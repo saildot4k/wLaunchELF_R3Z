@@ -1,6 +1,11 @@
 //---------------------------------------------------------------------------
 //File name:   SMB_test.h
 //---------------------------------------------------------------------------
+#ifndef SMB_TEST_H
+#define SMB_TEST_H
+
+#include <stddef.h>
+#include <tamtypes.h>
 
 #define SERVERLIST_MAX 16
 
@@ -19,9 +24,18 @@ typedef struct
 	char Server_FBID[64];  //Name of this server for display in FileBrowser
 } smbServerList_t;         //uLE SMB ServerList entry type
 
-int smbCurrentServer;
-int smbServerListCount;
-smbServerList_t smbServerList[SERVERLIST_MAX];
+extern int smbCurrentServer;
+extern int smbServerListCount;
+extern smbServerList_t smbServerList[SERVERLIST_MAX];
+
+int smbLogon_Server(int Index);
+int smbLogon_CurrentServer(void);
+size_t storeSMBCNF(char *cnf_buf);
+int saveSMBCNF(char *CNFpath);
+int scanSMBCNF(unsigned char *name, unsigned char *value);
+int loadSMBCNF(char *path);
 //---------------------------------------------------------------------------
 // End of file
 //---------------------------------------------------------------------------
+
+#endif /* SMB_TEST_H */

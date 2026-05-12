@@ -1,3 +1,6 @@
+#ifndef PS2HOST_HOSTLINK_H
+#define PS2HOST_HOSTLINK_H
+
 /*********************************************************************
  * Copyright (C) 2003 Tord Lindstrom (pukko@home.se)
  * This file is subject to the terms and conditions of the PS2Link License.
@@ -272,3 +275,5 @@ typedef struct
 
 #define PKO_MAX_WRITE_SEGMENT (1460 - sizeof(pko_pkt_write_req))
 #define PKO_MAX_READ_SEGMENT (1460 - sizeof(pko_pkt_read_rly))
+
+#endif /* PS2HOST_HOSTLINK_H */

@@ -1,17 +1,17 @@
 #.SILENT:
 
 # ---{ BUILD CONFIGURATION }--- #
-MMCE ?= 0
+MMCE ?= 1
 DS34 ?= 0
 SMB ?= 0
 TMANIP ?= 1
 ETH ?= 1
-EXFAT ?= 0
-DVRP ?= 0
+EXFAT ?= 1
+DVRP ?= 1
 IOP_RESET ?= 1
-XFROM ?= 0
+XFROM ?= 1
 UDPTTY ?= 0
-MX4SIO ?= 0
+MX4SIO ?= 1
 SIO2MAN ?= 0
 PPC_UART ?= 0
 SIO_DEBUG ?= 0
@@ -175,9 +175,42 @@ endif
 EE_OBJS_DIR = obj/
 EE_ASM_DIR = asm/
 EE_SRC_DIR = src/
+DS34_OFF_OBJ_DIR = obj-ds34-off/
+DS34_OFF_ASM_DIR = asm-ds34-off/
+DS34_ON_OBJ_DIR = obj-ds34-on/
+DS34_ON_ASM_DIR = asm-ds34-on/
+NO_PSX_NO_DS34_OBJ_DIR = obj-no-psx-no-ds34/
+NO_PSX_NO_DS34_ASM_DIR = asm-no-psx-no-ds34/
+NO_PSX_DS34_OBJ_DIR = obj-no-psx-ds34/
+NO_PSX_DS34_ASM_DIR = asm-no-psx-ds34/
+PSX_NO_DS34_OBJ_DIR = obj-psx-no-ds34/
+PSX_NO_DS34_ASM_DIR = asm-psx-no-ds34/
+PSX_DS34_OBJ_DIR = obj-psx-ds34/
+PSX_DS34_ASM_DIR = asm-psx-ds34/
 EE_OBJS := $(EE_OBJS:%=$(EE_OBJS_DIR)%) # remap all EE_OBJ to obj subdir
 
 all: githash.h $(EE_BIN_PKD)
+all-ds34-off:
+	$(MAKE) all DS34=0 EE_OBJS_DIR=$(DS34_OFF_OBJ_DIR) EE_ASM_DIR=$(DS34_OFF_ASM_DIR)
+
+all-ds34-on:
+	$(MAKE) all DS34=1 EE_OBJS_DIR=$(DS34_ON_OBJ_DIR) EE_ASM_DIR=$(DS34_ON_ASM_DIR)
+
+all-ds34-variants: all-ds34-off all-ds34-on
+
+all-no-psx-no-ds34:
+	$(MAKE) all DS34=0 DVRP=0 XFROM=0 EE_OBJS_DIR=$(NO_PSX_NO_DS34_OBJ_DIR) EE_ASM_DIR=$(NO_PSX_NO_DS34_ASM_DIR)
+
+all-no-psx-ds34:
+	$(MAKE) all DS34=1 DVRP=0 XFROM=0 EE_OBJS_DIR=$(NO_PSX_DS34_OBJ_DIR) EE_ASM_DIR=$(NO_PSX_DS34_ASM_DIR)
+
+all-psx-no-ds34:
+	$(MAKE) all DS34=0 DVRP=1 XFROM=1 EE_OBJS_DIR=$(PSX_NO_DS34_OBJ_DIR) EE_ASM_DIR=$(PSX_NO_DS34_ASM_DIR)
+
+all-psx-ds34:
+	$(MAKE) all DS34=1 DVRP=1 XFROM=1 EE_OBJS_DIR=$(PSX_DS34_OBJ_DIR) EE_ASM_DIR=$(PSX_DS34_ASM_DIR)
+
+all-ci-variants: all-no-psx-no-ds34 all-no-psx-ds34 all-psx-no-ds34 all-psx-ds34
 
 info:
 	$(info available build options:)
@@ -191,8 +224,14 @@ info:
 	$(info   UDPTTY		transfer stdout to UDP broadcast)
 	$(info   PPC_UART	transfer stdout to DECKARD UART)
 	$(info   SIO_DEBUG 	transfer EE stdout to EE UART)
+	$(info ----------)
+	$(info build shortcuts:)
+	$(info   all-ds34-off		builds without DS34 in isolated obj dirs)
+	$(info   all-ds34-on		builds with DS34 in isolated obj dirs)
+	$(info   all-ds34-variants	builds both DS34 variants)
+	$(info   all-ci-variants	builds 4 artifacts (PSX stuff off/on x DS34 off/on))
 
-.PHONY: all run reset clean rebuild isoclean iso
+.PHONY: all all-ds34-off all-ds34-on all-ds34-variants all-no-psx-no-ds34 all-no-psx-ds34 all-psx-no-ds34 all-psx-ds34 all-ci-variants clean-ds34-variants clean-ci-variants run reset clean rebuild isoclean iso
 
 $(EE_BIN_PKD): $(EE_BIN)
 	ps2-packer $< $@
@@ -231,6 +270,12 @@ clean:
 	@rm -rf $(EE_OBJS_DIR)
 	@rm -rf $(EE_ASM_DIR)
 	@rm -f iop/*.irx
+
+clean-ds34-variants:
+	@rm -rf $(DS34_OFF_OBJ_DIR) $(DS34_OFF_ASM_DIR) $(DS34_ON_OBJ_DIR) $(DS34_ON_ASM_DIR)
+
+clean-ci-variants:
+	@rm -rf $(NO_PSX_NO_DS34_OBJ_DIR) $(NO_PSX_NO_DS34_ASM_DIR) $(NO_PSX_DS34_OBJ_DIR) $(NO_PSX_DS34_ASM_DIR) $(PSX_NO_DS34_OBJ_DIR) $(PSX_NO_DS34_ASM_DIR) $(PSX_DS34_OBJ_DIR) $(PSX_DS34_ASM_DIR)
 
 rebuild: clean all
 

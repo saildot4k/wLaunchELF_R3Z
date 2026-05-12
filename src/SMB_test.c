@@ -58,7 +58,7 @@ int smbLogon_Server(int Index)
 //---------------------------------------------------------------------------
 //Function to log on to a currently selected SMB server
 //------------------------------
-int smbLogon_CurrentServer()
+int smbLogon_CurrentServer(void)
 {
 	return smbLogon_Server(smbCurrentServer);
 }

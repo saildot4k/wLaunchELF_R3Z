@@ -1,3 +1,6 @@
+#ifndef VMC_FS_VMC_H
+#define VMC_FS_VMC_H
+
 #include <types.h>
 #include <irx.h>
 #include <stdio.h>
@@ -293,3 +296,5 @@ unsigned int getFreeCluster(struct gen_privdata *gendata, int unit);
 int getPs2Time(vmc_datetime *tm);
 int setDefaultSpec(int unit);
 void buildECC(int unit, const u8 *Page_Data, u8 *ECC_Data);
+
+#endif /* VMC_FS_VMC_H */

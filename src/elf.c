@@ -67,6 +67,9 @@ int checkELFheader(char *path)
 #ifdef MMCE
 		|| !strncmp(fullpath, "mmce", 4)
 #endif
+#ifdef XFROM
+		|| (console_is_PSX && !strncmp(fullpath, "xfrom", 5))
+#endif
 		|| !strncmp(fullpath, "cdfs", 4)) {
 		;  //fullpath is already correct
 	} else if (!strncmp(fullpath, "hdd0:", 5)) {
@@ -82,6 +85,8 @@ int checkELFheader(char *path)
 		fullpath[3] += ret;
 #ifdef DVRP
 	} else if (!strncmp(fullpath, "dvr_hdd0:", 9)) {
+		if (!console_is_PSX)
+			goto error;
 		p = &path[9];
 		if (*p == '/')
 			p++;
@@ -93,12 +98,26 @@ int checkELFheader(char *path)
 			goto error;
 		fullpath[7] += ret;
 #endif
+	} else if (!strncmp(fullpath, "usb", 3)) {
+		if (genFixPath(path, fullpath) < 0)
+			goto error;
 	} else if (!strncmp(fullpath, "mass", 4)) {
 		char *pathSep;
 
 		pathSep = strchr(path, '/');
 		if (pathSep && (pathSep - path < 7) && pathSep[-1] == ':')
 			strcpy(fullpath + (pathSep - path), pathSep + 1);
+	} else if (!strncmp(fullpath, "ata", 3)) {
+		char *pathSep;
+
+		pathSep = strchr(path, '/');
+		if (pathSep && (pathSep - path < 7) && pathSep[-1] == ':')
+			strcpy(fullpath + (pathSep - path), pathSep + 1);
+#ifdef MX4SIO
+	} else if (!strncmp(fullpath, "mx4sio:", 7)) {
+		if (genFixPath(path, fullpath) < 0)
+			goto error;
+#endif
 	} else if (!strncmp(fullpath, "host:", 5)) {
 		if (path[5] == '/')
 			strcpy(fullpath + 5, path + 6);
@@ -126,6 +145,27 @@ error:
 //------------------------------
 //End of func:  int checkELFheader(const char *path)
 //--------------------------------------------------------------
+static void normalizeLaunchArgPath(const char *in_path, char *out_path)
+{
+	char *sep;
+
+	strcpy(out_path, in_path);
+	sep = strchr(out_path, ':');
+	if (sep == NULL)
+		return;
+
+	// Keep APA/HDD handoff format unchanged (e.g. hdd0:partition:pfs:/path).
+	if (!strncmp(out_path, "hdd0:", 5) || !strncmp(out_path, "dvr_hdd0:", 9) ||
+	    !strncmp(out_path, "pfs", 3) || !strncmp(out_path, "dvr_pfs", 7))
+		return;
+
+	if (sep[1] == 0 || sep[1] == '/' || sep[1] == '\\')
+		return;
+
+	memmove(sep + 2, sep + 1, strlen(sep + 1) + 1);
+	sep[1] = '/';
+}
+//--------------------------------------------------------------
 // RunLoaderElf loads LOADER.ELF from program memory and passes
 // args of selected ELF and partition to it
 // Modified version of loader from Independence
@@ -139,7 +179,7 @@ void RunLoaderElf(char *filename, char *party)
 	elf_pheader_t *eph;
 	void *pdata;
 	int i;
-	char *argv[ELFLOAD_ARGC], bootpath[256];
+	char *argv[ELFLOAD_ARGC], bootpath[256], launchpath[MAX_PATH];
 
 	if ((!strncmp(party, "hdd0:", 5)) && (!strncmp(filename, "pfs0:", 5))) {
 		if (0 > fileXioMount("pfs0:", party, FIO_MT_RDONLY)) {
@@ -158,7 +198,8 @@ void RunLoaderElf(char *filename, char *party)
 		}
 
 		argv[0] = filename;
-		argv[1] = bootpath;
+		normalizeLaunchArgPath(bootpath, launchpath);
+		argv[1] = launchpath;
 #ifdef DVRP
 	} else if ((!strncmp(party, "dvr_hdd0:", 9)) && (!strncmp(filename, "dvr_pfs0:", 9))) {
 		if (0 > fileXioMount("dvr_pfs0:", party, FIO_MT_RDONLY)) {
@@ -176,11 +217,13 @@ void RunLoaderElf(char *filename, char *party)
 			sprintf(bootpath, "%s:%s", party, filename);
 		}
 		argv[0] = filename;
-		argv[1] = bootpath;
+		normalizeLaunchArgPath(bootpath, launchpath);
+		argv[1] = launchpath;
 #endif
 	} else {
 		argv[0] = filename;
-		argv[1] = filename;
+		normalizeLaunchArgPath(filename, launchpath);
+		argv[1] = launchpath;
 	}
 
 	/* NB: LOADER.ELF is embedded  */

@@ -230,7 +230,15 @@ int uLE_InitializeRegion(void);
 int uLE_cdDiscValid(void);
 int uLE_cdStop(void);
 int IsSupportedFileType(char *path);
+#ifdef XFROM
 void loadFlashModules(void);
+#endif
+#ifdef MMCE
+void loadMmceModules(void);
+#endif
+#ifdef MX4SIO
+int loadMx4sioModules(void);
+#endif
 
 /* elf.c */
 int checkELFheader(char *filename);

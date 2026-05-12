@@ -1,3 +1,7 @@
+#ifndef LIBDS34BT_H
+#define LIBDS34BT_H
+
+#include <tamtypes.h>
 
 enum eDS34BTStatus {
     DS34BT_STATE_USB_DISCONNECTED = 0x00,
@@ -31,3 +35,5 @@ int ds34bt_get_data(int port, u8 *data);
 int ds34bt_reset();
 int ds34bt_get_version(hci_information_t *info);
 int ds34bt_get_features(u8 *info);
+
+#endif /* LIBDS34BT_H */

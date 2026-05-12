@@ -135,6 +135,9 @@ char netConfig[IPCONF_MAX_LEN + 64];  //Adjust size as needed
 
 //State of module collections
 static u8 have_HDD_modules = 0;
+static u8 have_basic_modules = 0;
+static u8 have_filexio_ready = 0;
+static u8 have_mc_rpc_ready = 0;
 //State of Uncheckable Modules (invalid header)
 static u8 have_cdvd = 0;
 static u8 have_usbd = 0;
@@ -163,10 +166,27 @@ static u8 have_vmc_fs = 0;
 #ifdef XFROM
 static u8 have_Flash_modules = 0;
 #endif
+#ifdef MMCE
+static u8 have_mmce = 0;
+#endif
+#ifdef MX4SIO
+static u8 have_mx4sio = 0;
+#endif
 
 #ifdef MX4SIO
 u8 mx4sio_driver_running = 0;
 #endif
+
+enum storage_driver_stack_mode {
+	STORAGE_STACK_DEFAULT = 0,
+#ifdef MMCE
+	STORAGE_STACK_MMCE,
+#endif
+#ifdef MX4SIO
+	STORAGE_STACK_MX4SIO,
+#endif
+};
+static int storage_driver_stack_mode = STORAGE_STACK_DEFAULT;
 
 //State of whether DEV9 was successfully loaded or not.
 static u8 ps2dev9_loaded = 0;
@@ -258,12 +278,18 @@ static void ShowDebugInfo(void);
 static void load_ps2ftpd(void);
 static void load_ps2netfs(void);
 static void loadBasicModules(void);
+static void ensureCoreIoStackReady(void);
 static void loadCdModules(void);
 static int loadExternalFile(char *argPath, void **fileBaseP, int *fileSizeP);
 static int loadExternalModule(char *modPath, void *defBase, int defSize);
 static void loadUsbDModule(void);
 static void loadUsbModules(void);
 static void loadKbdModules(void);
+static void resetRuntimeDeviceState(void);
+static void switchStorageDriverStack(int target_mode);
+#ifdef DS34
+static void stopDs34Input(void);
+#endif
 static void closeAllAndPoweroff(void);
 static void poweroffHandler(int i);
 static void setupPowerOff(void);
@@ -282,6 +308,12 @@ static void CleanUp(void);
 static void Execute(char *pathin);
 static void Reset(void);
 static void InitializeBootExecPath();
+#ifdef MMCE
+void loadMmceModules(void);
+#endif
+#ifdef MX4SIO
+int loadMx4sioModules(void);
+#endif
 //---------------------------------------------------------------------------
 //executable code
 //---------------------------------------------------------------------------
@@ -923,6 +955,7 @@ void load_ps2host(void)
 {
 	int ret, ID;
 
+	ensureCoreIoStackReady();
 	setupPowerOff();  //resolves the stall out when opening host: from LaunchELF's FileBrowser
 	load_ps2ip();
 	if (!have_ps2host) {
@@ -940,6 +973,7 @@ static void load_smbman(void)
 {
 	int ret, ID;
 
+	ensureCoreIoStackReady();
 	setupPowerOff();  //resolves stall out when opening smb: FileBrowser
 	load_ps2ip();
 	if (!have_smbman) {
@@ -1142,6 +1176,9 @@ static void loadBasicModules(void)
 {
 	int ret, id;
 
+	if (have_basic_modules)
+		return;
+
 #ifdef IOPTRAP
 	id = SifExecModuleBuffer(ioptrap_irx, size_ioptrap_irx, 0, NULL, &ret);
 	DPRINTF(" [IOP TRAP]: id=%d ret=%d\n", id, ret);
@@ -1185,13 +1222,34 @@ static void loadBasicModules(void)
 	DPRINTF(" [rom0:PADMAN]: id=%d\n", id);
 #endif
 
-#ifdef MMCE
-	id = SifExecModuleBuffer(mmceman_irx, size_mmceman_irx, 0, NULL, &ret);  //Home
-	DPRINTF(" [MMCE]: id=%d ret=%d\n", id, ret);
-#endif
+	have_basic_modules = 1;
 }
 //------------------------------
 //endfunc loadBasicModules
+//---------------------------------------------------------------------------
+static void ensureCoreIoStackReady(void)
+{
+	loadBasicModules();
+
+	if (!have_filexio_ready) {
+		fileXioInit();
+		// Increase the FILEIO R/W buffer size to reduce overhead.
+		fileXioSetRWBufferSize(128 * 1024);
+		have_filexio_ready = 1;
+	}
+
+	if (!have_mc_rpc_ready) {
+		DPRINTF("Initializing mc rpc\n");
+#ifdef HOMEBREW_SIO2MAN
+		mcInit(MC_TYPE_XMC);
+#else
+		mcInit(MC_TYPE_MC);
+#endif
+		have_mc_rpc_ready = 1;
+	}
+}
+//------------------------------
+//endfunc ensureCoreIoStackReady
 //---------------------------------------------------------------------------
 static void loadCdModules(void)
 {
@@ -1287,6 +1345,10 @@ static void getExternalFilePath(const char *argPath, char *filePath)
 		mountParty(party);
 #ifdef DVRP
 	} else if (!strncmp(argPath, "dvr_hdd0:/", 10)) {
+		if (!console_is_PSX) {
+			genFixPath(argPath, filePath);
+			return;
+		}
 		//Loading some module from HDD
 		char party[MAX_PATH];
 		char *p;
@@ -1404,56 +1466,56 @@ static void loadUsbDModule(void)
 static void loadDs34Modules(void)
 {
 	DPRINTF("Loading DS34\n");
-    if (!have_ds34) {
-        if (loadExternalModule("DS34USB.IRX", &ds34usb_irx, size_ds34usb_irx))
-            if (loadExternalModule("DS34BT.IRX", &ds34bt_irx, size_ds34bt_irx))
-                have_ds34 = 1;
-    }
+	if (!have_ds34 &&
+	    loadExternalModule("DS34USB.IRX", &ds34usb_irx, size_ds34usb_irx) &&
+	    loadExternalModule("DS34BT.IRX", &ds34bt_irx, size_ds34bt_irx))
+		have_ds34 = 1;
 }
 //------------------------------
 //endfunc loadDs34Modules
 //---------------------------------------------------------------------------
 #endif
 static void loadUsbModules(void)
+{
 #ifdef EXFAT
-{
-    int ret, ID;
+	int ret, ID;
+#endif
 
-    loadUsbDModule();
-    if (have_usbd && !have_usb_mass && (USB_mass_loaded = loadExternalModule("", NULL, 0))) {
-        delay(3);
-        have_usb_mass = 1;
-    } else if (have_usbd && !have_usb_mass) {
-        ID = SifExecModuleBuffer(bdm_irx, size_bdm_irx, 0, NULL, &ret);
-		DPRINTF(" [BDM] ID=%d, ret=%d\n", ID, ret);
-        ID = SifExecModuleBuffer(bdmfs_fatfs_irx, size_bdmfs_fatfs_irx, 0, NULL, &ret);
-		DPRINTF(" [BDMFS_FATFS] ID=%d, ret=%d\n", ID, ret);
-        ID = SifExecModuleBuffer(usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, &ret);
-		DPRINTF(" [USBMASS_BD] ID=%d, ret=%d\n", ID, ret);
-        delay(3);
-        USB_mass_loaded = 1;
-        have_usb_mass = 1;
-    }
-    if (USB_mass_loaded == 1)                       // if using the internal mass driver
-        USB_mass_max_drives = USB_MASS_MAX_DRIVES;  // allow multiple drives
-    else
-        USB_mass_max_drives = 1;  // else allow only one mass drive
-#ifdef DS34
-	loadDs34Modules();
-#endif
-#ifdef MX4SIO
-	ID = SifExecModuleBuffer(mx4sio_bd_irx, size_mx4sio_bd_irx, 0, NULL, &ret);
-	DPRINTF(" [MX4SIO_BD] ID=%d, ret=%d\n", ID, ret);
-	mx4sio_driver_running = (ID > 0 && ret != 1);
-#endif
-}
-#else
-{
+	ensureCoreIoStackReady();
 	loadUsbDModule();
+
+#ifdef EXFAT
+	if (have_usbd && !have_usb_mass) {
+		int loaded_ok = 1;
+		/*
+		 * EXFAT builds use the embedded BDM stack.
+		 * There is no dedicated external override path in current config.
+		 */
+		ID = SifExecModuleBuffer(bdm_irx, size_bdm_irx, 0, NULL, &ret);
+		DPRINTF(" [BDM] ID=%d, ret=%d\n", ID, ret);
+		if (ID < 0 || ret < 0)
+			loaded_ok = 0;
+		ID = SifExecModuleBuffer(bdmfs_fatfs_irx, size_bdmfs_fatfs_irx, 0, NULL, &ret);
+		DPRINTF(" [BDMFS_FATFS] ID=%d, ret=%d\n", ID, ret);
+		if (ID < 0 || ret < 0)
+			loaded_ok = 0;
+		ID = SifExecModuleBuffer(usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, &ret);
+		DPRINTF(" [USBMASS_BD] ID=%d, ret=%d\n", ID, ret);
+		if (ID < 0 || ret < 0)
+			loaded_ok = 0;
+		if (loaded_ok) {
+			delay(3);
+			USB_mass_loaded = 1;
+			have_usb_mass = 1;
+		}
+	}
+#else
 	if (have_usbd && !have_usb_mass && (USB_mass_loaded = loadExternalModule("USBMASS.IRX", &usb_mass_irx, size_usb_mass_irx))) {
 		delay(3);
 		have_usb_mass = 1;
 	}
+#endif
+
 	if (USB_mass_loaded == 1)                       //if using the internal mass driver
 		USB_mass_max_drives = USB_MASS_MAX_DRIVES;  //allow multiple drives
 	else
@@ -1463,12 +1525,12 @@ static void loadUsbModules(void)
 	loadDs34Modules();
 #endif
 }
-#endif
 //------------------------------
 //endfunc loadUsbModules
 //---------------------------------------------------------------------------
 static void loadKbdModules(void)
 {
+	ensureCoreIoStackReady();
 	loadUsbDModule();
 	if ((have_usbd && !have_ps2kbd) && (loadExternalModule(setting->usbkbd_file, &ps2kbd_irx, size_ps2kbd_irx)))
 		have_ps2kbd = 1;
@@ -1476,6 +1538,92 @@ static void loadKbdModules(void)
 //------------------------------
 //endfunc loadKbdModules
 //---------------------------------------------------------------------------
+#ifdef DS34
+static void stopDs34Input(void)
+{
+	if (is_early_init)
+		return;
+
+	WaitSema(semRunning);
+	isRunning = 0;
+	SignalSema(semRunning);
+	WaitSema(semFinish);
+	ds34usb_reset();
+	ds34bt_reset();
+}
+#endif
+
+static void resetRuntimeDeviceState(void)
+{
+#ifdef DS34
+	stopDs34Input();
+#endif
+	unmountAll();
+	Reset();
+	loadUsbModules();
+	setupPad();
+	startKbd();
+}
+
+static void switchStorageDriverStack(int target_mode)
+{
+#if defined(MMCE) && defined(MX4SIO)
+	if (storage_driver_stack_mode == target_mode)
+		return;
+
+	if ((storage_driver_stack_mode == STORAGE_STACK_MMCE && target_mode == STORAGE_STACK_MX4SIO) ||
+	    (storage_driver_stack_mode == STORAGE_STACK_MX4SIO && target_mode == STORAGE_STACK_MMCE)) {
+		DPRINTF("Switching storage driver stack (%d -> %d), resetting IOP\n", storage_driver_stack_mode, target_mode);
+		resetRuntimeDeviceState();
+		storage_driver_stack_mode = STORAGE_STACK_DEFAULT;
+	}
+#else
+	(void)target_mode;
+#endif
+}
+
+#ifdef MMCE
+void loadMmceModules(void)
+{
+	int ret, id;
+
+	ensureCoreIoStackReady();
+	switchStorageDriverStack(STORAGE_STACK_MMCE);
+	if (!have_mmce) {
+		id = SifExecModuleBuffer(mmceman_irx, size_mmceman_irx, 0, NULL, &ret);
+		DPRINTF(" [MMCE]: id=%d ret=%d\n", id, ret);
+		have_mmce = (id >= 0);
+	}
+	if (have_mmce)
+		storage_driver_stack_mode = STORAGE_STACK_MMCE;
+}
+#endif
+
+#ifdef MX4SIO
+int loadMx4sioModules(void)
+{
+	int ret, id;
+
+	ensureCoreIoStackReady();
+	switchStorageDriverStack(STORAGE_STACK_MX4SIO);
+	if (!have_mx4sio) {
+		id = SifExecModuleBuffer(mx4sio_bd_irx, size_mx4sio_bd_irx, 0, NULL, &ret);
+		DPRINTF(" [MX4SIO_BD]: id=%d ret=%d\n", id, ret);
+		mx4sio_driver_running = (id > 0 && ret != 1);
+		have_mx4sio = mx4sio_driver_running;
+		if (have_mx4sio) {
+			USB_mass_scanned = 0;
+			memset(USB_mass_ix, 0, sizeof(USB_mass_ix));
+			USB_mass_ix[0] = '0';
+		}
+	}
+	if (have_mx4sio)
+		storage_driver_stack_mode = STORAGE_STACK_MX4SIO;
+
+	return have_mx4sio;
+}
+#endif
+
 void loadHdlInfoModule(void)
 {
 	int ret, ID;
@@ -1542,6 +1690,7 @@ static void setupPowerOff(void)
 //---------------------------------------------------------------------------
 void loadHddModules(void)
 {
+	ensureCoreIoStackReady();
 	if (!have_HDD_modules) {
 		if (!is_early_init)  //Do not draw any text before the UI is initialized.
 			drawMsg(LNG(Loading_HDD_Modules));
@@ -1556,6 +1705,10 @@ void loadHddModules(void)
 #ifdef XFROM
 void loadFlashModules(void)
 {
+	if (!console_is_PSX)
+		return;
+
+	ensureCoreIoStackReady();
 	if (!have_Flash_modules) {
 		if (!is_early_init)  //Do not draw any text before the UI is initialized.
 			drawMsg(LNG(Loading_Flash_Modules));
@@ -1572,6 +1725,10 @@ void loadFlashModules(void)
 #ifdef DVRP
 void loadDVRPHddModules(void)
 {
+	if (!console_is_PSX)
+		return;
+
+	ensureCoreIoStackReady();
 	if (!have_DVRP_HDD_modules) {
 		if (!is_early_init)  //Do not draw any text before the UI is initialized.
 			drawMsg(LNG(Loading_HDD_Modules));
@@ -1592,6 +1749,7 @@ void loadDVRPHddModules(void)
 #ifdef ETH
 static void loadNetModules(void)
 {
+	ensureCoreIoStackReady();
 	if (!have_NetModules) {
 		drawMsg(LNG(Loading_NetFS_and_FTP_Server_Modules));
 
@@ -2079,6 +2237,8 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		goto ELFchecked;
 #ifdef DVRP
 	} else if (!strncmp(path, "dvr_hdd0:/", 10)) {
+		if (!console_is_PSX)
+			goto ELFnotFound;
 		loadDVRPHddModules();
 		if ((t = checkELFheader(path)) <= 0)
 			goto ELFnotFound;
@@ -2090,28 +2250,58 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		goto ELFchecked;
 #endif
 #ifdef XFROM
-	} else if (!strncmp(path, "xfrom:/", 7)) {
+	} else if (!strncmp(path, "xfrom", 5)) {
+		if (!console_is_PSX)
+			goto ELFnotFound;
 		loadFlashModules();
 		if ((t = checkELFheader(path)) <= 0)
 			goto ELFnotFound;
 		strcpy(fullpath, path);
 		goto ELFchecked;
 #endif
+#ifdef MX4SIO
+	} else if (!strncmp(path, "mx4sio:", 7)) {
+		if ((t = checkELFheader(path)) <= 0)
+			goto ELFnotFound;
+		party[0] = 0;
+		strcpy(fullpath, path);
+		goto ELFchecked;
+#endif
 #ifdef MMCE
 	} else if (!strncmp(path, "mmce", 4)) {
+		loadMmceModules();
 		if ((t = checkELFheader(path)) <= 0)
 			goto ELFnotFound;
 		strcpy(fullpath, path);
 		goto ELFchecked;
 #endif
+	} else if (!strncmp(path, "usb", 3)) {
+		if ((t = checkELFheader(path)) <= 0)
+			goto ELFnotFound;
+		party[0] = 0;
+		if (genFixPath(path, fullpath) < 0)
+			goto ELFnotFound;
+		if (!strncmp(fullpath, "mass", 4)) {
+			char *usb_sep = strchr(fullpath, ':');
+
+			if (usb_sep != NULL && usb_sep[1] != 0 && usb_sep[1] != '/') {
+				memmove(usb_sep + 2, usb_sep + 1, strlen(usb_sep + 1) + 1);
+				usb_sep[1] = '/';
+			}
+		}
+		goto ELFchecked;
+	} else if (!strncmp(path, "ata", 3)) {
+		if ((t = checkELFheader(path)) <= 0)
+			goto ELFnotFound;
+		party[0] = 0;
+		strcpy(fullpath, path);
+		goto ELFchecked;
 	} else if (!strncmp(path, "mass", 4)) {
 		if ((t = checkELFheader(path)) <= 0)
 			goto ELFnotFound;
 		party[0] = 0;
 
 		strcpy(fullpath, path);
-		if (pathSep && (pathSep - path < 7) && pathSep[-1] == ':')
-			strcpy(fullpath + (pathSep - path), pathSep + 1);
 		goto ELFchecked;
 #ifdef ETH
 	} else if (!strncmp(path, "host:", 5)) {
@@ -2421,20 +2611,55 @@ static void Reset()
 	SifLoadFileInit();
 	initsbv_patches();
 
+	have_basic_modules = 0;
+	have_filexio_ready = 0;
+	have_mc_rpc_ready = 0;
 	have_cdvd = 0;
 	have_usbd = 0;
 	have_usb_mass = 0;
+#ifdef DS34
+	have_ds34 = 0;
+#endif
 	have_ps2smap = 0;
 	have_ps2host = 0;
+	have_ps2ip = 0;
+	have_ps2netfs = 0;
 	have_vmc_fs = 0;
 	have_smbman = 0;
 	have_ps2ftpd = 0;
 	have_ps2kbd = 0;
+	have_hdl_info = 0;
 	have_NetModules = 0;
 	have_HDD_modules = 0;
-#ifdef XFROM
-	have_Flash_modules = 0;
+	have_poweroff = 0;
+	have_ps2dev9 = 0;
+	have_ps2atad = 0;
+	have_ps2hdd = 0;
+	have_ps2fs = 0;
+#ifdef MMCE
+	have_mmce = 0;
 #endif
+#ifdef MX4SIO
+	have_mx4sio = 0;
+	mx4sio_driver_running = 0;
+#endif
+	storage_driver_stack_mode = STORAGE_STACK_DEFAULT;
+	ps2dev9_loaded = 0;
+	done_setupPowerOff = 0;
+	ps2kbd_opened = 0;
+	#ifdef XFROM
+		have_Flash_modules = 0;
+	#endif
+#ifdef DVRP
+	have_DVRP_HDD_modules = 0;
+	have_dvrdrv = 0;
+	have_dvrfile = 0;
+#endif
+	USB_mass_loaded = 0;
+	USB_mass_scanned = 0;
+	USB_mass_scan_time = 0;
+	memset(USB_mass_ix, 0, sizeof(USB_mass_ix));
+	USB_mass_ix[0] = '0';
 
 #ifdef POWERPC_UART
 int i, d;
@@ -2448,18 +2673,8 @@ int i, d;
 	i = SifExecModuleBuffer(&udptty_irx, size_udptty_irx, 0, NULL, &d);
     DPRINTF(" [UDPTTY]: id=%d, ret=%d\n", i, d);
 #endif
-	loadBasicModules();
+	ensureCoreIoStackReady();
 	loadCdModules();
-
-	fileXioInit();
-	//Increase the FILEIO R/W buffer size to reduce overhead.
-	fileXioSetRWBufferSize(128 * 1024);
-	DPRINTF("Initializing mc rpc\n");
-#ifdef HOMEBREW_SIO2MAN
-	mcInit(MC_TYPE_XMC);
-#else
-	mcInit(MC_TYPE_MC);
-#endif
 	DPRINTF("RESET FINISHED\n");
 	//	setupPad();
 }
@@ -2612,10 +2827,24 @@ int main(int argc, char *argv[])
 						LaunchElfDir[i] = '/';
 				}
 			}  //else we booted with normal homebrew mass: drivers
-
 			boot = BOOT_DEVICE_MASS;
 		} else if (!strncmp(argv[0], "mc", 2))
 			boot = BOOT_DEVICE_MC;
+#ifdef MMCE
+		else if (!strncmp(argv[0], "mmce", 4)) {
+			loadMmceModules();
+			boot = BOOT_DEVICE_MASS;
+		}
+#endif
+#ifdef MX4SIO
+			else if (!strncmp(argv[0], "mx4sio", 6)) {
+				boot = BOOT_DEVICE_MASS;
+				loadMx4sioModules();
+			}
+#endif
+		else if (!strncmp(argv[0], "ata", 3)) {
+			boot = BOOT_DEVICE_MASS;
+		}
 		else if (!strncmp(argv[0], "cd", 2)) {
 			boot = BOOT_DEVICE_CDVD;
 			strcpy(LaunchElfDir, "mc0:/SYS-CONF/");  //Default to mc0 as a writable location.
@@ -2643,7 +2872,7 @@ int main(int argc, char *argv[])
 
 			boot = BOOT_DEVICE_HDD;
 #ifdef DVRP
-		} else if (!strncmp(argv[0], "dvr_hdd", 7)) {
+		} else if (console_is_PSX && !strncmp(argv[0], "dvr_hdd", 7)) {
 			//Booting from the HDD requires special handling for HDD-based paths.
 			char temp[MAX_PATH];
 			char *t, *p;
@@ -2672,6 +2901,13 @@ int main(int argc, char *argv[])
 #ifdef ETH
 	if (!strncmp(LaunchElfDir, "host", 4)) {
 		boot = BOOT_DEVICE_HOST;
+	}
+#endif
+#ifdef MX4SIO
+	if ((boot == BOOT_DEVICE_MASS) && LaunchElfDir[0] && !exists(LaunchElfDir)) {
+		if (loadMx4sioModules()) {
+			DPRINTF("Boot path '%s' became accessible after loading MX4SIO.\n", LaunchElfDir);
+		}
 	}
 #endif
 	DPRINTF("Boot device is %d\n", boot);

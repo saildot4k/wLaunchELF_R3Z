@@ -14,14 +14,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        eth: ["ETH=0", "ETH=1"]
-        bdmstuff: ["EXFAT=0", "EXFAT=1", "EXFAT=1 MX4SIO=1"]
-        ds34: ["DS34=0", "DS34=1"]
-        mmce: ["MMCE=0", "MMCE=1"]
-        xfrom: ["XFROM=0", "XFROM=1"]
-        exclude:
-          - bdmstuff: "EXFAT=1 MX4SIO=1"
-            mmce: "MMCE=1"
+        include:
+          - variant_name: "ALL-NO-PSX-NO-DS34"
+            ds34: "DS34=0"
+            psx_stuff: "DVRP=0 XFROM=0"
+          - variant_name: "ALL-NO-PSX-DS34"
+            ds34: "DS34=1"
+            psx_stuff: "DVRP=0 XFROM=0"
+          - variant_name: "ALL-PSX-NO-DS34"
+            ds34: "DS34=0"
+            psx_stuff: "DVRP=1 XFROM=1"
+          - variant_name: "ALL-PSX-DS34"
+            ds34: "DS34=1"
+            psx_stuff: "DVRP=1 XFROM=1"
     runs-on: ubuntu-latest
     container: ps2dev/ps2dev:v1.0
     steps:
@@ -37,12 +42,12 @@ jobs:
 
     - name: Compile wLaunchELF
       run: |
-        make rebuild ${{ matrix.eth }} ${{ matrix.mmce }} ${{ matrix.bdmstuff }} ${{ matrix.ds34 }} ${{ matrix.xfrom }} ${{ github.event.inputs.make_args }}
+        make rebuild ${{ github.event.inputs.make_args }} ETH=1 MMCE=1 EXFAT=1 MX4SIO=1 ${{ matrix.psx_stuff }} ${{ matrix.ds34 }} DEBUG=0
 
     - name: Upload variants artifact ELF
       uses: actions/upload-artifact@v4
       with:
-        name: "WLE-${{ matrix.eth }}-${{ matrix.mmce }}-${{ matrix.bdmstuff }}-${{ matrix.ds34 }}-${{ matrix.xfrom }}"
+        name: "WLE-${{ matrix.variant_name }}"
         path: |
             BOOT*.ELF
 
@@ -63,7 +68,6 @@ jobs:
       with:
         path: WLE/
         pattern: "WLE-*"
-        merge-multiple: true
 
     - name: list
       run: |
@@ -78,7 +82,7 @@ jobs:
         title: "Latest automated build"
         prerelease: false
         files: |
-               WLE/*.ELF
+               WLE/**/*.ELF
 
     - name: notify on discord
       if: github.ref == 'refs/heads/master'

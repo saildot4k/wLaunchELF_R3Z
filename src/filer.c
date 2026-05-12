@@ -77,10 +77,6 @@ char mountedDVRPParty[MOUNT_LIMIT][MAX_NAME];
 int latestDVRPMount = -1;
 #endif
 
-#ifdef MX4SIO
-int mx4sio_idx = -1; // To keep track of wich mass#:/ device represents MX4SIO
-#endif
-
 int file_show = 1;  //dlanor: 0==name_only, 1==name+size+time, 2==title+size+time
 int file_sort = 1;  //dlanor: 0==none, 1==name, 2==title, 3==mtime
 int size_valid = 0;
@@ -179,6 +175,66 @@ u64 USB_mass_scan_time = 0;
 int USB_mass_scanned = 0;  //0==Not_found_OR_No_Multi 1==found_Multi_mass_once
 int USB_mass_loaded = 0;   //0==none, 1==internal, 2==external
 
+static int mapUsbPathToMassPath(const char *usb_path, char *mass_path)
+{
+	const char *suffix;
+	int unit = 0;
+
+	if (strncmp(usb_path, "usb", 3))
+		return -1;
+
+	if (usb_path[3] == ':')
+		suffix = usb_path + 4;
+	else if (usb_path[3] >= '0' && usb_path[3] <= '9' && usb_path[4] == ':') {
+		unit = usb_path[3] - '0';
+		suffix = usb_path + 5;
+	} else
+		return -1;
+
+	if (*suffix == 0)
+		suffix = "/";
+
+	if (unit == 0)
+		snprintf(mass_path, MAX_PATH, "mass:%s", suffix);
+	else
+		snprintf(mass_path, MAX_PATH, "mass%d:%s", unit, suffix);
+
+	return 0;
+}
+
+static const char *getRootDeviceLabel(const char *name)
+{
+	if (!strcmp(name, "mc0:"))
+		return "mc0";
+	if (!strcmp(name, "mc1:"))
+		return "mc1";
+	if (!strcmp(name, "mass:"))
+		return "usb";
+#ifdef MMCE
+	if (!strcmp(name, "mmce0:"))
+		return "mmce";
+#endif
+#ifdef MX4SIO
+	if (!strcmp(name, "mx4sio:"))
+		return "mx4sio";
+#endif
+	if (!strcmp(name, "hdd0:"))
+		return "hdd0";
+#ifdef EXFAT
+	if (!strcmp(name, "ata:"))
+		return "ata";
+#endif
+#ifdef XFROM
+	if (!strcmp(name, "xfrom0:") || !strcmp(name, "xfrom:"))
+		return "xfrom";
+#endif
+#ifdef DVRP
+	if (!strcmp(name, "dvr_hdd0:"))
+		return "dvr";
+#endif
+
+	return NULL;
+}
 
 //char debugs[4096]; //For debug display strings. Comment it out when unused
 //--------------------------------------------------------------
@@ -266,6 +322,8 @@ int mountParty(const char *party)
 				break;
 			}
 		}
+		if (j < 0)
+			return -1;  //no usable mountpoint available
 		unmountParty(j);
 	}
 	//Here j is the index of a free PFS mountpoint
@@ -278,20 +336,20 @@ int mountParty(const char *party)
 	strcpy(pfs_str, "pfs0:");
 
 	pfs_str[3] = '0' + i;
-	if (fileXioMount(pfs_str, party, FIO_MT_RDWR) < 0) {          //if FTP stole it
-		for (i = 0; i <= 4; i++) {                                //for loop to kill FTP partition mountpoints
-			if ((i != latestMount) && (Party_vmcIndex[i] < 0)) {  //if unneeded by uLE
-				unmountParty(i);                                  //unmount partition mountpoint
-				pfs_str[3] = '0' + i;                             //prepare to reuse that mountpoint
-				if (fileXioMount(pfs_str, party, FIO_MT_RDWR) >= 0)
-					break;  //break from the loop on successful mount
-			}               //ends if unneeded by uLE
-		}                   //ends for loop to kill FTP partition mountpoints
-		//Here i indicates what happened above with the following meanings:
-		//0..4==Success after trying i mountpoints,  5==Failure
-		if (i > 4)
-			return -1;
-	}  //ends if clause for mountpoints stolen by FTP
+		if (fileXioMount(pfs_str, party, FIO_MT_RDWR) < 0) {                 //if FTP stole it
+			for (i = 0; i < MOUNT_LIMIT; i++) {                               //for loop to kill FTP partition mountpoints
+				if ((i != latestMount) && (Party_vmcIndex[i] < 0)) {  //if unneeded by uLE
+					unmountParty(i);                                  //unmount partition mountpoint
+					pfs_str[3] = '0' + i;                             //prepare to reuse that mountpoint
+					if (fileXioMount(pfs_str, party, FIO_MT_RDWR) >= 0)
+						break;  //break from the loop on successful mount
+				}               //ends if unneeded by uLE
+			}                   //ends for loop to kill FTP partition mountpoints
+			//Here i indicates what happened above with the following meanings:
+			//0..MOUNT_LIMIT-1==Success, MOUNT_LIMIT==Failure
+			if (i >= MOUNT_LIMIT)
+				return -1;
+		}  //ends if clause for mountpoints stolen by FTP
 	strcpy(mountedParty[i], party);
 return_i:
 	latestMount = i;
@@ -897,11 +955,40 @@ int genFixPath(const char *inp_path, char *gen_path)
 		LCDVD_DISKREADY(0);
 		//end of clause for using a CD or DVD path
 
+	} else if (!strncmp(uLE_path, "usb", 3)) {  //if using USB alias path
+		char mass_path[MAX_PATH];
+		char *mass_sep;
+
+		if (mapUsbPathToMassPath(uLE_path, mass_path) < 0) {
+			part_ix = -1;
+		} else {
+			strcpy(gen_path, mass_path);
+			mass_sep = strchr(gen_path, '/');
+			if (mass_sep && (mass_sep - gen_path < 7) && mass_sep[-1] == ':')
+				strcpy(gen_path + (mass_sep - gen_path), mass_sep + 1);
+		}
+		//end of clause for using a USB alias path
+
 	} else if (!strncmp(uLE_path, "mass", 4)) {  //if using USB mass: path
 		if (pathSep && (pathSep - uLE_path < 7) && pathSep[-1] == ':')
 			strcpy(gen_path + (pathSep - uLE_path), pathSep + 1);
 		//end of clause for using a USB mass: path
 
+	} else if (!strncmp(uLE_path, "ata", 3)) {  //if using ATA BDM path
+		if (pathSep && (pathSep - uLE_path < 7) && pathSep[-1] == ':')
+			strcpy(gen_path + (pathSep - uLE_path), pathSep + 1);
+
+#ifdef MX4SIO
+	} else if (!strncmp(uLE_path, "mx4sio", 6)) {
+		if (!mx4sio_driver_running && !loadMx4sioModules())
+			part_ix = -1;
+		if ((part_ix >= 0) && pathSep && (pathSep - uLE_path < 10) && pathSep[-1] == ':')
+			strcpy(gen_path + (pathSep - uLE_path), pathSep + 1);
+#endif
+#ifdef MMCE
+	} else if (!strncmp(uLE_path, "mmce", 4)) {
+		loadMmceModules();
+#endif
 	} else if (!strncmp(uLE_path, "hdd0:/", 6)) {  //If using HDD path
 		//Get path on HDD unit, LaunchELF's format (e.g. hdd0:/partition/path/to/file)
 		strcpy(loc_path, uLE_path + 6);
@@ -926,6 +1013,10 @@ int genFixPath(const char *inp_path, char *gen_path)
 			gen_path[3] = part_ix + '0';
 #ifdef DVRP
 	} else if (!strncmp(uLE_path, "dvr_hdd0:/", 10)) {  //If using DVRP HDD path
+		if (!console_is_PSX) {
+			part_ix = -1;
+			goto finalize_path;
+		}
 		//Get path on DVR HDD unit, LaunchELF's format (e.g. dvr_hdd0:/partition/path/to/file)
 		strcpy(loc_path, uLE_path + 10);
 		if ((p = strchr(loc_path, '/')) != NULL) {
@@ -950,6 +1041,7 @@ int genFixPath(const char *inp_path, char *gen_path)
 		//end of clause for using an HDD path
 #endif
 	}
+finalize_path:
 	genLimObjName(gen_path, 0);
 	return part_ix;
 	//non-HDD Path => 99, Good HDD Path => 0-3, Bad Path => negative
@@ -1180,6 +1272,9 @@ int readHDDDVRP(const char *path, FILEINFO *info, int max)
 	char party[MAX_PATH], dir[MAX_PATH];
 	int i = 0, fd, ret;
 
+	if (!console_is_PSX)
+		return 0;
+
 	if (ndvrpparties == 0) {
 		loadDVRPHddModules();
 		setDVRPPartyList();
@@ -1237,24 +1332,14 @@ int readHDDDVRP(const char *path, FILEINFO *info, int max)
 //--------------------------------------------------------------
 #endif
 
-#ifndef USBMASS_IOCTL_GET_DRIVERNAME
-#define USBMASS_IOCTL_GET_DRIVERNAME 0x0003
-#endif
 void scan_USB_mass(void)
 {
-#ifdef MX4SIO
-	static char DEVID[5];
-#endif
-	int i, dd;
+	int i;
 	iox_stat_t chk_stat;
 	char mass_path[8] = "mass0:/";
 	if ((USB_mass_max_drives < 2)  //No need for dynamic lists with only one drive
 	    || (USB_mass_scanned && ((Timer() - USB_mass_scan_time) < 5000)))
 		return;
-
-#ifdef MX4SIO
-	mx4sio_idx = -1; //assume none is mx4sio // this MUST ALWAYS be after the USB_mass_scan_time check
-#endif
 
 	for (i = 0; i < USB_mass_max_drives; i++) {
 		mass_path[4] = '0' + i;
@@ -1262,18 +1347,6 @@ void scan_USB_mass(void)
 			USB_mass_ix[i] = 0;
 			continue;
 		}
-#ifdef MX4SIO
-    	if ((dd = fileXioDopen(mass_path)) >= 0) {
-    	    int *intptr_ctl = (int *)DEVID;
-    	    *intptr_ctl = fileXioIoctl(dd, USBMASS_IOCTL_GET_DRIVERNAME, "");
-    	    fileXioDclose(dd);
-		if (!strncmp(DEVID, "sdc", 3))
-		{
-			mx4sio_idx = i;
-			DPRINTF("%s: Found MX4SIO device at mass%d:/\n", __func__, i);
-		}
-    	}
-#endif
 		USB_mass_ix[i] = '0' + i;
 		USB_mass_scanned = 1;
 		USB_mass_scan_time = Timer();
@@ -1479,7 +1552,7 @@ int getDir(const char *path, FILEINFO *info)
 	else if (!strncmp(path, "hdd", 3))
 		n = readHDD(path, info, max);
 #ifdef DVRP
-	else if (!strncmp(path, "dvr_hdd", 7))
+	else if (console_is_PSX && !strncmp(path, "dvr_hdd", 7))
 		n = readHDDDVRP(path, info, max);
 #endif
 	else if (!strncmp(path, "mass", 4)) {
@@ -1487,6 +1560,17 @@ int getDir(const char *path, FILEINFO *info)
 			scan_USB_mass();
 		n = readGENERIC(path, info, max);
 	}
+	else if (!strncmp(path, "usb", 3)) {
+		char mass_path[MAX_PATH];
+
+		if (mapUsbPathToMassPath(path, mass_path) < 0)
+			return 0;
+		if (!USB_mass_scanned)
+			scan_USB_mass();
+		n = readGENERIC(mass_path, info, max);
+	}
+	else if (!strncmp(path, "ata", 3))
+		n = readGENERIC(path, info, max);
 	else if (!strncmp(path, "cdfs", 4))
 		n = readCD(path, info, max);
 #ifdef ETH
@@ -1494,12 +1578,22 @@ int getDir(const char *path, FILEINFO *info)
 		n = readHOST(path, info, max);
 #endif
 #ifdef MMCE
-	else if (!strncmp(path, "mmce", 4))
+	else if (!strncmp(path, "mmce", 4)) {
+		loadMmceModules();
 		n = readGENERIC(path, info, max);
+	}
+#endif
+#ifdef MX4SIO
+	else if (!strncmp(path, "mx4sio", 6)) {
+		if (!mx4sio_driver_running && !loadMx4sioModules())
+			return 0;
+		n = readGENERIC(path, info, max);
+	}
 #endif
 #ifdef XFROM
 	else if (!strncmp(path, "xfrom", 5)) {
-		
+		if (!console_is_PSX)
+			return 0;
 		loadFlashModules();
 		n = readGENERIC(path, info, max);
 	}
@@ -1535,13 +1629,19 @@ static int getGameTitle(const char *path, const FILEINFO *file, unsigned char *o
 
 	if (!strncmp(path, "hdd", 3)) {
 		ret = getHddParty(path, file, party, dir);
-		if ((ret = mountParty(party) < 0))
+		if (ret < 0)
+			return -1;
+		ret = mountParty(party);
+		if (ret < 0)
 			return -1;
 		dir[3] = ret + '0';
 #ifdef DVRP
 	} else if (!strncmp(path, "dvr_hdd", 7)) {
 		ret = getHddDVRPParty(path, file, party, dir);
-		if ((ret = mountDVRPParty(party) < 0))
+		if (ret < 0)
+			return -1;
+		ret = mountDVRPParty(party);
+		if (ret < 0)
 			return -1;
 		dir[7] = ret + '0';
 #endif
@@ -1689,7 +1789,14 @@ int menu(const char *path, FILEINFO *file)
 		enable[TIMEMANIP] = FALSE;
 	} 
 //#endif //TMANIP
-	if ( (genCmpFileExt(file->name, "ELF")) && ( (!strncmp(path, "mass", 4)) || (!strncmp(path, "hdd0:/", 6) && !menu_disabled) ) )
+	if ((genCmpFileExt(file->name, "ELF")) &&
+	    ((!strncmp(path, "mass", 4)) ||
+	     (!strncmp(path, "usb", 3)) ||
+#ifdef MX4SIO
+	     (!strncmp(path, "mx4sio", 6)) ||
+#endif
+	     (!strncmp(path, "ata", 3)) ||
+	     (!strncmp(path, "hdd0:/", 6) && !menu_disabled)))
 	{
 		enable[TITLE_CFG] = TRUE;
 	} else {enable[TITLE_CFG] = FALSE;}
@@ -2121,17 +2228,19 @@ int delete (const char *path, const FILEINFO *file)
 	int nfiles, i, ret;
 
 	if (!strncmp(path, "hdd", 3)) {
-		getHddParty(path, file, party, hdddir);
+		if (getHddParty(path, file, party, hdddir) < 0)
+			return -1;
 		ret = mountParty(party);
 		if (ret < 0)
-			return 0;
+			return -1;
 		hdddir[3] = ret + '0';
 #ifdef DVRP
 	} else if (!strncmp(path, "dvr_hdd", 7)) {
-		getHddDVRPParty(path, file, party, hdddir);
+		if (getHddDVRPParty(path, file, party, hdddir) < 0)
+			return -1;
 		ret = mountDVRPParty(party);
 		if (ret < 0)
-			return 0;
+			return -1;
 		hdddir[7] = ret + '0';
 #endif
 	}
@@ -2366,6 +2475,9 @@ int copy(char *outPath, const char *inPath, FILEINFO file, int recurses)
 	int psu_pad_size = 0, PSU_restart_f = 0;
 	char *cp, *np;
 
+	if (recurses + 1 >= MAX_RECURSE)
+		return -1;
+
 	PM_flag[recurses + 1] = PM_NORMAL;  //assume normal mode for next level
 	PM_file[recurses + 1] = -1;         //assume that no special file is needed
 
@@ -2381,27 +2493,38 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 	//for non-renaming cases this is always identical to the struct 'file'
 
 	if (!strncmp(inPath, "hdd", 3)) {
-		getHddParty(inPath, &file, inParty, in);
+		if (getHddParty(inPath, &file, inParty, in) < 0)
+			return -1;
 		pfsin = mountParty(inParty);
+		if (pfsin < 0)
+			return -1;
 		in[3] = pfsin + '0';
 #ifdef DVRP
-	}
-	if (!strncmp(inPath, "dvr_hdd", 7)) {
-		getHddDVRPParty(inPath, &file, inParty, in);
+	} else if (!strncmp(inPath, "dvr_hdd", 7)) {
+		if (getHddDVRPParty(inPath, &file, inParty, in) < 0)
+			return -1;
 		pfsin = mountDVRPParty(inParty);
+		if (pfsin < 0)
+			return -1;
 		in[7] = pfsin + '0';
 #endif
 	} else
 		sprintf(in, "%s%s", inPath, file.name);
 
 	if (!strncmp(outPath, "hdd", 3)) {
-		getHddParty(outPath, &newfile, outParty, out);
+		if (getHddParty(outPath, &newfile, outParty, out) < 0)
+			return -1;
 		pfsout = mountParty(outParty);
+		if (pfsout < 0)
+			return -1;
 		out[3] = pfsout + '0';
 #ifdef DVRP
 	} else if (!strncmp(outPath, "dvr_hdd", 7)) {
-		getHddDVRPParty(outPath, &newfile, outParty, out);
+		if (getHddDVRPParty(outPath, &newfile, outParty, out) < 0)
+			return -1;
 		pfsout = mountDVRPParty(outParty);
+		if (pfsout < 0)
+			return -1;
 		out[7] = pfsout + '0';
 #endif
 	} else
@@ -2705,10 +2828,14 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 				}                                               //ends non-MC source clause
 				mcSetFileInfo(out[2] - '0', 0, &out[4], &file.stats, ret);
 				mcSync(0, NULL, &dummy);
-			} else {                                    //Handle folder copied to non-MC
-				if (!strncmp(out, "host", 4)) {         //for files copied to host: we skip Chstat
-				} else if (!strncmp(out, "mass", 4)) {  //for files copied to mass: we skip Chstat
-				} else {                                //for other devices we use fileXio_ stuff
+				} else {                                    //Handle folder copied to non-MC
+					if (!strncmp(out, "host", 4)) {         //for files copied to host: we skip Chstat
+					} else if (!strncmp(out, "mass", 4)) {  //for files copied to mass: we skip Chstat
+#ifdef MX4SIO
+					} else if (!strncmp(out, "mx4sio", 6)) {  //for files copied to mx4sio: we skip Chstat
+#endif
+					} else if (!strncmp(out, "ata", 3)) {  //for files copied to ata: we skip Chstat
+					} else {                                //for other devices we use fileXio_ stuff
 					memcpy(iox_stat.ctime, (void *)&file.stats._Create, 8);
 					memcpy(iox_stat.mtime, (void *)&file.stats._Modify, 8);
 					memcpy(iox_stat.atime, iox_stat.mtime, 8);
@@ -2830,13 +2957,23 @@ non_PSU_RESTORE_init:
 	if (!strncmp(out, "mc", 2) || !strncmp(out, "mass", 4) || !strncmp(out, "vmc", 3))
 		buffSize = 131072;  //Use  128KB if writing to USB (Flash RAM writes) or MC (pretty slow).
 	                        //VMC contents should use the same size, as VMCs will often be stored on USB
+#ifdef MX4SIO
+	else if (!strncmp(out, "mx4sio", 6))
+		buffSize = 131072;  //Use 128KB when writing to MX4SIO (FAT over SIO2).
+#endif
+	else if (!strncmp(out, "ata", 3))
+		buffSize = 131072;  //Use 128KB when writing to ATA (BDM FATFS).
 	else if (!strncmp(in, "mc", 2))
 		buffSize = 262144;  //Use 256KB if reading from MC (still pretty slow)
 #ifdef ETH
 	else if (!strncmp(out, "host", 4))
 		buffSize = 393216;  //Use 384KB if writing to HOST (acceptable)
 #endif
-	else if ((!strncmp(in, "mass", 4)) || (!strncmp(in, "host", 4)))
+	else if ((!strncmp(in, "mass", 4)) || (!strncmp(in, "host", 4))
+#ifdef MX4SIO
+	         || (!strncmp(in, "mx4sio", 6))
+#endif
+	         || (!strncmp(in, "ata", 3)))
 		buffSize = 524288;  //Use 512KB reading from USB or HOST (acceptable)
 
 	if (size < buffSize)
@@ -3003,10 +3140,14 @@ non_PSU_RESTORE_init:
 			mcSetFileInfo(out[2] - '0', 0, &out[4], &file.stats, ret);
 			mcSync(0, NULL, &dummy);
 		}
-	} else {                                    //Handle file copied to non-MC
-		if (!strncmp(out, "host", 4)) {         //for files copied to host: we skip Chstat
-		} else if (!strncmp(out, "mass", 4)) {  //for files copied to mass: we skip Chstat
-		} else {                                //for other devices we use fileXio_ stuff
+		} else {                                    //Handle file copied to non-MC
+			if (!strncmp(out, "host", 4)) {         //for files copied to host: we skip Chstat
+			} else if (!strncmp(out, "mass", 4)) {  //for files copied to mass: we skip Chstat
+#ifdef MX4SIO
+			} else if (!strncmp(out, "mx4sio", 6)) {  //for files copied to mx4sio: we skip Chstat
+#endif
+			} else if (!strncmp(out, "ata", 3)) {  //for files copied to ata: we skip Chstat
+			} else {                                //for other devices we use fileXio_ stuff
 			memcpy(iox_stat.ctime, (void *)&file.stats._Create, 8);
 			memcpy(iox_stat.mtime, (void *)&file.stats._Modify, 8);
 			memcpy(iox_stat.atime, iox_stat.mtime, 8);
@@ -3452,7 +3593,7 @@ int keyboard2(char *out, int max)
 //--------------------------------------------------------------
 int setFileList(const char *path, const char *ext, FILEINFO *files, int cnfmode)
 {
-	int nfiles, i, j, ret;
+	int nfiles, i, j, ret, allow_usb_devices;
 
 	size_valid = 0;
 	time_valid = 0;
@@ -3461,53 +3602,43 @@ int setFileList(const char *path, const char *ext, FILEINFO *files, int cnfmode)
 		//-- Start case for browser root pseudo folder with device links --
 		if (USB_mass_scanned)  //if mass drives were scanned in earlier browsing
 			scan_USB_mass();   //then allow another scan here (timer dependent)
+		allow_usb_devices = ((cnfmode != USBD_IRX_CNF) && (cnfmode != USBKBD_IRX_CNF) && (cnfmode != USBMASS_IRX_CNF));
 
 		strcpy(files[nfiles].name, "mc0:");
 		files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
-		
-#ifdef MX4SIO
-		if (!mx4sio_driver_running) {
-#endif
 		strcpy(files[nfiles].name, "mc1:");
 		files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
-#ifdef MX4SIO
+
+		if (allow_usb_devices) {
+			strcpy(files[nfiles].name, "mass:");
+			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
 		}
-#endif
-#ifdef MMCE
+
+	#ifdef MMCE
 		strcpy(files[nfiles].name, "mmce0:");
 		files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
-		strcpy(files[nfiles].name, "mmce1:");
-		files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
-#endif
+	#endif
+
+	#ifdef MX4SIO
+		if (allow_usb_devices) {
+			strcpy(files[nfiles].name, "mx4sio:");
+			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+		}
+	#endif
+
 		strcpy(files[nfiles].name, "hdd0:");
 		files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
-#ifdef DVRP
-		if (console_is_PSX)
-		{
-		strcpy(files[nfiles].name, "dvr_hdd0:");
-		files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+
+#ifdef EXFAT
+		if (allow_usb_devices) {
+			strcpy(files[nfiles].name, "ata:");
+			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
 		}
 #endif
-#ifdef XFROM
-		strcpy(files[nfiles].name, "xfrom0:");
-		files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
-#endif
+
 		strcpy(files[nfiles].name, "cdfs:");
 		files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
-		if ((cnfmode != USBD_IRX_CNF) && (cnfmode != USBKBD_IRX_CNF) && (cnfmode != USBMASS_IRX_CNF)) {
-			//The condition above blocks selecting USB drivers from USB devices
-			if (USB_mass_ix[0] || !USB_mass_scanned) {
-				strcpy(files[nfiles].name, "mass:");
-				files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
-			}
-			for (i = 1; i < 10; i++) {
-				if (USB_mass_ix[i]) {
-					strcpy(files[nfiles].name, "mass0:");
-					files[nfiles].name[4] = USB_mass_ix[i];
-					files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
-				}
-			}
-		}
+
 		if (!cnfmode || (cnfmode == JPG_CNF)) {
 			//This condition blocks selecting any CONFIG items on PC
 			//or in a virtual memory card
@@ -3524,6 +3655,19 @@ int setFileList(const char *path, const char *ext, FILEINFO *files, int cnfmode)
 				files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
 			}
 		}
+#ifdef XFROM
+		if (console_is_PSX) {
+			strcpy(files[nfiles].name, "xfrom0:");
+			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+		}
+#endif
+
+#ifdef DVRP
+		if (console_is_PSX) {
+			strcpy(files[nfiles].name, "dvr_hdd0:");
+			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+		}
+#endif
 		if (cnfmode < 2) {
 			//This condition blocks use of MISC pseudo-device for drivers and skins
 			//And allows this device only for launch keys and for normal browsing
@@ -4088,29 +4232,35 @@ int getFilePath(char *out, int cnfmode)
 							}
 						}
 					}  //ends NEWDIR
-					else if (ret == NEWICON) {
-						strcpy(tmp, LNG(Icon_Title));
-						if (keyboard(tmp, 36) <= 0)
-							goto DoneIcon;
-						genFixPath(path, tmp1);
-						strcat(tmp1, "icon.sys");
-						if ((ret = genOpen(tmp1, O_RDONLY)) >= 0) {  //if old "icon.sys" file exists
-							genClose(ret);
+						else if (ret == NEWICON) {
+							strcpy(tmp, LNG(Icon_Title));
+							if (keyboard(tmp, 36) <= 0)
+								goto DoneIcon;
+							if (genFixPath(path, tmp1) < 0) {
+								sprintf(msg0, "Path conversion failed: %s", path);
+								goto DoneIcon;
+							}
+							strcat(tmp1, "icon.sys");
+							if ((ret = genOpen(tmp1, O_RDONLY)) >= 0) {  //if old "icon.sys" file exists
+								genClose(ret);
 							sprintf(msg1,
 							        "\n\"icon.sys\" %s.\n\n%s ?", LNG(file_alredy_exists),
 							        LNG(Do_you_wish_to_overwrite_it));
 							if (ynDialog(msg1) < 0)
 								goto DoneIcon;
 							genRemove(tmp1);
-						}
-						make_iconsys(tmp, "icon.icn", tmp1);
-						browser_cd = TRUE;
-						strcpy(tmp, LNG(IconText));
-						keyboard(tmp, 36);
-						genFixPath(path, tmp1);
-						strcat(tmp1, "icon.icn");
-						if ((ret = genOpen(tmp1, O_RDONLY)) >= 0) {  //if old "icon.icn" file exists
-							genClose(ret);
+							}
+							make_iconsys(tmp, "icon.icn", tmp1);
+							browser_cd = TRUE;
+							strcpy(tmp, LNG(IconText));
+							keyboard(tmp, 36);
+							if (genFixPath(path, tmp1) < 0) {
+								sprintf(msg0, "Path conversion failed: %s", path);
+								goto DoneIcon;
+							}
+							strcat(tmp1, "icon.icn");
+							if ((ret = genOpen(tmp1, O_RDONLY)) >= 0) {  //if old "icon.icn" file exists
+								genClose(ret);
 							sprintf(msg1,
 							        "\n\"icon.icn\" %s.\n\n%s ?", LNG(file_alredy_exists),
 							        LNG(Do_you_wish_to_overwrite_it));
@@ -4126,17 +4276,24 @@ int getFilePath(char *out, int cnfmode)
 						i = ret - MOUNTVMC0;
 						load_vmc_fs();
 						sprintf(tmp, "vmc%d:", i);
-						if (vmcMounted[i]) {
-							if ((j = vmc_PartyIndex[i]) >= 0) {
-								vmc_PartyIndex[i] = -1;
-								if (j != vmc_PartyIndex[1 ^ i])
-									Party_vmcIndex[j] = -1;
+							if (vmcMounted[i]) {
+								if ((j = vmc_PartyIndex[i]) >= 0) {
+									vmc_PartyIndex[i] = -1;
+									if (j != vmc_PartyIndex[1 ^ i])
+										Party_vmcIndex[j] = -1;
+								}
+								fileXioUmount(tmp);
+								vmcMounted[i] = 0;
 							}
-							fileXioUmount(tmp);
-							vmcMounted[i] = 0;
-						}
-						j = genFixPath(path, tmp1);
-						strcpy(tmp2, tmp1);
+							j = genFixPath(path, tmp1);
+							if (j < 0) {
+								sprintf(msg1, "\n'%s vmc%d:' for \"%s\"\nResult=%d",
+								        LNG(Mount), i, path, j);
+								(void)ynDialog(msg1);
+								browser_pushed = FALSE;
+								continue;
+							}
+							strcpy(tmp2, tmp1);
 #ifdef ETH
 						if (!strncmp(path, "host:", 5)) {
 							makeHostPath(tmp2, tmp1);
@@ -4335,20 +4492,15 @@ int getFilePath(char *out, int cnfmode)
 				else if ((file_show == 2) && files[top + i].title[0] != 0) {
 					mcTitle = files[top + i].title;
 				} else {  //Show normal file/folder names
-#ifdef MX4SIO
-					if (path[0] == 0) { // we are on root. apply the unique "alias" here
-						if ((!strncmp(files[top + i].name, "mass", 4)) //
-						&& (files[top + i].name[4] == ('0' + mx4sio_idx) || (mx4sio_idx == 0 && files[top + i].name[4] == ':')) //index corresponds to mx4sio index, also assume that if device path index 4 is equal to ':' then it is index 0
-						)
-							strcpy(tmp, "mx4sio:");
-						else 
-							strcpy(tmp, files[top + i].name);
-				} else {
-					strcpy(tmp, files[top + i].name);
-				}
-#else
-				strcpy(tmp, files[top + i].name);
-#endif
+					const char *root_label;
+
+					root_label = NULL;
+					if (path[0] == 0)
+						root_label = getRootDeviceLabel(files[top + i].name);
+					if (root_label != NULL)
+						strcpy(tmp, root_label);
+					else
+						strcpy(tmp, files[top + i].name);
 					if (file_show > 0) {  //Does display mode include file details ?
 						name_limit = 43 * 8;
 					} else {  //Filenames are shown without file details
@@ -4366,7 +4518,7 @@ int getFilePath(char *out, int cnfmode)
 					}
 				}
 
-				if (files[top + i].stats.AttrFile & sceMcFileAttrSubdir)
+				if (files[top + i].stats.AttrFile & sceMcFileAttrSubdir && path[0] != 0)
 					strcat(tmp, "/");
 				if (mcTitle != NULL)
 					printXY_sjis(mcTitle, x + 4, y, color, TRUE);
@@ -4666,7 +4818,9 @@ void subfunc_Paste(char *mess, char *path)
 		ret = copy(path, clipPath, clipFiles[i], 0);
 		if (ret < 0)
 			break;
-		if (browser_cut) {
+	}
+	if ((ret >= 0) && browser_cut) {
+		for (i = 0; i < nclipFiles; i++) {
 			ret = delete (clipPath, &clipFiles[i]);
 			if (ret < 0)
 				break;

@@ -31,6 +31,12 @@ It features:
 - `MX4SIO`: Support for browsing the contents of SD Cards connected via [mx4sio](https://www.google.com/search?q=mx4sio)
 - `MMCE`: Support for browsing the contents of the SDCard connected to MemcardPro2 or SD2PSX and their variants (make sure firmware of device is new enough to support the protocol)
 
+### Build shortcuts
+
+- `make all-ds34-off` builds a dedicated ELF without DS34 support.
+- `make all-ds34-on` builds a dedicated ELF with DS34 support.
+- `make all-ds34-variants` builds both variants in one run.
+
 
 # **original readme**
 wLaunchELF, formerly known as uLaunchELF, also known as wLE or uLE (abbreviated), is an open source file manager and executable launcher for the Playstation 2 console based off of the original LaunchELF. It contains many different features, including a text editor, hard drive manager, as well as network support, and much more.
