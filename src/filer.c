@@ -212,7 +212,9 @@ static const char *getRootDeviceLabel(const char *name)
 		return "usb";
 #ifdef MMCE
 	if (!strcmp(name, "mmce0:"))
-		return "mmce";
+		return "mmce0";
+	if (!strcmp(name, "mmce1:"))
+		return "mmce1";
 #endif
 #ifdef MX4SIO
 	if (!strcmp(name, "mx4sio:"))
@@ -3615,19 +3617,21 @@ int setFileList(const char *path, const char *ext, FILEINFO *files, int cnfmode)
 		}
 
 	#ifdef MMCE
-		strcpy(files[nfiles].name, "mmce0:");
-		files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+			strcpy(files[nfiles].name, "mmce0:");
+			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+			strcpy(files[nfiles].name, "mmce1:");
+			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
 	#endif
 
 	#ifdef MX4SIO
-		if (allow_usb_devices) {
-			strcpy(files[nfiles].name, "mx4sio:");
-			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
-		}
+			if (allow_usb_devices) {
+				strcpy(files[nfiles].name, "mx4sio:");
+				files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+			}
 	#endif
 
-		strcpy(files[nfiles].name, "hdd0:");
-		files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+			strcpy(files[nfiles].name, "hdd0:");
+			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
 
 #ifdef EXFAT
 		if (allow_usb_devices) {
@@ -3636,42 +3640,42 @@ int setFileList(const char *path, const char *ext, FILEINFO *files, int cnfmode)
 		}
 #endif
 
-		strcpy(files[nfiles].name, "cdfs:");
-		files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+			strcpy(files[nfiles].name, "cdfs:");
+			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
 
-		if (!cnfmode || (cnfmode == JPG_CNF)) {
-			//This condition blocks selecting any CONFIG items on PC
-			//or in a virtual memory card
-#ifdef ETH
-			strcpy(files[nfiles].name, "host:");
-			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
-#endif
-			if (vmcMounted[0]) {
-				strcpy(files[nfiles].name, "vmc0:");
-				files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
-			}
-			if (vmcMounted[1]) {
-				strcpy(files[nfiles].name, "vmc1:");
-				files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
-			}
-		}
 #ifdef XFROM
-		if (console_is_PSX) {
-			strcpy(files[nfiles].name, "xfrom0:");
-			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
-		}
+			if (console_is_PSX) {
+				strcpy(files[nfiles].name, "xfrom0:");
+				files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+			}
 #endif
 
 #ifdef DVRP
-		if (console_is_PSX) {
-			strcpy(files[nfiles].name, "dvr_hdd0:");
-			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
-		}
+			if (console_is_PSX) {
+				strcpy(files[nfiles].name, "dvr_hdd0:");
+				files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+			}
 #endif
-		if (cnfmode < 2) {
-			//This condition blocks use of MISC pseudo-device for drivers and skins
-			//And allows this device only for launch keys and for normal browsing
-			strcpy(files[nfiles].name, LNG(MISC));
+			if (!cnfmode || (cnfmode == JPG_CNF)) {
+				//This condition blocks selecting any CONFIG items on PC
+				//or in a virtual memory card
+#ifdef ETH
+				strcpy(files[nfiles].name, "host:");
+				files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+#endif
+				if (vmcMounted[0]) {
+					strcpy(files[nfiles].name, "vmc0:");
+					files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+				}
+				if (vmcMounted[1]) {
+					strcpy(files[nfiles].name, "vmc1:");
+					files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+				}
+			}
+			if (cnfmode < 2) {
+				//This condition blocks use of MISC pseudo-device for drivers and skins
+				//And allows this device only for launch keys and for normal browsing
+				strcpy(files[nfiles].name, LNG(MISC));
 			files[nfiles].stats.AttrFile = sceMcFileAttrSubdir;
 			nfiles++;
 		}
