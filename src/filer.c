@@ -205,35 +205,43 @@ static int mapUsbPathToMassPath(const char *usb_path, char *mass_path)
 static const char *getRootDeviceLabel(const char *name)
 {
 	if (!strcmp(name, "mc0:"))
-		return "mc0";
+		return "mc0:/";
 	if (!strcmp(name, "mc1:"))
-		return "mc1";
+		return "mc1:/";
 	if (!strcmp(name, "mass:"))
-		return "usb";
+		return "usb:/";
 #ifdef MMCE
 	if (!strcmp(name, "mmce0:"))
-		return "mmce0";
+		return "mmce0:/";
 	if (!strcmp(name, "mmce1:"))
-		return "mmce1";
+		return "mmce1:/";
 #endif
 #ifdef MX4SIO
 	if (!strcmp(name, "mx4sio:"))
-		return "mx4sio";
+		return "mx4sio:/";
 #endif
 	if (!strcmp(name, "hdd0:"))
-		return "hdd0";
+		return "hdd0:/";
 #ifdef EXFAT
 	if (!strcmp(name, "ata:"))
-		return "ata";
+		return "ata:/";
 #endif
+	if (!strcmp(name, "cdfs:"))
+		return "cdfs:/";
 #ifdef XFROM
 	if (!strcmp(name, "xfrom0:") || !strcmp(name, "xfrom:"))
-		return "xfrom";
+		return "xfrom:/";
 #endif
 #ifdef DVRP
 	if (!strcmp(name, "dvr_hdd0:"))
-		return "dvr";
+		return "dvr:/";
 #endif
+#ifdef ETH
+	if (!strcmp(name, "host:"))
+		return "host:/";
+#endif
+	if (!strcmp(name, LNG(MISC)))
+		return "MISC/";
 
 	return NULL;
 }
