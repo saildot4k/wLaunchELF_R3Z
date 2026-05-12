@@ -3,6 +3,10 @@
 //--------------------------------------------------------------
 #include "launchelf.h"
 
+#ifdef EXFAT
+void loadAtaModules(void);
+#endif
+
 typedef struct
 {
 	unsigned char unknown;
@@ -985,6 +989,9 @@ int genFixPath(const char *inp_path, char *gen_path)
 		//end of clause for using a USB mass: path
 
 	} else if (!strncmp(uLE_path, "ata", 3)) {  //if using ATA BDM path
+#ifdef EXFAT
+		loadAtaModules();
+#endif
 		if (pathSep && (pathSep - uLE_path < 7) && pathSep[-1] == ':')
 			strcpy(gen_path + (pathSep - uLE_path), pathSep + 1);
 
@@ -1579,8 +1586,12 @@ int getDir(const char *path, FILEINFO *info)
 			scan_USB_mass();
 		n = readGENERIC(mass_path, info, max);
 	}
-	else if (!strncmp(path, "ata", 3))
+	else if (!strncmp(path, "ata", 3)) {
+#ifdef EXFAT
+		loadAtaModules();
+#endif
 		n = readGENERIC(path, info, max);
+	}
 	else if (!strncmp(path, "cdfs", 4))
 		n = readCD(path, info, max);
 #ifdef ETH

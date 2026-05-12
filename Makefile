@@ -153,7 +153,7 @@ ifeq ($(TMANIP),2)
 endif
 
 ifeq ($(EXFAT),1)
-    EE_OBJS += bdm_irx.o bdmfs_fatfs_irx.o usbmass_bd_irx.o
+    EE_OBJS += bdm_irx.o bdmfs_fatfs_irx.o usbmass_bd_irx.o ata_bd_irx.o
     EE_CFLAGS += -DEXFAT
     HAS_EXFAT = -EXFAT
 else

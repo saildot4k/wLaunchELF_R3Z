@@ -1,9 +1,9 @@
-ifeq ($(MX4SIO),0) # no mx4sio? use ps2dev:1.0 drivers
+ifeq ($(SIO2MAN),0) # no custom SIO2 stack? use ps2dev:1.0 drivers
   $(info using ps2dev:1.0 mc drivers)
   MCMAN_SOURCE = $(PS2SDK)/iop/irx/mcman.irx
   MCSERV_SOURCE = $(PS2SDK)/iop/irx/mcserv.irx
   SIO2MAN_SOURCE = $(PS2SDK)/iop/irx/sio2man.irx
-else # if we have mx4sio use newer IRX to avoid deadlocks when opening common memory card
+else # custom SIO2 stack (MMCE/MX4SIO/manual): use newer IRX to avoid deadlocks
   $(info using latest mc drivers)
   MCMAN_SOURCE = iop/__precompiled/mcman.irx
   MCSERV_SOURCE = iop/__precompiled/mcserv.irx
@@ -47,6 +47,9 @@ $(EE_ASM_DIR)bdmfs_fatfs_irx.s:iop/__precompiled/bdmfs_fatfs.irx | $(EE_ASM_DIR)
 
 $(EE_ASM_DIR)usbmass_bd_irx.s:iop/__precompiled/usbmass_bd.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ usbmass_bd_irx
+
+$(EE_ASM_DIR)ata_bd_irx.s:$(PS2SDK)/iop/irx/ata_bd.irx | $(EE_ASM_DIR)
+	$(BIN2S) $< $@ ata_bd_irx
 else
 $(EE_ASM_DIR)usbhdfsd_irx.s: $(PS2SDK)/iop/irx/usbhdfsd.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ usb_mass_irx
@@ -214,4 +217,3 @@ $(ISO_BIN_DIR)system.cnf: $(ISO_BIN_DIR)
 	echo "BOOT2 = cdrom0:\$(ISO_BIN_ELF);1" >"$@"
 	echo VER = $(SYSTEMCNF_VERSION)>>"$@"
 	echo VMODE = $(SYSTEMCNF_VMODE)>>"$@"
-

@@ -3,6 +3,10 @@
 //--------------------------------------------------------------
 #include "launchelf.h"
 
+#ifdef EXFAT
+void loadAtaModules(void);
+#endif
+
 #define MAX_PATH 1025
 
 extern u8 loader_elf[];
@@ -110,6 +114,9 @@ int checkELFheader(char *path)
 	} else if (!strncmp(fullpath, "ata", 3)) {
 		char *pathSep;
 
+#ifdef EXFAT
+		loadAtaModules();
+#endif
 		pathSep = strchr(path, '/');
 		if (pathSep && (pathSep - path < 7) && pathSep[-1] == ':')
 			strcpy(fullpath + (pathSep - path), pathSep + 1);

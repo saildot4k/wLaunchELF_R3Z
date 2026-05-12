@@ -50,6 +50,7 @@ IMPORT_BIN2C(usbd_irx);
 IMPORT_BIN2C(bdm_irx);
 IMPORT_BIN2C(bdmfs_fatfs_irx);
 IMPORT_BIN2C(usbmass_bd_irx);
+IMPORT_BIN2C(ata_bd_irx);
 #else
 IMPORT_BIN2C(usb_mass_irx);
 #endif
@@ -163,6 +164,9 @@ static u8 have_ps2hdd = 0;
 static u8 have_ps2fs = 0;
 static u8 have_smbman = 0;
 static u8 have_vmc_fs = 0;
+#ifdef EXFAT
+static u8 have_ata_bd = 0;
+#endif
 #ifdef XFROM
 static u8 have_Flash_modules = 0;
 #endif
@@ -1567,12 +1571,11 @@ static void resetRuntimeDeviceState(void)
 
 static void switchStorageDriverStack(int target_mode)
 {
-#if defined(MMCE) && defined(MX4SIO)
+#if defined(MMCE) || defined(MX4SIO)
 	if (storage_driver_stack_mode == target_mode)
 		return;
 
-	if ((storage_driver_stack_mode == STORAGE_STACK_MMCE && target_mode == STORAGE_STACK_MX4SIO) ||
-	    (storage_driver_stack_mode == STORAGE_STACK_MX4SIO && target_mode == STORAGE_STACK_MMCE)) {
+	if (storage_driver_stack_mode != STORAGE_STACK_DEFAULT) {
 		DPRINTF("Switching storage driver stack (%d -> %d), resetting IOP\n", storage_driver_stack_mode, target_mode);
 		resetRuntimeDeviceState();
 		storage_driver_stack_mode = STORAGE_STACK_DEFAULT;
@@ -1592,7 +1595,7 @@ void loadMmceModules(void)
 	if (!have_mmce) {
 		id = SifExecModuleBuffer(mmceman_irx, size_mmceman_irx, 0, NULL, &ret);
 		DPRINTF(" [MMCE]: id=%d ret=%d\n", id, ret);
-		have_mmce = (id >= 0);
+		have_mmce = (id >= 0 && ret >= 0);
 	}
 	if (have_mmce)
 		storage_driver_stack_mode = STORAGE_STACK_MMCE;
@@ -1621,6 +1624,23 @@ int loadMx4sioModules(void)
 		storage_driver_stack_mode = STORAGE_STACK_MX4SIO;
 
 	return have_mx4sio;
+}
+#endif
+
+#ifdef EXFAT
+void loadAtaModules(void)
+{
+	int ret, id;
+
+	ensureCoreIoStackReady();
+	switchStorageDriverStack(STORAGE_STACK_DEFAULT);
+	loadUsbModules();
+	load_ps2dev9();
+	if (!have_ata_bd) {
+		id = SifExecModuleBuffer(ata_bd_irx, size_ata_bd_irx, 0, NULL, &ret);
+		DPRINTF(" [ATA_BD]: id=%d ret=%d\n", id, ret);
+		have_ata_bd = (id >= 0 && ret >= 0);
+	}
 }
 #endif
 
@@ -2291,6 +2311,9 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		}
 		goto ELFchecked;
 	} else if (!strncmp(path, "ata", 3)) {
+#ifdef EXFAT
+		loadAtaModules();
+#endif
 		if ((t = checkELFheader(path)) <= 0)
 			goto ELFnotFound;
 		party[0] = 0;
@@ -2636,6 +2659,9 @@ static void Reset()
 	have_ps2atad = 0;
 	have_ps2hdd = 0;
 	have_ps2fs = 0;
+#ifdef EXFAT
+	have_ata_bd = 0;
+#endif
 #ifdef MMCE
 	have_mmce = 0;
 #endif
@@ -2844,6 +2870,9 @@ int main(int argc, char *argv[])
 #endif
 		else if (!strncmp(argv[0], "ata", 3)) {
 			boot = BOOT_DEVICE_MASS;
+#ifdef EXFAT
+			loadAtaModules();
+#endif
 		}
 		else if (!strncmp(argv[0], "cd", 2)) {
 			boot = BOOT_DEVICE_CDVD;
