@@ -62,7 +62,7 @@ char *itoa(char *in, int val)
 char *uitoa(char *in, u64 val)
 {
 	char *p = in;
-	int bool = 0;
+	int has_digits = 0;
 	int i = 19;
 	char c;
 	int j;
@@ -76,10 +76,10 @@ char *uitoa(char *in, u64 val)
 
 		for (c = '0'; val >= tmp; c++) {
 			val -= tmp;
-			bool = 1;
+			has_digits = 1;
 		}
 
-		if (bool == 1)
+		if (has_digits == 1)
 			*p++ = c;
 	} while (i);
 
