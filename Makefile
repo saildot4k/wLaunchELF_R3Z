@@ -60,11 +60,13 @@ else ifneq ($(wildcard $(PS2DEV)/bin/bin2s),)
 BIN2S_TOOL := $(PS2DEV)/bin/bin2s
 else ifneq ($(wildcard /usr/local/ps2dev/bin/bin2s),)
 BIN2S_TOOL := /usr/local/ps2dev/bin/bin2s
+else ifneq ($(wildcard $(CURDIR)/scripts/bin2s-fallback.sh),)
+BIN2S_TOOL := sh $(CURDIR)/scripts/bin2s-fallback.sh
 else
 BIN2S_TOOL := $(shell command -v bin2s 2>/dev/null)
 endif
 ifeq ($(strip $(BIN2S_TOOL)),)
-$(error bin2s not found. Install PS2SDK tools or set BIN2S_TOOL=/full/path/to/bin2s)
+$(error bin2s not found. Install PS2SDK tools, or set BIN2S_TOOL=/full/path/to/bin2s)
 endif
 BIN2S = @$(BIN2S_TOOL)
 
