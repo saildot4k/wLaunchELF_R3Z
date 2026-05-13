@@ -1036,7 +1036,8 @@ int genFixPath(const char *inp_path, char *gen_path)
 	} else if (!strncmp(uLE_path, "dvr_hdd0:/", 10)) {  //If using DVRP HDD path
 		if (!console_is_PSX) {
 			part_ix = -1;
-			goto finalize_path;
+			genLimObjName(gen_path, 0);
+			return part_ix;
 		}
 		//Get path on DVR HDD unit, LaunchELF's format (e.g. dvr_hdd0:/partition/path/to/file)
 		strcpy(loc_path, uLE_path + 10);
@@ -1062,7 +1063,6 @@ int genFixPath(const char *inp_path, char *gen_path)
 		//end of clause for using an HDD path
 #endif
 	}
-finalize_path:
 	genLimObjName(gen_path, 0);
 	return part_ix;
 	//non-HDD Path => 99, Good HDD Path => 0-3, Bad Path => negative
@@ -2175,7 +2175,7 @@ u64 getFileSize(const char *path, const FILEINFO *file)
 // const FILEINFO *file = the FILEINFO struct for that save, however, this function only cares about folder name
 //_msg0 = pointer to msg0 to report what happened to the user (uLaunchELF only)
 //#ifdef TMANIP
-	void time_manip(const char *path, const FILEINFO *file, char **_msg0)
+	void time_manip(const char *path, const FILEINFO *file, char *_msg0)
 	{
 		int rett;  //this var will be used to store the result of mcSetFileInfo()
 		int slot;
@@ -2226,7 +2226,7 @@ u64 getFileSize(const char *path, const FILEINFO *file)
 	//
 //#endif //TMANIP
 
-void make_title_cfg(const char *path, const FILEINFO *file, char **_msg0)
+void make_title_cfg(const char *path, const FILEINFO *file, char *_msg0)
 {
 	int fd;
 	char title_cfg_buffer[128], ELF_NAME[64];
@@ -4409,7 +4409,7 @@ int getFilePath(char *out, int cnfmode)
 						sprintf(msg1, "\n\n %s  [%s]  ?\n", LNG(change_timestamp_of), files[browser_sel].name);
 #endif //TMANIP_MORON
 						if (ynDialog(msg1) > 0) {
-							time_manip(path, &files[browser_sel], &msg0);
+							time_manip(path, &files[browser_sel], msg0);
 							browser_pushed = FALSE;
 							browser_repos = TRUE;  // TEST
 							browser_cd = TRUE;     //TEST
@@ -4419,7 +4419,7 @@ int getFilePath(char *out, int cnfmode)
 					
 					else if (ret == TITLE_CFG)
 					{
-						make_title_cfg(path, &files[browser_sel], &msg0);
+						make_title_cfg(path, &files[browser_sel], msg0);
 						browser_pushed = FALSE;
 						browser_repos = TRUE;  // TEST
 						browser_cd = TRUE;     //TEST
@@ -4801,7 +4801,7 @@ void submenu_func_GetSize(char *mess, char *path, FILEINFO *files)
 				size = -1;
 		}
 	}
-	DPRINTF("size result = %lu\r\n", size);
+	DPRINTF("size result = %llu\r\n", (unsigned long long)size);
 	if (size < 0) {
 		strcpy(mess, LNG(Size_test_Failed));
 		text_pos = strlen(mess);
@@ -4812,7 +4812,7 @@ void submenu_func_GetSize(char *mess, char *path, FILEINFO *files)
 		else if (size >= 1024)
 			sprintf(mess, "%s = %.1fKB%n", LNG(SIZE), (double)size / 1024, &text_inc);
 		else
-			sprintf(mess, "%s = %luB%n", LNG(SIZE), size, &text_inc);
+			sprintf(mess, "%s = %lluB%n", LNG(SIZE), (unsigned long long)size, &text_inc);
 		text_pos += text_inc;
 	}
 
