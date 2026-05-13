@@ -52,7 +52,21 @@ EE_LIBS = -lgskit -ldmakit $(EE_JPEG_LIBS) -lmc -lhdd -lkbd $(EE_MATH_LIB) \
 			-lcdvd -lc -lfileXio -lpatches -lpoweroff -ldebug
 EE_CFLAGS := -mgpopt -G10240 -G0 -DNEWLIB_PORT_AWARE -D_EE
 
-BIN2S = @bin2s
+# Locate bin2s across old/new PS2SDK layouts and PATH.
+BIN2S_TOOL ?=
+ifneq ($(wildcard $(PS2SDK)/bin/bin2s),)
+BIN2S_TOOL := $(PS2SDK)/bin/bin2s
+else ifneq ($(wildcard $(PS2DEV)/bin/bin2s),)
+BIN2S_TOOL := $(PS2DEV)/bin/bin2s
+else ifneq ($(wildcard /usr/local/ps2dev/bin/bin2s),)
+BIN2S_TOOL := /usr/local/ps2dev/bin/bin2s
+else
+BIN2S_TOOL := $(shell command -v bin2s 2>/dev/null)
+endif
+ifeq ($(strip $(BIN2S_TOOL)),)
+$(error bin2s not found. Install PS2SDK tools or set BIN2S_TOOL=/full/path/to/bin2s)
+endif
+BIN2S = @$(BIN2S_TOOL)
 
 ifeq ($(SMB),1)
     EE_OBJS += smbman.o
