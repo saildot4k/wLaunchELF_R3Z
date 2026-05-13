@@ -38,6 +38,17 @@ enum {  //For menu commands
 #define SECTORS_PER_MB 2048  //Divide by this to convert from sector count to MB
 #define MB 1048576
 
+/* local fallback for newer SDKs that do not provide floatlib degree trig helpers */
+#ifndef WLE_DEG_TO_RADF
+#define WLE_DEG_TO_RADF(_deg) ((float)(_deg) * 0.01745329251994329577f)
+#endif
+#ifndef cosdgf
+#define cosdgf(_deg) cosf(WLE_DEG_TO_RADF(_deg))
+#endif
+#ifndef sindgf
+#define sindgf(_deg) sinf(WLE_DEG_TO_RADF(_deg))
+#endif
+
 static PARTYINFO PartyInfo[MAX_PARTITIONS];
 static int numParty;
 static u32 hddSize, hddFree, hddFreeSpace, hddUsed;

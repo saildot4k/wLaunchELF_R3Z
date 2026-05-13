@@ -561,22 +561,23 @@ static void getIpConfig(void)
 		for (i = 0; ((c = buf[i]) != '\0'); i++)  //Clear out spaces and any CR/LF
 			if ((c == ' ') || (c == '\r') || (c == '\n'))
 				buf[i] = '\0';
-		strncpy(ip, buf, 15);
+		snprintf(ip, sizeof(ip), "%.15s", buf);
 		i = strlen(ip) + 1;
-		strncpy(netmask, buf + i, 15);
+		snprintf(netmask, sizeof(netmask), "%.15s", buf + i);
 		i += strlen(netmask) + 1;
-		strncpy(gw, buf + i, 15);
+		snprintf(gw, sizeof(gw), "%.15s", buf + i);
 	}
 
 	bzero(if_conf, IPCONF_MAX_LEN);
-	strncpy(if_conf, ip, 15);
-	i = strlen(ip) + 1;
-	strncpy(if_conf + i, netmask, 15);
+	i = 0;
+	memcpy(if_conf + i, ip, strlen(ip) + 1);
+	i += strlen(ip) + 1;
+	memcpy(if_conf + i, netmask, strlen(netmask) + 1);
 	i += strlen(netmask) + 1;
-	strncpy(if_conf + i, gw, 15);
+	memcpy(if_conf + i, gw, strlen(gw) + 1);
 	i += strlen(gw) + 1;
 	if_conf_len = i;
-	sprintf(netConfig, "%s:  %-15s %-15s %-15s", LNG(Net_Config), ip, netmask, gw);
+	snprintf(netConfig, sizeof(netConfig), "%s:  %-15s %-15s %-15s", LNG(Net_Config), ip, netmask, gw);
 }
 //------------------------------
 //endfunc getIpConfig
@@ -1085,9 +1086,9 @@ static void ShowDebugInfo(void)
 				sprintf(TextRow, "Specific System Update KELF == \"B%cEXEC-SYSTEM/osd%03x.elf\"", rough_region, (ROMVersion+10)&~0x0F);
 				PrintRow(-1, TextRow);
 			}
-			sprintf(TextRow, "boot_path == \"%s\"", boot_path);
+			snprintf(TextRow, sizeof(TextRow), "boot_path == \"%s\"", boot_path);
 			PrintRow(-1, TextRow);
-			sprintf(TextRow, "LaunchElfDir == \"%s\"", LaunchElfDir);
+			snprintf(TextRow, sizeof(TextRow), "LaunchElfDir == \"%s\"", LaunchElfDir);
 #ifndef SMB
 			PrintRow(-1, TextRow);
 #else
@@ -2241,7 +2242,6 @@ static void Execute(char *pathin)
 	static char path[MAX_PATH];
 	static char fullpath[MAX_PATH];
 	static char party[40];
-	char *pathSep;
 	char *p;
 	int x, t = 0;
 	char dvdpl_path[] = "mc0:/BREXEC-DVDPLAYER/dvdplayer.elf";
@@ -2254,8 +2254,6 @@ static void Execute(char *pathin)
 		return;
 
 Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
-
-	pathSep = strchr(path, '/');
 
 	if (!strncmp(path, "mc", 2)) {
 		party[0] = 0;

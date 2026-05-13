@@ -65,6 +65,19 @@
 #include <sio.h>
 #include <sior_rpc.h>
 
+/* floatlib compatibility helpers removed in newer PS2SDK toolchains */
+#ifndef WLE_DEG_TO_RADF
+#define WLE_DEG_TO_RADF(_deg) ((_deg) * 0.01745329251994329577f)
+#endif
+
+#ifndef cosdgf
+#define cosdgf(_deg) cosf(WLE_DEG_TO_RADF(_deg))
+#endif
+
+#ifndef sindgf
+#define sindgf(_deg) sinf(WLE_DEG_TO_RADF(_deg))
+#endif
+
 static inline unsigned char wle_ascii_tolower(unsigned char c)
 {
 	return (c >= 'A' && c <= 'Z') ? (unsigned char)(c + ('a' - 'A')) : c;
