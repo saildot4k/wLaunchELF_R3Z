@@ -43,8 +43,13 @@ ifneq ($(wildcard $(PS2SDK)/ports/lib/libjpeg_ps2_addons.a),)
 EE_JPEG_LIBS := -ljpeg_ps2_addons -ljpeg
 endif
 
-EE_LIBS = -lgskit -ldmakit $(EE_JPEG_LIBS) -lmc -lhdd -lkbd -lmf \
-		-lcdvd -lc -lfileXio -lpatches -lpoweroff -ldebug
+EE_MATH_LIB := -lm
+ifneq ($(wildcard $(PS2SDK)/ee/lib/libmf.a),)
+EE_MATH_LIB := -lmf
+endif
+
+EE_LIBS = -lgskit -ldmakit $(EE_JPEG_LIBS) -lmc -lhdd -lkbd $(EE_MATH_LIB) \
+			-lcdvd -lc -lfileXio -lpatches -lpoweroff -ldebug
 EE_CFLAGS := -mgpopt -G10240 -G0 -DNEWLIB_PORT_AWARE -D_EE
 
 BIN2S = @bin2s

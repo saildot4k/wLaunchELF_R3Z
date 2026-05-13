@@ -61,7 +61,7 @@ jobs:
 
     - name: Compile wLaunchELF
       run: |
-        make rebuild ${{ github.event.inputs.make_args }} ETH=1 MMCE=1 EXFAT=1 MX4SIO=1 ${{ matrix.psx_stuff }} ${{ matrix.ds34 }} DEBUG=0
+        make rebuild ${{ github.event.inputs.make_args }} ETH=1 MMCE=1 EXFAT=1 MX4SIO=1 LCDVD=LATEST ${{ matrix.psx_stuff }} ${{ matrix.ds34 }} DEBUG=0
 
     - name: Upload variants artifact ELF
       uses: actions/upload-artifact@v7

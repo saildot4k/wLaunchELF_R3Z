@@ -1,6 +1,13 @@
 #ifndef WLE_LIBJPG_COMPAT_H
 #define WLE_LIBJPG_COMPAT_H
 
+#if defined(__has_include)
+#if __has_include(<libjpg_ps2_addons.h>)
+#define WLE_HAVE_LIBJPG_PS2_ADDONS 1
+#endif
+#endif
+
+#if defined(WLE_HAVE_LIBJPG_PS2_ADDONS)
 #include <libjpg_ps2_addons.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -45,5 +52,15 @@ static inline void jpgClose(jpgData *jpg)
 	free(jpg->buffer);
 	free(jpg);
 }
+
+#elif defined(__has_include_next)
+#if __has_include_next(<libjpg.h>)
+#include_next <libjpg.h>
+#else
+#error "Neither libjpg_ps2_addons.h nor legacy libjpg.h is available."
+#endif
+#else
+#include_next <libjpg.h>
+#endif
 
 #endif

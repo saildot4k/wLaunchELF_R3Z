@@ -38,11 +38,23 @@
 #include <debug.h>
 #include <gsKit.h>
 #include <dmaKit.h>
+#ifdef LIBCDVD_LEGACY
 #include <cdvd_rpc.h>
+#else
+#if defined(__has_include)
+#if __has_include(<libcdvd-rpc.h>)
+#include <libcdvd-rpc.h>
+#elif __has_include(<cdvd_rpc.h>)
+#include <cdvd_rpc.h>
+#endif
+#else
+#include <cdvd_rpc.h>
+#endif
+#endif
 #include <libcdvd.h>
 #include "libjpg.h"
 #include <libkbd.h>
-#include <floatlib.h>
+#include <math.h>
 #include <usbhdfsd-common.h>
 #include "hdl_rpc.h"
 #include "cdvd_macro.h"
