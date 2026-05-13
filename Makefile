@@ -59,6 +59,9 @@ ifeq ($(LCDVD),LEGACY)
 else
   EE_CFLAGS += -DLIBCDVD_LATEST
   CDVD_SOURCE = iop/__precompiled/cdfs.irx
+  ifneq ($(wildcard $(PS2SDK)/iop/irx/cdfs.irx),)
+    CDVD_SOURCE = $(PS2SDK)/iop/irx/cdfs.irx
+  endif
 endif
 
 ifeq ($(XFROM),1)

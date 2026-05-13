@@ -10,6 +10,29 @@ else # custom SIO2 stack (MMCE/MX4SIO/manual): use newer IRX to avoid deadlocks
   SIO2MAN_SOURCE = iop/__precompiled/sio2man.irx
 endif
 
+# Prefer PS2SDK IRX modules when available, then fall back to bundled copies.
+BDM_SOURCE := iop/__precompiled/bdm.irx
+BDMFS_FATFS_SOURCE := iop/__precompiled/bdmfs_fatfs.irx
+USBMASS_BD_SOURCE := iop/__precompiled/usbmass_bd.irx
+IOMANX_SOURCE := iop/__precompiled/iomanX.irx
+FILEXIO_SOURCE := iop/__precompiled/fileXio.irx
+
+ifneq ($(wildcard $(PS2SDK)/iop/irx/bdm.irx),)
+BDM_SOURCE := $(PS2SDK)/iop/irx/bdm.irx
+endif
+ifneq ($(wildcard $(PS2SDK)/iop/irx/bdmfs_fatfs.irx),)
+BDMFS_FATFS_SOURCE := $(PS2SDK)/iop/irx/bdmfs_fatfs.irx
+endif
+ifneq ($(wildcard $(PS2SDK)/iop/irx/usbmass_bd.irx),)
+USBMASS_BD_SOURCE := $(PS2SDK)/iop/irx/usbmass_bd.irx
+endif
+ifneq ($(wildcard $(PS2SDK)/iop/irx/iomanX.irx),)
+IOMANX_SOURCE := $(PS2SDK)/iop/irx/iomanX.irx
+endif
+ifneq ($(wildcard $(PS2SDK)/iop/irx/fileXio.irx),)
+FILEXIO_SOURCE := $(PS2SDK)/iop/irx/fileXio.irx
+endif
+
 
 
 #---{ MC }---#
@@ -39,13 +62,13 @@ $(EE_ASM_DIR)xfromman_irx.s: iop/__precompiled/xfromman.irx | $(EE_ASM_DIR)
 $(EE_ASM_DIR)usbd_irx.s: $(PS2SDK)/iop/irx/usbd.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ usbd_irx
 ifeq ($(EXFAT),1)
-$(EE_ASM_DIR)bdm_irx.s:iop/__precompiled/bdm.irx | $(EE_ASM_DIR)
+$(EE_ASM_DIR)bdm_irx.s:$(BDM_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ bdm_irx
 
-$(EE_ASM_DIR)bdmfs_fatfs_irx.s:iop/__precompiled/bdmfs_fatfs.irx | $(EE_ASM_DIR)
+$(EE_ASM_DIR)bdmfs_fatfs_irx.s:$(BDMFS_FATFS_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ bdmfs_fatfs_irx
 
-$(EE_ASM_DIR)usbmass_bd_irx.s:iop/__precompiled/usbmass_bd.irx | $(EE_ASM_DIR)
+$(EE_ASM_DIR)usbmass_bd_irx.s:$(USBMASS_BD_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ usbmass_bd_irx
 
 # ATA BDM module is not present in older PS2SDK releases.
@@ -127,10 +150,10 @@ $(EE_ASM_DIR)ioptrap_irx.s: $(PS2SDK)/iop/irx/ioptrap.irx | $(EE_ASM_DIR)
 $(EE_ASM_DIR)poweroff_irx.s: $(PS2SDK)/iop/irx/poweroff.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ poweroff_irx
 
-$(EE_ASM_DIR)iomanx_irx.s: iop/__precompiled/iomanX.irx | $(EE_ASM_DIR)
+$(EE_ASM_DIR)iomanx_irx.s: $(IOMANX_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ iomanx_irx
 
-$(EE_ASM_DIR)filexio_irx.s: iop/__precompiled/fileXio.irx | $(EE_ASM_DIR)
+$(EE_ASM_DIR)filexio_irx.s: $(FILEXIO_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ filexio_irx
 
 $(EE_ASM_DIR)ps2dev9_irx.s: $(PS2SDK)/iop/irx/ps2dev9.irx | $(EE_ASM_DIR)
@@ -143,6 +166,7 @@ $(EE_ASM_DIR)ps2ip_irx.s: $(PS2SDK)/iop/irx/ps2ip.irx | $(EE_ASM_DIR)
 $(EE_ASM_DIR)udptty.s: $(PS2SDK)/iop/irx/udptty.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ udptty_irx
 
+vpath ps2smap.irx $(PS2SDK)/iop/irx/
 vpath ps2smap.irx $(PS2DEV)/ps2eth/smap/
 vpath ps2smap.irx iop/__precompiled/
 $(EE_ASM_DIR)ps2smap_irx.s: ps2smap.irx | $(EE_ASM_DIR)

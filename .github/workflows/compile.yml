@@ -37,14 +37,22 @@ jobs:
     - name: Install dependencies
       run: |
         if command -v apk >/dev/null 2>&1; then
-          apk add make git zip
+          apk add --no-cache make git zip gmp mpfr4 mpc1
         elif command -v apt-get >/dev/null 2>&1; then
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y make git zip
+          DEBIAN_FRONTEND=noninteractive apt-get install -y make git zip libgmp10 libmpfr6 libmpc3
         else
           echo "No supported package manager found for dependency install." >&2
           exit 1
         fi
+
+    - name: Verify toolchain runtime libs
+      run: |
+        cc1_path="$(mips64r5900el-ps2-elf-gcc -print-prog-name=cc1)"
+        if [ -x "$cc1_path" ]; then
+          ldd "$cc1_path"
+        fi
+        mips64r5900el-ps2-elf-gcc --version
 
     - uses: actions/checkout@v6
     - run: |
