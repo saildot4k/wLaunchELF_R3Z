@@ -4,10 +4,24 @@ ifeq ($(SIO2MAN),0) # no custom SIO2 stack? use ps2dev:1.0 drivers
   MCSERV_SOURCE = $(PS2SDK)/iop/irx/mcserv.irx
   SIO2MAN_SOURCE = $(PS2SDK)/iop/irx/sio2man.irx
 else # custom SIO2 stack (MMCE/MX4SIO/manual): use newer IRX to avoid deadlocks
-  $(info using latest mc drivers)
+  $(info using latest mc drivers (prefer PS2SDK IRX, fallback bundled))
   MCMAN_SOURCE = iop/__precompiled/mcman.irx
   MCSERV_SOURCE = iop/__precompiled/mcserv.irx
   SIO2MAN_SOURCE = iop/__precompiled/sio2man.irx
+  ifneq ($(wildcard $(PS2SDK)/iop/irx/mcman.irx),)
+    MCMAN_SOURCE = $(PS2SDK)/iop/irx/mcman.irx
+  endif
+  ifneq ($(wildcard $(PS2SDK)/iop/irx/mcserv.irx),)
+    MCSERV_SOURCE = $(PS2SDK)/iop/irx/mcserv.irx
+  endif
+  ifneq ($(wildcard $(PS2SDK)/iop/irx/sio2man.irx),)
+    SIO2MAN_SOURCE = $(PS2SDK)/iop/irx/sio2man.irx
+  endif
+endif
+
+PADMAN_SOURCE = $(PS2SDK)/iop/irx/padman.irx
+ifneq ($(wildcard iop/__precompiled/padman.irx),)
+PADMAN_SOURCE = iop/__precompiled/padman.irx
 endif
 
 # Prefer PS2SDK IRX modules when available, then fall back to bundled copies.
@@ -234,7 +248,7 @@ $(EE_OBJS_DIR)libds34bt.a: iop/ds34bt/ee/libds34bt.a
 $(EE_ASM_DIR)ds34bt.s: iop/ds34bt.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ds34bt_irx
 
-$(EE_ASM_DIR)padman.s: $(PS2SDK)/iop/irx/padman.irx | $(EE_ASM_DIR)
+$(EE_ASM_DIR)padman.s: $(PADMAN_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ padman_irx
 
 ifeq ($(SMB),1)
