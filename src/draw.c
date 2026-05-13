@@ -423,9 +423,6 @@ void RotateBitmap(u8 *InBuff, u16 Width, u16 Height, u8 *OutBuff, int Way)
 		}
 	}
 
-	free(pixels);
-	free(newpixels);
-
 } /* end RotateBitmap */
 
 //--------------------------------------------------------------
