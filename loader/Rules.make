@@ -30,10 +30,13 @@ ifeq ($(wildcard $(EE_LINKFILE)),)
 EE_LINKFILE := $(PS2SDK)/ee/startup/src/linkfile
 endif
 
-# Link with following libraries.  This is a special case, and instead of
-# allowing the user to override the library order, we always make sure
-# libkernel is the last library to be linked.
-EE_LIBS += -lc -lkernel-nopatch
+# Link with following libraries. Some PS2SDK builds no longer ship
+# libkernel-nopatch, so fall back to libkernel when needed.
+EE_KERNEL_LIB := -lkernel-nopatch
+ifeq ($(wildcard $(PS2SDK)/ee/lib/libkernel-nopatch.a),)
+EE_KERNEL_LIB := -lkernel
+endif
+EE_LIBS += -lc $(EE_KERNEL_LIB)
 
 # Externally defined variables: EE_BIN, EE_OBJS, EE_LIB
 
