@@ -681,7 +681,7 @@ void loadSkin(int Picture, char *Path, int ThumbNum)
 	if (File != NULL) {
 
 		jpgData *Jpg;
-		u8 *ImgData, *ImgData1, *ImgData2;
+		u8 *ImgData = NULL, *ImgData1 = NULL, *ImgData2 = NULL;
 		int W = 0;
 
 		if ((Jpg = jpgOpenFILE(File, JPG_WIDTH_FIX)) > 0) {
