@@ -28,6 +28,7 @@
 #include <iopheap.h>
 #include <errno.h>
 #include <fileXio_rpc.h>
+#include <io_common.h>
 #include <iopcontrol.h>
 #include <stdarg.h>
 #include <sbv_patches.h>
@@ -88,6 +89,14 @@ static inline int wle_stricmp(const char *lhs, const char *rhs)
 
 #ifndef stricmp
 #define stricmp wle_stricmp
+#endif
+
+#ifndef FIO_MT_RDWR
+#define FIO_MT_RDWR 0x00
+#endif
+
+#ifndef FIO_MT_RDONLY
+#define FIO_MT_RDONLY 0x01
 #endif
 
 #ifdef SIO_DEBUG //EE SIO will be printed separated. no need for diferentiation
