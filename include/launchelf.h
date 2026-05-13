@@ -40,7 +40,7 @@
 #include <dmaKit.h>
 #include <cdvd_rpc.h>
 #include <libcdvd.h>
-#include <libjpg.h>
+#include "libjpg.h"
 #include <libkbd.h>
 #include <floatlib.h>
 #include <usbhdfsd-common.h>
