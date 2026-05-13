@@ -225,6 +225,7 @@ void load_ps2host(void);
 #endif
 void loadHddModules(void);
 void loadHdlInfoModule(void);
+void loadCdModules(void);
 int uLE_related(char *pathout, const char *pathin);
 int uLE_InitializeRegion(void);
 int uLE_cdDiscValid(void);
@@ -238,6 +239,9 @@ void loadMmceModules(void);
 #endif
 #ifdef MX4SIO
 int loadMx4sioModules(void);
+#endif
+#ifdef EXFAT
+void loadAtaModules(void);
 #endif
 
 /* elf.c */

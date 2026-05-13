@@ -245,24 +245,16 @@ static void Virt_KeyBoard_Entry(void)
 	Operation = 0;
 
 	if (new_pad & PAD_UP) {  // Virtual KeyBoard move up.
-		if (!KeyBoard_Cur)
-			KeyBoard_Cur = WFONTS * (HFONTS - 1);
-		else if (KeyBoard_Cur == WFONTS - 1)
-			KeyBoard_Cur = WFONTS * HFONTS - 1;
-		else if (KeyBoard_Cur > 0) {
-			if ((KeyBoard_Cur -= WFONTS) < 0)
-				KeyBoard_Cur = 0;
-		}
+		if (KeyBoard_Cur >= WFONTS)
+			KeyBoard_Cur -= WFONTS;
+		else
+			KeyBoard_Cur += WFONTS * (HFONTS - 1);
 		//ends Virtual KeyBoard move up.
 	} else if (new_pad & PAD_DOWN) {  // Virtual KeyBoard move down.
-		if (KeyBoard_Cur == WFONTS * HFONTS - 1)
-			KeyBoard_Cur = WFONTS - 1;
-		else if (KeyBoard_Cur == WFONTS * (HFONTS - 1))
-			KeyBoard_Cur = 0;
-		else if (KeyBoard_Cur < WFONTS * HFONTS - 1) {
-			if ((KeyBoard_Cur += WFONTS) > WFONTS * HFONTS - 1)
-				KeyBoard_Cur = WFONTS * HFONTS - 1;
-		}
+		if (KeyBoard_Cur < WFONTS * (HFONTS - 1))
+			KeyBoard_Cur += WFONTS;
+		else
+			KeyBoard_Cur -= WFONTS * (HFONTS - 1);
 		//ends Virtual KeyBoard move down.
 	} else if (new_pad & PAD_LEFT) {  // Virtual KeyBoard move left.
 		if (!KeyBoard_Cur)

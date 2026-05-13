@@ -283,7 +283,6 @@ static void load_ps2ftpd(void);
 static void load_ps2netfs(void);
 static void loadBasicModules(void);
 static void ensureCoreIoStackReady(void);
-static void loadCdModules(void);
 static int loadExternalFile(char *argPath, void **fileBaseP, int *fileSizeP);
 static int loadExternalModule(char *modPath, void *defBase, int defSize);
 static void loadUsbDModule(void);
@@ -1255,7 +1254,7 @@ static void ensureCoreIoStackReady(void)
 //------------------------------
 //endfunc ensureCoreIoStackReady
 //---------------------------------------------------------------------------
-static void loadCdModules(void)
+void loadCdModules(void)
 {
 	int ret, id;
 
@@ -1366,6 +1365,7 @@ static void getExternalFilePath(const char *argPath, char *filePath)
 
 #endif
 	} else if (!strncmp(argPath, "cdfs", 4)) {
+		loadCdModules();
 		strcpy(filePath, argPath);
 		LCDVD_FLUSHCACHE();
 		LCDVD_DISKREADY(0);
@@ -1634,8 +1634,9 @@ void loadAtaModules(void)
 
 	ensureCoreIoStackReady();
 	switchStorageDriverStack(STORAGE_STACK_DEFAULT);
-	loadUsbModules();
 	load_ps2dev9();
+	if (!have_usb_mass)
+		loadUsbModules();
 	if (!have_ata_bd) {
 		id = SifExecModuleBuffer(ata_bd_irx, size_ata_bd_irx, 0, NULL, &ret);
 		DPRINTF(" [ATA_BD]: id=%d ret=%d\n", id, ret);
@@ -2281,6 +2282,8 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 #endif
 #ifdef MX4SIO
 	} else if (!strncmp(path, "mx4sio:", 7)) {
+		if (!mx4sio_driver_running && !loadMx4sioModules())
+			goto ELFnotFound;
 		if ((t = checkELFheader(path)) <= 0)
 			goto ELFnotFound;
 		party[0] = 0;
@@ -2592,6 +2595,7 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		Show_build_info();
 		return;
 	} else if (!strncmp(path, "cdfs", 4)) {
+		loadCdModules();
 		LCDVD_FLUSHCACHE();
 		LCDVD_DISKREADY(0);
 		party[0] = 0;
@@ -2697,10 +2701,9 @@ int i, d;
 int i, d;
 	load_ps2ip();
 	i = SifExecModuleBuffer(&udptty_irx, size_udptty_irx, 0, NULL, &d);
-    DPRINTF(" [UDPTTY]: id=%d, ret=%d\n", i, d);
+	DPRINTF(" [UDPTTY]: id=%d, ret=%d\n", i, d);
 #endif
 	ensureCoreIoStackReady();
-	loadCdModules();
 	DPRINTF("RESET FINISHED\n");
 	//	setupPad();
 }

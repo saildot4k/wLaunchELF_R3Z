@@ -3,10 +3,6 @@
 //--------------------------------------------------------------
 #include "launchelf.h"
 
-#ifdef EXFAT
-void loadAtaModules(void);
-#endif
-
 #define MAX_PATH 1025
 
 extern u8 loader_elf[];
@@ -64,6 +60,20 @@ int checkELFheader(char *path)
 	char fullpath[MAX_PATH], tmp[MAX_PATH], *p;
 
 	strcpy(fullpath, path);
+	if (!strncmp(fullpath, "cdfs", 4))
+		loadCdModules();
+#ifdef MMCE
+	if (!strncmp(fullpath, "mmce", 4))
+		loadMmceModules();
+#endif
+#ifdef MX4SIO
+	if (!strncmp(fullpath, "mx4sio", 6) && !mx4sio_driver_running && !loadMx4sioModules())
+		goto error;
+#endif
+#ifdef EXFAT
+	if (!strncmp(fullpath, "ata", 3))
+		loadAtaModules();
+#endif
 	if (!strncmp(fullpath, "mc", 2) 
 		|| !strncmp(fullpath, "vmc", 3)
 		|| !strncmp(fullpath, "rom", 3)
@@ -114,9 +124,6 @@ int checkELFheader(char *path)
 	} else if (!strncmp(fullpath, "ata", 3)) {
 		char *pathSep;
 
-#ifdef EXFAT
-		loadAtaModules();
-#endif
 		pathSep = strchr(path, '/');
 		if (pathSep && (pathSep - path < 7) && pathSep[-1] == ':')
 			strcpy(fullpath + (pathSep - path), pathSep + 1);

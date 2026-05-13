@@ -3,10 +3,6 @@
 //--------------------------------------------------------------
 #include "launchelf.h"
 
-#ifdef EXFAT
-void loadAtaModules(void);
-#endif
-
 typedef struct
 {
 	unsigned char unknown;
@@ -1592,8 +1588,10 @@ int getDir(const char *path, FILEINFO *info)
 #endif
 		n = readGENERIC(path, info, max);
 	}
-	else if (!strncmp(path, "cdfs", 4))
+	else if (!strncmp(path, "cdfs", 4)) {
+		loadCdModules();
 		n = readCD(path, info, max);
+	}
 #ifdef ETH
 	else if (!strncmp(path, "host", 4))
 		n = readHOST(path, info, max);
@@ -3223,7 +3221,7 @@ int keyboard(char *out, int max)
 	            "0123456789/|\\"
 	            "<>(){}[].,:;\""
 	            "!@#$%&=+-^*_'";
-	int KEY_LEN;
+	int KEY_LEN, KEY_LAST, KEY_OK, KEY_CANCEL;
 	int cur = 0, sel = 0, i = 0, x, y, t = 0;
 	char tmp[256], *p;
 	char KeyPress;
@@ -3234,6 +3232,9 @@ int keyboard(char *out, int max)
 	else
 		cur = (int)(p - out);
 	KEY_LEN = strlen(KEY);
+	KEY_LAST = WFONTS * HFONTS - 1;
+	KEY_OK = KEY_LAST + 1;
+	KEY_CANCEL = KEY_OK + 1;
 
 	event = 1;  //event = initial entry
 	while (1) {
@@ -3243,28 +3244,52 @@ int keyboard(char *out, int max)
 			if (new_pad)
 				event |= 2;  //event |= pad command
 			if (new_pad & PAD_UP) {
-				if (sel <= WFONTS * HFONTS) {
+				if (sel <= KEY_LAST) {
 					if (sel >= WFONTS)
 						sel -= WFONTS;
-				} else {
-					sel -= 4;
-				}
-			} else if (new_pad & PAD_DOWN) {
-				if (sel / WFONTS == HFONTS - 1) {
-					if (sel % WFONTS < 5)
-						sel = WFONTS * HFONTS;
+					else if (sel < 5)
+						sel = KEY_OK;
 					else
-						sel = WFONTS * HFONTS + 1;
-				} else if (sel / WFONTS <= HFONTS - 2)
-					sel += WFONTS;
+						sel = KEY_CANCEL;
+				} else if (sel == KEY_OK)
+					sel = WFONTS * (HFONTS - 1);
+				else
+					sel = KEY_LAST;
+			} else if (new_pad & PAD_DOWN) {
+				if (sel <= KEY_LAST) {
+					if (sel / WFONTS == HFONTS - 1) {
+						if (sel % WFONTS < 5)
+							sel = KEY_OK;
+						else
+							sel = KEY_CANCEL;
+					} else if (sel / WFONTS <= HFONTS - 2)
+						sel += WFONTS;
+				} else if (sel == KEY_OK)
+					sel = 0;
+				else
+					sel = WFONTS - 1;
 			} else if (new_pad & PAD_LEFT) {
-				if (sel > 0)
-					sel--;
+				if (sel <= KEY_LAST) {
+					if (sel % WFONTS == 0)
+						sel += WFONTS - 1;
+					else
+						sel--;
+				} else if (sel == KEY_OK)
+					sel = KEY_CANCEL;
+				else
+					sel = KEY_OK;
 			} else if (new_pad & PAD_RIGHT) {
-				if (sel <= WFONTS * HFONTS)
-					sel++;
+				if (sel <= KEY_LAST) {
+					if (sel % WFONTS == WFONTS - 1)
+						sel -= WFONTS - 1;
+					else
+						sel++;
+				} else if (sel == KEY_OK)
+					sel = KEY_CANCEL;
+				else
+					sel = KEY_OK;
 			} else if (new_pad & PAD_START) {
-				sel = WFONTS * HFONTS;
+				sel = KEY_OK;
 			} else if (new_pad & PAD_L1) {
 				if (cur > 0)
 					cur--;
@@ -3293,7 +3318,7 @@ int keyboard(char *out, int max)
 				}
 			} else if ((swapKeys && new_pad & PAD_CROSS) || (!swapKeys && new_pad & PAD_CIRCLE)) {
 				i = strlen(out);
-				if (sel < WFONTS * HFONTS) {  //Any char in matrix selected ?
+				if (sel <= KEY_LAST) {  //Any char in matrix selected ?
 					if (i < max && i < 33) {
 						strcpy(tmp, out);
 						out[cur] = KEY[sel];
@@ -3302,9 +3327,9 @@ int keyboard(char *out, int max)
 						cur++;
 						t = 0;
 					}
-				} else if (sel == WFONTS * HFONTS) {  //'OK' exit-button selected ?
-					break;                            //break out of loop with i==strlen
-				} else                                //Must be 'CANCEL' exit-button
+				} else if (sel == KEY_OK) {  //'OK' exit-button selected ?
+					break;                      //break out of loop with i==strlen
+				} else                        //Must be 'CANCEL' exit-button
 					return -1;
 			} else if (new_pad & PAD_TRIANGLE) {
 				return -1;
@@ -3405,7 +3430,7 @@ int keyboard(char *out, int max)
 			        KEY_Y + LINE_THICKNESS + 1 + FONT_HEIGHT + 1 + LINE_THICKNESS + 8 + HFONTS * FONT_HEIGHT, setting->color[COLOR_TEXT], TRUE, 0);
 
 			//Cursor positioning section
-			if (sel <= WFONTS * HFONTS)
+			if (sel <= KEY_OK)
 				x = KEY_X + LINE_THICKNESS + 12 + (sel % WFONTS) * (FONT_WIDTH + 12) - 8;
 			else
 				x = KEY_X + KEY_W - 2 - (strlen(LNG(CANCEL)) + 3) * FONT_WIDTH;
@@ -4037,18 +4062,44 @@ int getFilePath(char *out, int cnfmode)
 		//Pad response section
 		waitPadReady(0, 0);
 		if (readpad()) {
+			int step;
 			if (new_pad) {
 				browser_pushed = TRUE;
 				event |= 2;  //event |= pad command
 			}
-			if (new_pad & PAD_UP)
-				browser_sel--;
-			else if (new_pad & PAD_DOWN)
-				browser_sel++;
-			else if (new_pad & PAD_LEFT)
-				browser_sel -= rows / 2;
-			else if (new_pad & PAD_RIGHT)
-				browser_sel += rows / 2;
+			if (new_pad & PAD_UP) {
+				if (browser_nfiles > 0) {
+					if (browser_sel > 0)
+						browser_sel--;
+					else
+						browser_sel = browser_nfiles - 1;
+				}
+			} else if (new_pad & PAD_DOWN) {
+				if (browser_nfiles > 0) {
+					if (browser_sel < browser_nfiles - 1)
+						browser_sel++;
+					else
+						browser_sel = 0;
+				}
+			} else if (new_pad & PAD_LEFT) {
+				if (browser_nfiles > 0) {
+					step = rows / 2;
+					if (step < 1)
+						step = 1;
+					browser_sel -= step;
+					while (browser_sel < 0)
+						browser_sel += browser_nfiles;
+				}
+			} else if (new_pad & PAD_RIGHT) {
+				if (browser_nfiles > 0) {
+					step = rows / 2;
+					if (step < 1)
+						step = 1;
+					browser_sel += step;
+					while (browser_sel >= browser_nfiles)
+						browser_sel -= browser_nfiles;
+				}
+			}
 			else if (new_pad & PAD_TRIANGLE)
 				browser_up = TRUE;
 			else if ((swapKeys && (new_pad & PAD_CROSS)) || (!swapKeys && (new_pad & PAD_CIRCLE))) {  //Pushed OK
