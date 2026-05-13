@@ -86,7 +86,7 @@ int checkELFheader(char *path)
 	elf_header_t elf_head;
 	u8 *boot_elf = (u8 *)&elf_head;
 	elf_header_t *eh = (elf_header_t *)boot_elf;
-	int fd, size = 0, ret, read_bytes;
+	int fd, ret, read_bytes;
 	char fullpath[MAX_PATH], openpath[MAX_PATH], tmp[MAX_PATH], *p;
 	u32 magic;
 
@@ -171,18 +171,22 @@ int checkELFheader(char *path)
 	}
 	if ((fd = openExecPathForRead(fullpath, openpath)) < 0)
 		goto error;
-	size = genLseek(fd, 0, SEEK_END);
-	if (!size) {
+
+	/*
+	 * Some device stacks do not reliably report size via SEEK_END.
+	 * Only header bytes are needed, so seek to start and proceed.
+	 */
+	if (genLseek(fd, 0, SEEK_SET) < 0) {
 		genClose(fd);
-		goto error;
+		if ((fd = openExecPathForRead(fullpath, openpath)) < 0)
+			goto error;
 	}
-	genLseek(fd, 0, SEEK_SET);
 	read_bytes = genRead(fd, boot_elf, sizeof(elf_header_t));
 	genClose(fd);
-	if (read_bytes < 4)
+	if (read_bytes < (int)sizeof(u32))
 		goto error;
 
-	magic = _lw((u32)&eh->ident);
+	memcpy(&magic, eh->ident, sizeof(magic));
 	if (magic == ELF_MAGIC && eh->type == 2)
 		return 1;  // successful ELF check
 	if (magic == KELF_MAGIC || magic == XLF_MAGIC)

@@ -1071,7 +1071,12 @@ static void ShowDebugInfo(void)
 		if (event || post_event) {  //NB: We need to update two frame buffers per event
 			clrScr(setting->color[COLOR_BACKGR]);
 			PrintRow(0, "Debug Info Screen:");
-			sprintf(TextRow, "rom0:ROMVER == \"%s\"", ROMVER_data);
+			if (ROMVER_data[0] == '\0')
+				uLE_InitializeRegion();
+			if (ROMVER_data[0] == '\0')
+				snprintf(TextRow, sizeof(TextRow), "rom0:ROMVER == \"<unavailable>\"");
+			else
+				snprintf(TextRow, sizeof(TextRow), "rom0:ROMVER == \"%s\"", ROMVER_data);
 			PrintRow(2, TextRow);
 			sprintf(TextRow, "argc == %d", boot_argc);
 			PrintRow(4, TextRow);
@@ -2235,7 +2240,7 @@ int IsSupportedFileType(char *path)
 {
 	if (strchr(path, ':') != NULL) {
 		if (genCmpFileExt(path, "ELF") || genCmpFileExt(path, "XLF") || genCmpFileExt(path, "KELF")) {
-			return (checkELFheader(path) >= 0);
+			return (checkELFheader(path) > 0);
 		} else if (isTextEditorFileType(path) || (genCmpFileExt(path, "JPG") || genCmpFileExt(path, "JPEG"))) {
 			return 1;
 		} else
@@ -2752,43 +2757,60 @@ int i, d;
 int uLE_InitializeRegion(void)
 {
 	int ROMVER_fd;
+	int read_len;
 	static int TVMode = -1;
 
-	if (TVMode < 0) {
-		ROMVER_fd = genOpen("rom0:ROMVER", O_RDONLY);
-		if (ROMVER_fd < 0) {
-			memset(ROMVER_data, 0, sizeof(ROMVER_data));
-			rough_region = 'X';
-			TVMode = TV_mode_NTSC;  //NTSC is default mode for unidentified console
-			return TVMode;
-		}
-		genRead(ROMVER_fd, ROMVER_data, 16);
-		genClose(ROMVER_fd);
-		ROMVER_data[15] = 0;
+	// Keep default mode available even before ROMVER can be read.
+	if (TVMode < 0)
+		TVMode = TV_mode_NTSC;
 
-		switch (ROMVER_data[4]) {
-			case 'J':
-				rough_region = 'I';
-				break;
-			case 'E':
-				rough_region = 'E';
-				break;
-			case 'A':
-			case 'H':  //Asia shares the same letter as USA.
-				rough_region = 'A';
-				break;
-			case 'C':
-				rough_region = 'C';
-				break;
-			default:
-				rough_region = 'X';
-		}
+	// If we already have ROMVER, keep the cached region/mode.
+	if (ROMVER_data[0] != '\0')
+		return TVMode;
 
-		if (ROMVER_data[4] == 'E')
-			TVMode = TV_mode_PAL;  //PAL mode is identified by 'E' for Europe
-		else
-			TVMode = TV_mode_NTSC;  //All other cases need NTSC
+	ensureCoreIoStackReady();
+
+	ROMVER_fd = genOpen("rom0:ROMVER", O_RDONLY);
+	if (ROMVER_fd < 0)
+		ROMVER_fd = genOpen("rom0:/ROMVER", O_RDONLY);
+	if (ROMVER_fd < 0) {
+		rough_region = 'X';
+		return TVMode;
 	}
+
+	memset(ROMVER_data, 0, sizeof(ROMVER_data));
+	read_len = genRead(ROMVER_fd, ROMVER_data, sizeof(ROMVER_data) - 1);
+	genClose(ROMVER_fd);
+	if (read_len <= 0) {
+		memset(ROMVER_data, 0, sizeof(ROMVER_data));
+		rough_region = 'X';
+		return TVMode;
+	}
+
+	ROMVER_data[sizeof(ROMVER_data) - 1] = '\0';
+
+	switch (ROMVER_data[4]) {
+		case 'J':
+			rough_region = 'I';
+			break;
+		case 'E':
+			rough_region = 'E';
+			break;
+		case 'A':
+		case 'H':  //Asia shares the same letter as USA.
+			rough_region = 'A';
+			break;
+		case 'C':
+			rough_region = 'C';
+			break;
+		default:
+			rough_region = 'X';
+	}
+
+	if (ROMVER_data[4] == 'E')
+		TVMode = TV_mode_PAL;  //PAL mode is identified by 'E' for Europe
+	else
+		TVMode = TV_mode_NTSC;  //All other cases need NTSC
 
 	return TVMode;
 }

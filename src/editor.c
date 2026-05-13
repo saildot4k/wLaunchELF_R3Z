@@ -1046,47 +1046,90 @@ static int OpenFile(int Win)
 static int Open(int Win, char *path)
 {
 	int fd, i, ret = 0;
+	int size, rd, total;
 	char filePath[MAX_PATH];
+	char probe;
 
 	if (path[0] == '\0')
 		goto abort;
 
-	genFixPath(path, filePath);
+	if (genFixPath(path, filePath) < 0)
+		goto abort;
 	fd = genOpen(filePath, O_RDONLY);
 
 	if (fd >= 0) {
-		TextSize[Win] = genLseek(fd, 0, SEEK_END);
-		genLseek(fd, 0, SEEK_SET);
+		size = genLseek(fd, 0, SEEK_END);
+		if (size > 512 * 1024)
+			goto done;
 
-		if (TextSize[Win] && TextSize[Win] <= 512 * 1024) {             // Limit Text Size To 512Kb???
-			if ((TextBuffer[Win] = malloc(TextSize[Win] + 256)) > 0) {  // 256 To Avoid Crash 256???
-				memset(TextBuffer[Win], 0, TextSize[Win] + 256);        // 256 To Avoid Crash 256???
-				genRead(fd, TextBuffer[Win], TextSize[Win]);
-
-				for (i = 0; i < TextSize[Win]; i++) {  // Scan For Text Mode.
-					if (TextBuffer[Win][i - 1] != '\r' && TextBuffer[Win][i] == '\n') {
-						// Mode MAC Only LF At Line End.
-						TextMode[Win] = MAC;
-						break;
-					} else if (TextBuffer[Win][i] == '\r' && TextBuffer[Win][i + 1] == '\n') {
-						// Mode OTHER CR/LF At Line End.
-						TextMode[Win] = OTHER;
-						break;
-					} else if (TextBuffer[Win][i] == '\r' && TextBuffer[Win][i + 1] != '\n') {
-						// Mode UNIX Only CR At Line End.
-						TextMode[Win] = UNIX;
-						break;
-					}
+		// Try fast path first (seekable filesystems with known non-zero size), then fallback to streamed read.
+		if (size > 0 && genLseek(fd, 0, SEEK_SET) >= 0) {
+			if ((TextBuffer[Win] = malloc(size + 256)) != NULL) {
+				memset(TextBuffer[Win], 0, size + 256);
+				rd = (size > 0) ? genRead(fd, TextBuffer[Win], size) : 0;
+				if (rd < 0 || (size > 0 && rd == 0)) {
+					free(TextBuffer[Win]);
+					TextBuffer[Win] = NULL;
+					goto done;
 				}
-
-				Window[Win][OPENED] = 1, Window[Win][SAVED] = 0;
-				Init();
+				TextSize[Win] = rd;
+				ret = 1;
+			}
+		} else {
+			if ((TextBuffer[Win] = malloc(512 * 1024 + 256)) != NULL) {
+				memset(TextBuffer[Win], 0, 512 * 1024 + 256);
+				total = 0;
+				while (total < 512 * 1024) {
+					int chunk = 4096;
+					if ((512 * 1024 - total) < chunk)
+						chunk = 512 * 1024 - total;
+					rd = genRead(fd, TextBuffer[Win] + total, chunk);
+					if (rd < 0) {
+						free(TextBuffer[Win]);
+						TextBuffer[Win] = NULL;
+						goto done;
+					}
+					if (rd == 0)
+						break;
+					total += rd;
+				}
+				if (total == 512 * 1024 && genRead(fd, &probe, 1) > 0) {
+					// File exceeds editor limit.
+					free(TextBuffer[Win]);
+					TextBuffer[Win] = NULL;
+					goto done;
+				}
+				TextSize[Win] = total;
 				ret = 1;
 			}
 		}
+
+		if (ret) {
+			for (i = 0; i < TextSize[Win]; i++) {  // Scan for text mode.
+				if (TextBuffer[Win][i] == '\n' && (i == 0 || TextBuffer[Win][i - 1] != '\r')) {
+					// Mode MAC: LF line endings.
+					TextMode[Win] = MAC;
+					break;
+				} else if (TextBuffer[Win][i] == '\r' && (i + 1) < TextSize[Win] && TextBuffer[Win][i + 1] == '\n') {
+					// Mode OTHER: CRLF line endings.
+					TextMode[Win] = OTHER;
+					break;
+				} else if (TextBuffer[Win][i] == '\r' && ((i + 1) >= TextSize[Win] || TextBuffer[Win][i + 1] != '\n')) {
+					// Mode UNIX: CR line endings.
+					TextMode[Win] = UNIX;
+					break;
+				}
+			}
+
+			Window[Win][OPENED] = 1;
+			Window[Win][SAVED] = 0;
+			Init();
+		}
 	}
 
-	genClose(fd);
+done:
+	if (fd >= 0)
+		genClose(fd);
 
 	if (ret) {
 		drawMsg(LNG(File_Opened));
@@ -1465,7 +1508,7 @@ void TextEditor(char *path)
 			//Display section.
 			clrScr(setting->color[COLOR_BACKGR]);
 
-			if (TextSize[Active_Window] == 0)
+			if (!Window[Active_Window][OPENED])
 				goto end;
 
 			drawOpSprite(COL_NORM_BG,

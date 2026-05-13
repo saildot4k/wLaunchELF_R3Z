@@ -1604,9 +1604,33 @@ int getDir(const char *path, FILEINFO *info)
 	}
 	else if (!strncmp(path, "ata", 3)) {
 #ifdef EXFAT
+		u64 wait_start;
+		int dd;
+		int is_ata_root;
+
 		loadAtaModules();
+		is_ata_root = (!strcmp(path, "ata:/") || !strcmp(path, "ata:"));
 #endif
 		n = readGENERIC(path, info, max);
+#ifdef EXFAT
+		// First browse after loading ATA_BD can race module/device readiness.
+		// Retry briefly so ata:/ populates on first open instead of requiring re-entry.
+		if (n == 0) {
+			wait_start = Timer();
+			while (Timer() < wait_start + 500) {
+				dd = fileXioDopen(path);
+				if (dd < 0)
+					continue;
+
+				fileXioDclose(dd);
+				n = readGENERIC(path, info, max);
+				if (n > 0)
+					break;
+				if (!is_ata_root)
+					break;
+			}
+		}
+#endif
 	}
 	else if (!strncmp(path, "cdfs", 4)) {
 		loadCdModules();
@@ -4176,7 +4200,7 @@ int getFilePath(char *out, int cnfmode)
 					//pushed R3 for a file (treat as uLE-related)
 					sprintf(out, "%s%s", path, files[browser_sel].name);
 					// Must to include a function for check IRX Header
-					if (((cnfmode == LK_ELF_CNF) || (cnfmode == NON_CNF)) && (checkELFheader(out) < 0)) {
+					if (((cnfmode == LK_ELF_CNF) || (cnfmode == NON_CNF)) && (checkELFheader(out) <= 0)) {
 						browser_pushed = FALSE;
 						sprintf(msg0, "%s.", LNG(This_file_isnt_an_ELF));
 						out[0] = 0;

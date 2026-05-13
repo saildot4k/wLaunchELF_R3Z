@@ -792,8 +792,7 @@ int loadConfig(char *mainMsg, char *CNF)
 		if (!strcmp(name, "CNF_version")) {
 			CNF_version = atoi(value);
 			continue;
-		} else if (CNF_version == 0)
-			goto failed_load;  // Refuse unidentified CNF
+		}
 
 		if (scanSkinCNF(name, value))
 			continue;
@@ -920,6 +919,8 @@ int loadConfig(char *mainMsg, char *CNF)
 			}
 		}
 	}  //ends for
+	if (CNF_version == 0)
+		DPRINTF("loadConfig: CNF_version missing, treating \"%s\" as legacy config.\n", cnf_path);
 	for (i = 0; i < SETTING_LK_BTN_COUNT; i++)
 		setting->LK_Title[i][MAX_ELF_TITLE - 1] = 0;
 	free(RAM_p);
@@ -927,7 +928,7 @@ int loadConfig(char *mainMsg, char *CNF)
 		setting->JpgView_Timer = DEF_JPGVIEW_TIMER;
 	if ((setting->JpgView_Trans < 1) || (setting->JpgView_Trans > 4))
 		setting->JpgView_Trans = DEF_JPGVIEW_TRANS;
-	sprintf(mainMsg, "%s (%s)", LNG(Loaded_Config), path);
+	sprintf(mainMsg, "%s (%s)", LNG(Loaded_Config), cnf_path);
 	return 0;
 }
 //------------------------------
