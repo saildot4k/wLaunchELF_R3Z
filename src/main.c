@@ -948,9 +948,9 @@ IMPORT_BIN2C(xfromman_irx);
 static void load_pflash(void)
 {
 	int ID, ret;
-		ID = SifExecModuleBuffer(extflash_irx, size_extflash_irx, NULL, 0, &ret);
+		ID = SifExecModuleBuffer(extflash_irx, size_extflash_irx, 0, NULL, &ret);
 		DPRINTF(" [PFLASH]: ID=%d, ret=%d\n", ID, ret);
-		ID = SifExecModuleBuffer(xfromman_irx, size_xfromman_irx, NULL, 0, &ret);
+		ID = SifExecModuleBuffer(xfromman_irx, size_xfromman_irx, 0, NULL, &ret);
 		DPRINTF(" [XFROMMAN]: ID=%d, ret=%d\n", ID, ret);
 }
 //------------------------------
