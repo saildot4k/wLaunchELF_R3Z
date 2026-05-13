@@ -10,6 +10,8 @@ extern int size_loader_elf;
 
 // ELF-loading stuff
 #define ELF_MAGIC 0x464c457f
+#define KELF_MAGIC 0x464c454b
+#define XLF_MAGIC 0x00464c58
 #define ELF_PT_LOAD 1
 
 //------------------------------
@@ -42,6 +44,34 @@ typedef struct
 	u32 flags;
 	u32 align;
 } elf_pheader_t;
+
+static void normalizeLaunchArgPath(const char *in_path, char *out_path);
+
+static int openExecPathForRead(const char *path, char *resolved_path)
+{
+	char alt_path[MAX_PATH];
+	char *sep;
+	int fd;
+
+	normalizeLaunchArgPath(path, resolved_path);
+	fd = genOpen(resolved_path, O_RDONLY);
+	if (fd >= 0)
+		return fd;
+
+	/* Compatibility fallback for stacks that still accept "mass:foo" style. */
+	strcpy(alt_path, resolved_path);
+	sep = strchr(alt_path, ':');
+	if (sep && sep[1] == '/') {
+		memmove(sep + 1, sep + 2, strlen(sep + 2) + 1);
+		fd = genOpen(alt_path, O_RDONLY);
+		if (fd >= 0) {
+			strcpy(resolved_path, alt_path);
+			return fd;
+		}
+	}
+
+	return -1;
+}
 //--------------------------------------------------------------
 //End of data declarations
 //--------------------------------------------------------------
@@ -56,8 +86,9 @@ int checkELFheader(char *path)
 	elf_header_t elf_head;
 	u8 *boot_elf = (u8 *)&elf_head;
 	elf_header_t *eh = (elf_header_t *)boot_elf;
-	int fd, size = 0, ret;
-	char fullpath[MAX_PATH], tmp[MAX_PATH], *p;
+	int fd, size = 0, ret, read_bytes;
+	char fullpath[MAX_PATH], openpath[MAX_PATH], tmp[MAX_PATH], *p;
+	u32 magic;
 
 	strcpy(fullpath, path);
 	if (!strncmp(fullpath, "cdfs", 4))
@@ -138,7 +169,7 @@ int checkELFheader(char *path)
 	} else {
 		return 0;  //return 0 for unrecognized device
 	}
-	if ((fd = genOpen(fullpath, O_RDONLY)) < 0)
+	if ((fd = openExecPathForRead(fullpath, openpath)) < 0)
 		goto error;
 	size = genLseek(fd, 0, SEEK_END);
 	if (!size) {
@@ -146,10 +177,20 @@ int checkELFheader(char *path)
 		goto error;
 	}
 	genLseek(fd, 0, SEEK_SET);
-	genRead(fd, boot_elf, sizeof(elf_header_t));
+	read_bytes = genRead(fd, boot_elf, sizeof(elf_header_t));
 	genClose(fd);
+	if (read_bytes < 4)
+		goto error;
 
-	if ((_lw((u32)&eh->ident) != ELF_MAGIC) || eh->type != 2)
+	magic = _lw((u32)&eh->ident);
+	if (magic == ELF_MAGIC && eh->type == 2)
+		return 1;  // successful ELF check
+	if (magic == KELF_MAGIC || magic == XLF_MAGIC)
+		return 2;  // encrypted KELF/XLF payload
+
+	if (magic != ELF_MAGIC)
+		goto error;
+	if (eh->type != 2)
 		goto error;
 
 	return 1;  //return 1 for successful check

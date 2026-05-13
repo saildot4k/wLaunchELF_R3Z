@@ -88,6 +88,9 @@ int main(int argc, char *argv[])
 	//Writeback data cache before loading ELF.
 	FlushCache(0);
 	ret = SifLoadElf(target, &elfdata);
+	if (ret != 0)
+		ret = SifLoadElfEncrypted(target, &elfdata);
+
 	if (ret == 0) {
 		args[0] = path;
 		///ISRA: based on config

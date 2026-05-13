@@ -2218,12 +2218,25 @@ static void CleanUp(void)
 //---------------------------------------------------------------------------
 //Indicates whether the file type is supported by LaunchELF (for any action)
 //------------------------------
+static int isTextEditorFileType(const char *path)
+{
+	return (genCmpFileExt(path, "TXT") ||
+	        genCmpFileExt(path, "CHT") ||
+	        genCmpFileExt(path, "CFG") ||
+	        genCmpFileExt(path, "INI") ||
+	        genCmpFileExt(path, "CNF") ||
+	        genCmpFileExt(path, "PBT") ||
+	        genCmpFileExt(path, "TOML") ||
+	        genCmpFileExt(path, "YAML") ||
+	        genCmpFileExt(path, "YML"));
+}
+
 int IsSupportedFileType(char *path)
 {
 	if (strchr(path, ':') != NULL) {
-		if (genCmpFileExt(path, "ELF")) {
+		if (genCmpFileExt(path, "ELF") || genCmpFileExt(path, "XLF") || genCmpFileExt(path, "KELF")) {
 			return (checkELFheader(path) >= 0);
-		} else if ((genCmpFileExt(path, "TXT") || genCmpFileExt(path, "CHT") || genCmpFileExt(path, "CFG") || genCmpFileExt(path, "INI")  || genCmpFileExt(path, "CNF") ) || (genCmpFileExt(path, "JPG") || genCmpFileExt(path, "JPEG"))) {
+		} else if (isTextEditorFileType(path) || (genCmpFileExt(path, "JPG") || genCmpFileExt(path, "JPEG"))) {
 			return 1;
 		} else
 			return 0;
@@ -2515,7 +2528,7 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		LastDir[0] = 0;
 		getFilePath(tmp, FALSE);
 		if (tmp[0]) {
-			if (genCmpFileExt(tmp, "TXT") || genCmpFileExt(tmp, "CHT") || genCmpFileExt(tmp, "INI") || genCmpFileExt(tmp, "CFG") || genCmpFileExt(tmp, "CNF")) {
+			if (isTextEditorFileType(tmp)) {
 				if (setting->GUI_skin[0]) {
 					GUI_active = 0;
 					loadSkin(BACKGROUND_PIC, 0, 0);
@@ -2827,6 +2840,23 @@ static void InitializeBootExecPath()
 //------------------------------
 //endfunc InitializeBootExecPath
 //---------------------------------------------------------------------------
+static void normalizeBootPath(char *path)
+{
+	int i;
+
+	if (path == NULL || path[0] == '\0')
+		return;
+
+	for (i = 0; path[i] != '\0'; i++) {
+		if (path[i] == '\\')
+			path[i] = '/';
+	}
+
+	// Legacy SwapMagic path normalization: mass0:/path -> mass:/path
+	if (!strncmp(path, "mass0:", 6))
+		memmove(path + 4, path + 5, strlen(path + 5) + 1);
+}
+//---------------------------------------------------------------------------
 
 //#ifdef SMB
 //#include "SMB_test.c"
@@ -2872,41 +2902,34 @@ int main(int argc, char *argv[])
 	if ((argc > 0) && argv[0]) {
 		strcpy(LaunchElfDir, argv[0]);  //Default LaunchElfDir to the boot path.
 		strcpy(boot_path, argv[0]);
-		if (!strncmp(argv[0], "mass", 4)) {
-			if (!strncmp(argv[0], "mass0:\\", 7)) {  //SwapMagic boot path for usb_mass
-				//Transform the boot path to homebrew standards
-				LaunchElfDir[4] = ':';
-				strcpy(&LaunchElfDir[5], &LaunchElfDir[7]);
-				for (i = 0; LaunchElfDir[i] != 0; i++) {
-					if (LaunchElfDir[i] == '\\')
-						LaunchElfDir[i] = '/';
-				}
-			}  //else we booted with normal homebrew mass: drivers
+		normalizeBootPath(LaunchElfDir);
+		normalizeBootPath(boot_path);
+		if (!strncmp(LaunchElfDir, "mass", 4) || !strncmp(LaunchElfDir, "usb", 3)) {
 			boot = BOOT_DEVICE_MASS;
-		} else if (!strncmp(argv[0], "mc", 2))
+		} else if (!strncmp(LaunchElfDir, "mc", 2))
 			boot = BOOT_DEVICE_MC;
 #ifdef MMCE
-		else if (!strncmp(argv[0], "mmce", 4)) {
+		else if (!strncmp(LaunchElfDir, "mmce", 4)) {
 			loadMmceModules();
 			boot = BOOT_DEVICE_MASS;
 		}
 #endif
 #ifdef MX4SIO
-			else if (!strncmp(argv[0], "mx4sio", 6)) {
+			else if (!strncmp(LaunchElfDir, "mx4sio", 6)) {
 				boot = BOOT_DEVICE_MASS;
 				loadMx4sioModules();
 			}
 #endif
-		else if (!strncmp(argv[0], "ata", 3)) {
+		else if (!strncmp(LaunchElfDir, "ata", 3)) {
 			boot = BOOT_DEVICE_MASS;
 #ifdef EXFAT
 			loadAtaModules();
 #endif
 		}
-		else if (!strncmp(argv[0], "cd", 2)) {
+		else if (!strncmp(LaunchElfDir, "cd", 2)) {
 			boot = BOOT_DEVICE_CDVD;
 			strcpy(LaunchElfDir, "mc0:/SYS-CONF/");  //Default to mc0 as a writable location.
-		} else if (!strncmp(argv[0], "hdd", 3)) {
+		} else if (!strncmp(LaunchElfDir, "hdd", 3)) {
 			//Booting from the HDD requires special handling for HDD-based paths.
 			char temp[MAX_PATH];
 			char *t, *p;
@@ -2930,7 +2953,7 @@ int main(int argc, char *argv[])
 
 			boot = BOOT_DEVICE_HDD;
 #ifdef DVRP
-		} else if (console_is_PSX && !strncmp(argv[0], "dvr_hdd", 7)) {
+		} else if (console_is_PSX && !strncmp(LaunchElfDir, "dvr_hdd", 7)) {
 			//Booting from the HDD requires special handling for HDD-based paths.
 			char temp[MAX_PATH];
 			char *t, *p;

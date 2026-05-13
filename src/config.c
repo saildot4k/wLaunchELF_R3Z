@@ -150,6 +150,29 @@ int CheckMC(void)
 
 	return -11;
 }
+
+static int getLaunchMcPort(void)
+{
+	int mcport;
+
+	if (!strncmp(LaunchElfDir, "mc0", 3))
+		return 0;
+	if (!strncmp(LaunchElfDir, "mc1", 3))
+		return 1;
+
+	if (!strncmp(LaunchElfDir, "mc:", 3)) {
+		mcport = CheckMC();
+		if (mcport == 0 || mcport == 1)
+			return mcport;
+		return 0;
+	}
+
+	mcport = CheckMC();
+	if (mcport == 0 || mcport == 1)
+		return mcport;
+
+	return 0;
+}
 //---------------------------------------------------------------------------
 unsigned long hextoul(char *string)
 {
@@ -578,10 +601,7 @@ void saveConfig(char *mainMsg, char *CNF)
 		genClose(fd);
 	else {                                //Start of clause for failure to use LaunchElfDir
 		if (setting->CNF_Path[0] == 0) {  //if NO CNF Path override defined
-			if (!strncmp(LaunchElfDir, "mc", 2))
-				sprintf(c, "mc%d:/SYS-CONF", LaunchElfDir[2] - '0');
-			else
-				sprintf(c, "mc%d:/SYS-CONF", CheckMC());
+			sprintf(c, "mc%d:/SYS-CONF", getLaunchMcPort());
 
 			if ((fd = fileXioDopen(c)) >= 0) {
 				fileXioDclose(fd);
@@ -596,7 +616,7 @@ void saveConfig(char *mainMsg, char *CNF)
 
 	ret = genFixPath(c, cnf_path);
 	if ((ret < 0) || ((fd = genOpen(cnf_path, O_CREAT | O_WRONLY | O_TRUNC)) < 0)) {
-		sprintf(c, "mc%d:/SYS-CONF", CheckMC());
+		sprintf(c, "mc%d:/SYS-CONF", getLaunchMcPort());
 		if ((fd = fileXioDopen(c)) >= 0) {
 			fileXioDclose(fd);
 			char strtmp[MAX_PATH] = "/";
@@ -740,10 +760,7 @@ int loadConfig(char *mainMsg, char *CNF)
 		if ((tst = genFixPath(strtmp, cnf_path)) >= 0)
 			fd = genOpen(cnf_path, O_RDONLY);
 		if (fd < 0) {
-			if (!strncmp(LaunchElfDir, "mc", 2))
-				mcport = LaunchElfDir[2] - '0';
-			else
-				mcport = CheckMC();
+			mcport = getLaunchMcPort();
 			if (mcport == 1 || mcport == 0) {
 				sprintf(strtmp, "mc%d:/SYS-CONF/", mcport);
 				strcpy(cnf_path, strtmp);

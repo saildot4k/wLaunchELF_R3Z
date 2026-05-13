@@ -40,6 +40,7 @@ enum {
 	MOUNTVMC0,
 	MOUNTVMC1,
 	GETSIZE,
+	OPEN_TEXTEDITOR,
 	TIMEMANIP,
 	TITLE_CFG,
 	NUM_MENU
@@ -244,6 +245,17 @@ static const char *getRootDeviceLabel(const char *name)
 		return "MISC/";
 
 	return NULL;
+}
+
+static void formatBrowserPathForDisplay(const char *path, char *display_path)
+{
+	if (!strncmp(path, "mass", 4)) {
+		snprintf(display_path, MAX_PATH, "usb%s", path + 4);
+		return;
+	}
+
+	strncpy(display_path, path, MAX_PATH - 1);
+	display_path[MAX_PATH - 1] = '\0';
 }
 
 //char debugs[4096]; //For debug display strings. Comment it out when unused
@@ -1769,6 +1781,7 @@ int menu(const char *path, FILEINFO *file)
 	menu_len = strlen(LNG(Rename)) > menu_len ? strlen(LNG(Rename)) : menu_len;
 	menu_len = strlen(LNG(New_Dir)) > menu_len ? strlen(LNG(New_Dir)) : menu_len;
 	menu_len = strlen(LNG(Get_Size)) > menu_len ? strlen(LNG(Get_Size)) : menu_len;
+	menu_len = strlen(LNG(TextEditor)) > menu_len ? strlen(LNG(TextEditor)) : menu_len;
 	menu_len = strlen(LNG(mcPaste)) > menu_len ? strlen(LNG(mcPaste)) : menu_len;
 	menu_len = strlen(LNG(psuPaste)) > menu_len ? strlen(LNG(psuPaste)) : menu_len;
     menu_len = strlen(LNG(time_manip)) > menu_len ? strlen(LNG(time_manip)) : menu_len;
@@ -1827,6 +1840,18 @@ int menu(const char *path, FILEINFO *file)
 	{
 		enable[TITLE_CFG] = TRUE;
 	} else {enable[TITLE_CFG] = FALSE;}
+
+	if ((file->stats.AttrFile & sceMcFileAttrSubdir) ||
+	    (!strcmp(file->name, "..")) ||
+	    (!strcmp(path, setting->Misc)) ||
+	    genCmpFileExt(file->name, "ELF") ||
+	    genCmpFileExt(file->name, "ICN") ||
+	    genCmpFileExt(file->name, "SYS"))
+	{
+		enable[OPEN_TEXTEDITOR] = FALSE;
+	} else {
+		enable[OPEN_TEXTEDITOR] = TRUE;
+	}
 
 
 	if (write_disabled || menu_disabled) {
@@ -1943,13 +1968,15 @@ int menu(const char *path, FILEINFO *file)
 					sprintf(tmp, "%s vmc1:", LNG(Mount));
 				else if (i == GETSIZE)
 					strcpy(tmp, LNG(Get_Size));
+				else if (i == OPEN_TEXTEDITOR)
+					strcpy(tmp, LNG(TextEditor));
 				else if (i == TITLE_CFG)
 					strcpy(tmp, LNG(title_cfg));
-				#ifdef TMANIP
+#ifdef TMANIP
 				else if (i == TIMEMANIP)
 					strcpy(tmp, LNG(time_manip));
-				#endif //TMANIP
-				
+#endif //TMANIP
+
 				if (enable[i])
 					color = setting->color[COLOR_TEXT];
 				else
@@ -4398,6 +4425,14 @@ int getFilePath(char *out, int cnfmode)
 							(void)ynDialog(msg1);
 						}
 					}  //ends MOUNTVMCx
+					else if (ret == OPEN_TEXTEDITOR) {
+						sprintf(tmp1, "%s%s", path, files[browser_sel].name);
+						TextEditor(tmp1);
+						strcpy(cursorEntry, files[browser_sel].name);
+						browser_pushed = FALSE;
+						browser_repos = TRUE;
+						browser_cd = TRUE;
+					}  //ends OPEN_TEXTEDITOR
 					else if (ret == GETSIZE) {
 						submenu_func_GetSize(msg0, path, files);
 					}  //ends GETSIZE
@@ -4661,6 +4696,10 @@ int getFilePath(char *out, int cnfmode)
 									genCmpFileExt(files[top + i].name, "CNF") || 
 									genCmpFileExt(files[top + i].name, "INI") || 
 									genCmpFileExt(files[top + i].name, "CHT") || 
+									genCmpFileExt(files[top + i].name, "PBT") ||
+									genCmpFileExt(files[top + i].name, "TOML") ||
+									genCmpFileExt(files[top + i].name, "YAML") ||
+									genCmpFileExt(files[top + i].name, "YML") ||
 									genCmpFileExt(files[top + i].name, "JPG") || 
 									genCmpFileExt(files[top + i].name, "JPEG")
 									)
@@ -4697,8 +4736,12 @@ int getFilePath(char *out, int cnfmode)
 				drawOpSprite(RIM_colour, x1, y1, x2, y2);
 				drawOpSprite(LED_colour, x1 + RIM_w, y1 + RIM_w, x2 - RIM_w, y2 - RIM_w);
 			}  //ends clause for clipboard indicator
-			if (browser_pushed)
-				sprintf(msg0, "%s: %s", LNG(Path), path);
+			if (browser_pushed) {
+				char display_path[MAX_PATH];
+
+				formatBrowserPathForDisplay(path, display_path);
+				sprintf(msg0, "%s: %s", LNG(Path), display_path);
+			}
 
 			//Tooltip section
 			if (cnfmode) {  //cnfmode indicates configurable file selection
