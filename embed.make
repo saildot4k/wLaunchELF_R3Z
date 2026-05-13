@@ -48,7 +48,64 @@ $(EE_ASM_DIR)bdmfs_fatfs_irx.s:iop/__precompiled/bdmfs_fatfs.irx | $(EE_ASM_DIR)
 $(EE_ASM_DIR)usbmass_bd_irx.s:iop/__precompiled/usbmass_bd.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ usbmass_bd_irx
 
-$(EE_ASM_DIR)ata_bd_irx.s:$(PS2SDK)/iop/irx/ata_bd.irx | $(EE_ASM_DIR)
+# ATA BDM module is not present in older PS2SDK releases.
+# Preferred order:
+# 1) installed PS2SDK IRX
+# 2) bundled fallback IRX
+# 3) auto-build from PS2SDK sources (when available)
+ATA_BD_SOURCE :=
+ATA_BD_AUTOGEN := iop/__generated/ata_bd.irx
+ATA_BD_SDK_ROOT :=
+ATA_BD_SDK_MODULE_DIR :=
+
+ifneq ($(wildcard $(PS2SDK)/iop/irx/ata_bd.irx),)
+ATA_BD_SOURCE := $(PS2SDK)/iop/irx/ata_bd.irx
+endif
+
+ifeq ($(strip $(ATA_BD_SOURCE)),)
+ifneq ($(wildcard iop/__precompiled/ata_bd.irx),)
+ATA_BD_SOURCE := iop/__precompiled/ata_bd.irx
+endif
+endif
+
+ifeq ($(strip $(ATA_BD_SOURCE)),)
+ifneq ($(PS2SDKSRC),)
+ifneq ($(wildcard $(PS2SDKSRC)/iop/dev9/ata_bd/Makefile),)
+ATA_BD_SDK_ROOT := $(PS2SDKSRC)
+ATA_BD_SDK_MODULE_DIR := $(PS2SDKSRC)/iop/dev9/ata_bd
+endif
+endif
+endif
+
+ifeq ($(strip $(ATA_BD_SOURCE)),)
+ifneq ($(wildcard $(PS2SDK)/iop/dev9/ata_bd/Makefile),)
+ATA_BD_SDK_ROOT := $(PS2SDK)
+ATA_BD_SDK_MODULE_DIR := $(PS2SDK)/iop/dev9/ata_bd
+endif
+endif
+
+ifeq ($(strip $(ATA_BD_SOURCE)),)
+ifneq ($(strip $(ATA_BD_SDK_MODULE_DIR)),)
+ATA_BD_SOURCE := $(ATA_BD_AUTOGEN)
+endif
+endif
+
+ifeq ($(strip $(ATA_BD_SOURCE)),)
+$(error Missing ata_bd.irx. Update PS2SDK, add iop/__precompiled/ata_bd.irx, or provide PS2SDKSRC with iop/dev9/ata_bd sources)
+endif
+
+$(ATA_BD_AUTOGEN): | iop/__generated
+	$(MAKE) -C $(ATA_BD_SDK_MODULE_DIR) \
+		PS2SDKSRC=$(ATA_BD_SDK_ROOT) \
+		PS2SDK=$(ATA_BD_SDK_ROOT) \
+		IOP_BIN_DIR=$(abspath iop/__generated)/ \
+		IOP_OBJS_DIR=$(abspath iop/__generated/ata_bd_obj)/ \
+		IOP_BIN=ata_bd.irx
+
+iop/__generated:
+	mkdir -p $@
+
+$(EE_ASM_DIR)ata_bd_irx.s:$(ATA_BD_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ata_bd_irx
 else
 $(EE_ASM_DIR)usbhdfsd_irx.s: $(PS2SDK)/iop/irx/usbhdfsd.irx | $(EE_ASM_DIR)

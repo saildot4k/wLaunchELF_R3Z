@@ -269,6 +269,7 @@ clean:
 	@rm -f githash.h $(EE_BIN) $(EE_BIN_PKD)
 	@rm -rf $(EE_OBJS_DIR)
 	@rm -rf $(EE_ASM_DIR)
+	@rm -rf iop/__generated
 	@rm -f iop/*.irx
 
 clean-ds34-variants:

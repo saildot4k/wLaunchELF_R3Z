@@ -224,6 +224,9 @@ void load_vmc_fs(void);
 void load_ps2host(void);
 #endif
 void loadHddModules(void);
+#ifdef DVRP
+void loadDVRPHddModules(void);
+#endif
 void loadHdlInfoModule(void);
 void loadCdModules(void);
 int uLE_related(char *pathout, const char *pathin);
@@ -389,6 +392,7 @@ void unmountDVRPParty(int party_ix);
 int mountDVRPParty(const char *party);
 #endif
 void unmountAll(void);
+void invalidatePartitionCaches(void);
 int setFileList(const char *path, const char *ext, FILEINFO *files, int cnfmode);
 
 /* hdd.c */

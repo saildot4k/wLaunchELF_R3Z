@@ -492,8 +492,16 @@ void unmountAll(void)
 		}
 	}
 	latestDVRPMount = -1;
-#endif
+	#endif
 }  //ends unmountAll
+//--------------------------------------------------------------
+void invalidatePartitionCaches(void)
+{
+	nparties = 0;
+#ifdef DVRP
+	ndvrpparties = 0;
+#endif
+}
 //--------------------------------------------------------------
 int ynDialog(const char *message)
 {

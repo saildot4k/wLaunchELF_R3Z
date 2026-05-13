@@ -290,6 +290,9 @@ static void loadUsbModules(void);
 static void loadKbdModules(void);
 static void resetRuntimeDeviceState(void);
 static void switchStorageDriverStack(int target_mode);
+#ifdef DVRP
+static void switchPsxHddDriverStack(int use_dvr_stack);
+#endif
 #ifdef DS34
 static void stopDs34Input(void);
 #endif
@@ -1585,6 +1588,26 @@ static void switchStorageDriverStack(int target_mode)
 #endif
 }
 
+#ifdef DVRP
+static void switchPsxHddDriverStack(int use_dvr_stack)
+{
+	if (!console_is_PSX)
+		return;
+
+	if (use_dvr_stack) {
+		if (!have_HDD_modules)
+			return;
+		DPRINTF("Switching PSX HDD stack (hdd0:/ -> dvr_hdd0:/), resetting IOP\n");
+	} else {
+		if (!have_DVRP_HDD_modules)
+			return;
+		DPRINTF("Switching PSX HDD stack (dvr_hdd0:/ -> hdd0:/), resetting IOP\n");
+	}
+
+	resetRuntimeDeviceState();
+}
+#endif
+
 #ifdef MMCE
 void loadMmceModules(void)
 {
@@ -1711,6 +1734,9 @@ static void setupPowerOff(void)
 //---------------------------------------------------------------------------
 void loadHddModules(void)
 {
+#ifdef DVRP
+	switchPsxHddDriverStack(0);
+#endif
 	ensureCoreIoStackReady();
 	if (!have_HDD_modules) {
 		if (!is_early_init)  //Do not draw any text before the UI is initialized.
@@ -1749,6 +1775,7 @@ void loadDVRPHddModules(void)
 	if (!console_is_PSX)
 		return;
 
+	switchPsxHddDriverStack(1);
 	ensureCoreIoStackReady();
 	if (!have_DVRP_HDD_modules) {
 		if (!is_early_init)  //Do not draw any text before the UI is initialized.
@@ -2690,6 +2717,7 @@ static void Reset()
 	USB_mass_scan_time = 0;
 	memset(USB_mass_ix, 0, sizeof(USB_mass_ix));
 	USB_mass_ix[0] = '0';
+	invalidatePartitionCaches();
 
 #ifdef POWERPC_UART
 int i, d;
