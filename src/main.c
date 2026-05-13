@@ -880,7 +880,7 @@ static void load_ps2dev9(void)
 #ifdef ETH
 static void load_ps2ip(void)
 {
-	int ret, ID;
+	int ret, ID __attribute__((unused));
 
 	load_ps2dev9();
 	if (!have_ps2ip) {
@@ -901,7 +901,7 @@ static void load_ps2ip(void)
 //---------------------------------------------------------------------------
 static void load_ps2atad(void)
 {
-	int ret, ID;
+	int ret, ID __attribute__((unused));
 	static char hddarg[] = "-o"
 	                       "\0"
 	                       "4"
@@ -959,7 +959,7 @@ static void load_pflash(void)
 #ifdef ETH
 void load_ps2host(void)
 {
-	int ret, ID;
+	int ret, ID __attribute__((unused));
 
 	ensureCoreIoStackReady();
 	setupPowerOff();  //resolves the stall out when opening host: from LaunchELF's FileBrowser
@@ -977,7 +977,7 @@ void load_ps2host(void)
 #ifdef SMB
 static void load_smbman(void)
 {
-	int ret, ID;
+	int ret, ID __attribute__((unused));
 
 	ensureCoreIoStackReady();
 	setupPowerOff();  //resolves stall out when opening smb: FileBrowser
@@ -996,7 +996,7 @@ static void load_smbman(void)
 #ifdef DVRP
 static void load_ps2dvr(void)
 {
-	int ret, ID;
+	int ret, ID __attribute__((unused));
 
 	load_ps2atad();
 	if (!is_early_init)  //Do not draw any text before the UI is initialized.
@@ -1130,7 +1130,7 @@ static void ShowDebugInfo(void)
 //---------------------------------------------------------------------------
 void load_vmc_fs(void)
 {
-	int ret, ID;
+	int ret, ID __attribute__((unused));
 
 	if (!have_vmc_fs) {
 		ID = SifExecModuleBuffer(vmc_fs_irx, size_vmc_fs_irx, 0, NULL, &ret);
@@ -1144,7 +1144,7 @@ void load_vmc_fs(void)
 #ifdef ETH
 static void load_ps2ftpd(void)
 {
-	int ret, ID;
+	int ret, ID __attribute__((unused));
 	int arglen;
 	char *arg_p;
 
@@ -1165,7 +1165,7 @@ static void load_ps2ftpd(void)
 #ifdef ETH
 static void load_ps2netfs(void)
 {
-	int ret, ID;
+	int ret, ID __attribute__((unused));
 
 	load_ps2ip();
 	if (!have_ps2netfs) {
@@ -1180,7 +1180,7 @@ static void load_ps2netfs(void)
 //---------------------------------------------------------------------------
 static void loadBasicModules(void)
 {
-	int ret, id;
+	int ret, id __attribute__((unused));
 
 	if (have_basic_modules)
 		return;
@@ -1259,7 +1259,7 @@ static void ensureCoreIoStackReady(void)
 //---------------------------------------------------------------------------
 void loadCdModules(void)
 {
-	int ret, id;
+	int ret, id __attribute__((unused));
 
 	if (!have_cdvd) {
 		sceCdInit(SCECdINoD);  // SCECdINoD init without check for a disc. Reduces risk of a lockup if the drive is in a erroneous state.
@@ -1485,7 +1485,7 @@ static void loadDs34Modules(void)
 static void loadUsbModules(void)
 {
 #ifdef EXFAT
-	int ret, ID;
+	int ret, ID __attribute__((unused));
 #endif
 
 	ensureCoreIoStackReady();
@@ -1611,7 +1611,7 @@ static void switchPsxHddDriverStack(int use_dvr_stack)
 #ifdef MMCE
 void loadMmceModules(void)
 {
-	int ret, id;
+	int ret, id __attribute__((unused));
 
 	ensureCoreIoStackReady();
 	switchStorageDriverStack(STORAGE_STACK_MMCE);
@@ -1628,7 +1628,7 @@ void loadMmceModules(void)
 #ifdef MX4SIO
 int loadMx4sioModules(void)
 {
-	int ret, id;
+	int ret, id __attribute__((unused));
 
 	ensureCoreIoStackReady();
 	switchStorageDriverStack(STORAGE_STACK_MX4SIO);
@@ -1653,7 +1653,7 @@ int loadMx4sioModules(void)
 #ifdef EXFAT
 void loadAtaModules(void)
 {
-	int ret, id;
+	int ret, id __attribute__((unused));
 
 	ensureCoreIoStackReady();
 	switchStorageDriverStack(STORAGE_STACK_DEFAULT);
@@ -1670,7 +1670,7 @@ void loadAtaModules(void)
 
 void loadHdlInfoModule(void)
 {
-	int ret, ID;
+	int ret, ID __attribute__((unused));
 
 	if (!have_hdl_info) {
 		drawMsg(LNG(Loading_HDL_Info_Module));
@@ -1715,7 +1715,7 @@ static void poweroffHandler(int i)
 //---------------------------------------------------------------------------
 static void setupPowerOff(void)
 {
-	int ret, ID;
+	int ret, ID __attribute__((unused));
 
 	if (!done_setupPowerOff) {
 		if (!have_poweroff) {

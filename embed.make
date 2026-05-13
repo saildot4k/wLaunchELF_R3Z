@@ -142,7 +142,6 @@ iop/cdvd.irx: iop/oldlibs/libcdvd
 
 $(EE_ASM_DIR)cdvd_irx.s: $(CDVD_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ cdvd_irx
-	$(MAKE) -C iop/oldlibs/libcdvd
 
 $(EE_ASM_DIR)ioptrap_irx.s: $(PS2SDK)/iop/irx/ioptrap.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ioptrap_irx
