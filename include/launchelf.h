@@ -64,9 +64,35 @@
 #include <sio.h>
 #include <sior_rpc.h>
 
+static inline unsigned char wle_ascii_tolower(unsigned char c)
+{
+	return (c >= 'A' && c <= 'Z') ? (unsigned char)(c + ('a' - 'A')) : c;
+}
+
+static inline int wle_stricmp(const char *lhs, const char *rhs)
+{
+	unsigned char a;
+	unsigned char b;
+
+	while (*lhs && *rhs) {
+		a = wle_ascii_tolower((unsigned char)*lhs++);
+		b = wle_ascii_tolower((unsigned char)*rhs++);
+		if (a != b)
+			return (int)a - (int)b;
+	}
+
+	a = wle_ascii_tolower((unsigned char)*lhs);
+	b = wle_ascii_tolower((unsigned char)*rhs);
+	return (int)a - (int)b;
+}
+
+#ifndef stricmp
+#define stricmp wle_stricmp
+#endif
+
 #ifdef SIO_DEBUG //EE SIO will be printed separated. no need for diferentiation
-	#define DPRINTF(format, args...) \
-    	sio_printf(format, ##args)
+		#define DPRINTF(format, args...) \
+	    	sio_printf(format, ##args)
 #elif defined(POWERPC_UART) || defined(COMMON_PRINTF) || defined(UDPTTY) //printf has to travel to IOP, add color escape to make up the diff
 	#define DPRINTF(format, args...) \
     	printf("\033[1;94;40m"format"\033[m", ##args)
