@@ -31,9 +31,11 @@
 #include "iopcontrol.h"
 #include "sifrpc.h"
 #include "loadfile.h"
+#include "loadfile-common.h"
 #include "sio.h"
 #include "string.h"
 #include "stdio.h"
+#include "stdarg.h"
 #include "iopheap.h"
 #include "errno.h"
 //--------------------------------------------------------------
@@ -57,6 +59,56 @@ static void wipeUserMem(void)
 		    "\tsq $0, 32(%0) \n"
 		    "\tsq $0, 48(%0) \n" ::"r"(i));
 	}
+}
+
+static int wleLoadElfRpc(const char *path, int encrypted, t_ExecData *data)
+{
+	SifRpcClientData_t lf_cd;
+	struct _lf_elf_load_arg arg;
+	int res;
+	int fno;
+
+	if (path == NULL || data == NULL)
+		return -EINVAL;
+
+	memset(&lf_cd, 0, sizeof(lf_cd));
+	sceSifInitRpc(0);
+	while ((res = sceSifBindRpc(&lf_cd, 0x80000006, 0)) >= 0 && !lf_cd.server)
+		nopdelay();
+	if (res < 0)
+		return -SCE_EBINDMISS;
+
+	memset(&arg, 0, sizeof(arg));
+	strncpy(arg.path, path, LF_PATH_MAX - 1);
+	arg.path[LF_PATH_MAX - 1] = '\0';
+	strncpy(arg.secname, "all", LF_ARG_MAX - 1);
+	arg.secname[LF_ARG_MAX - 1] = '\0';
+
+	fno = encrypted ? LF_F_MG_ELF_LOAD : LF_F_ELF_LOAD;
+	if (sceSifCallRpc(&lf_cd, fno, 0, &arg, sizeof(arg), &arg, sizeof(t_ExecData), NULL, NULL) < 0)
+		return -SCE_ECALLMISS;
+
+	if (arg.epc == 0)
+		return -SCE_ELOADMISS;
+
+	data->epc = arg.epc;
+	data->gp = arg.gp;
+	data->sp = 0;
+	data->dummy = 0;
+	return 0;
+}
+
+static void wle_log(const char *fmt, ...)
+{
+	char msg[192];
+	va_list args;
+
+	va_start(args, fmt);
+	vsnprintf(msg, sizeof(msg), fmt, args);
+	va_end(args);
+
+	sio_puts(msg);
+	printf("%s", msg);
 }
 
 //--------------------------------------------------------------
@@ -88,7 +140,7 @@ int main(int argc, char *argv[])
 		wipeUserMem();
 
 	if (argc < 2) {  // arg1=path to ELF, arg2=partition to mount
-		sio_puts("# wle: argc < 2\n");
+		wle_log("# wle: argc < 2\n");
 		SifExitRpc();
 		return -EINVAL;
 	}
@@ -136,20 +188,20 @@ int main(int argc, char *argv[])
 	for (target_ix = 0; target_ix < target_count; target_ix++) {
 		memset(&elfdata, 0, sizeof(elfdata));
 		snprintf(dbg, sizeof(dbg), "# wle: try target[%d] %s mode=%s\n", target_ix, targets[target_ix], prefer_encrypted ? "enc-first" : "plain");
-		sio_puts(dbg);
+		wle_log("%s", dbg);
 		if (prefer_encrypted) {
-			ret = SifLoadElfEncrypted(targets[target_ix], &elfdata);
-			snprintf(dbg, sizeof(dbg), "# wle: SifLoadElfEncrypted ret=%d epc=0x%08lx gp=0x%08lx\n", ret, (unsigned long)elfdata.epc, (unsigned long)elfdata.gp);
-			sio_puts(dbg);
+			ret = wleLoadElfRpc(targets[target_ix], 1, &elfdata);
+			snprintf(dbg, sizeof(dbg), "# wle: wleLoadElfRpc(enc) ret=%d epc=0x%08lx gp=0x%08lx\n", ret, (unsigned long)elfdata.epc, (unsigned long)elfdata.gp);
+			wle_log("%s", dbg);
 			if (ret != 0)
-				ret = SifLoadElf(targets[target_ix], &elfdata);
-			snprintf(dbg, sizeof(dbg), "# wle: SifLoadElf ret=%d epc=0x%08lx gp=0x%08lx\n", ret, (unsigned long)elfdata.epc, (unsigned long)elfdata.gp);
-			sio_puts(dbg);
+				ret = wleLoadElfRpc(targets[target_ix], 0, &elfdata);
+			snprintf(dbg, sizeof(dbg), "# wle: wleLoadElfRpc(plain) ret=%d epc=0x%08lx gp=0x%08lx\n", ret, (unsigned long)elfdata.epc, (unsigned long)elfdata.gp);
+			wle_log("%s", dbg);
 		} else {
 			/* Normal ELF path: do not use encrypted loader fallback. */
-			ret = SifLoadElf(targets[target_ix], &elfdata);
-			snprintf(dbg, sizeof(dbg), "# wle: SifLoadElf ret=%d epc=0x%08lx gp=0x%08lx\n", ret, (unsigned long)elfdata.epc, (unsigned long)elfdata.gp);
-			sio_puts(dbg);
+			ret = wleLoadElfRpc(targets[target_ix], 0, &elfdata);
+			snprintf(dbg, sizeof(dbg), "# wle: wleLoadElfRpc(plain) ret=%d epc=0x%08lx gp=0x%08lx\n", ret, (unsigned long)elfdata.epc, (unsigned long)elfdata.gp);
+			wle_log("%s", dbg);
 		}
 
 		if (ret == 0 && elfdata.epc != 0 && (elfdata.epc & 0x3) == 0) {
@@ -172,7 +224,7 @@ int main(int argc, char *argv[])
 	               But do not do that for boot targets on other devices, for backward-compatibility with older (homebrew) software.
 		} */
 		if (rebootiop) {
-			sio_puts("# wle: rst iop\n");
+			wle_log("# wle: rst iop\n");
 			while (!SifIopReset("", 0));
 			while (!SifIopSync());
 		}
@@ -183,10 +235,10 @@ int main(int argc, char *argv[])
 		FlushCache(2);
 
 		ExecPS2((void *)elfdata.epc, (void *)elfdata.gp, 1, args);
-		sio_puts("# wle: post ExecPS2\n");
+		wle_log("# wle: post ExecPS2\n");
 		return 0;
 	} else {
-		sio_puts("# wle: SifLoadElf fail\n");
+		wle_log("# wle: SifLoadElf fail\n");
 		SifExitRpc();
 		return -ENOENT;
 	}
