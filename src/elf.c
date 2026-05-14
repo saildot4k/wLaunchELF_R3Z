@@ -251,7 +251,7 @@ error:
 // Modified version of loader from Independence
 //	(C) 2003 Marcus R. Brown <mrbrown@0xd6.org>
 //------------------------------
-void RunLoaderElf(char *filename, char *party, const char *selected_path, int exec_kind)
+void RunLoaderElf(char *filename, char *party, const char *selected_path, int exec_kind, int reboot_iop_elf_load)
 {
 #define ELFLOAD_ARGC 3
 	u8 *boot_elf;
@@ -267,6 +267,10 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 		handoff_path = selected_path;
 	normalizeLaunchArgPath(filename, execpath);
 	exec_target = execpath;
+	DPRINTF("RunLoaderElf: exec_kind=%d reboot_iop=%d target='%s' handoff='%s' party='%s'\n",
+	        exec_kind, reboot_iop_elf_load, exec_target,
+	        (handoff_path != NULL) ? handoff_path : "",
+	        (party != NULL) ? party : "");
 
 	if ((!strncmp(party, "hdd0:", 5)) && (!strncmp(filename, "pfs0:", 5))) {
 		if (0 > fileXioMount("pfs0:", party, FIO_MT_RDONLY)) {
@@ -341,9 +345,10 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 			       eph[i].memsz - eph[i].filesz);
 	}
 	if (exec_kind == 2)
-		argv[2] = (setting->reboot_iop_elf_load) ? "-er" : "-enr";
+		argv[2] = (reboot_iop_elf_load) ? "-er" : "-enr";
 	else
-		argv[2] = (setting->reboot_iop_elf_load) ? "-r" : "-nr";
+		argv[2] = (reboot_iop_elf_load) ? "-r" : "-nr";
+	DPRINTF("RunLoaderElf: loader mode arg='%s'\n", argv[2]);
 	/* Let's go.  */
 	SifExitRpc();
 	FlushCache(0);
@@ -352,7 +357,7 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 	ExecPS2((void *)eh->entry, NULL, ELFLOAD_ARGC, argv);
 }
 //------------------------------
-//End of func:  void RunLoaderElf(char *filename, char *party, const char *selected_path, int exec_kind)
+//End of func:  void RunLoaderElf(char *filename, char *party, const char *selected_path, int exec_kind, int reboot_iop_elf_load)
 //--------------------------------------------------------------
 //End of file:  elf.c
 //--------------------------------------------------------------
