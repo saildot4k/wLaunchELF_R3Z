@@ -45,10 +45,97 @@ typedef struct
 	u32 align;
 } elf_pheader_t;
 
-static int openExecPathForRead(const char *path, char *resolved_path)
+static int readExecHeader(const char *path, u8 *header, int header_len, int *opened_file)
 {
-	snprintf(resolved_path, MAX_PATH, "%s", path);
-	return genOpen(resolved_path, O_RDONLY);
+	int fd, rd, total;
+
+	if (opened_file != NULL)
+		*opened_file = 0;
+
+	if (path == NULL || path[0] == '\0')
+		return -1;
+
+	fd = genOpen(path, O_RDONLY);
+	if (fd < 0)
+		return -1;
+
+	if (opened_file != NULL)
+		*opened_file = 1;
+
+	/* Some devices do not support SEEK_END reliably. SEEK_SET is enough here. */
+	genLseek(fd, 0, SEEK_SET);
+
+	total = 0;
+	while (total < header_len) {
+		rd = genRead(fd, header + total, header_len - total);
+		if (rd <= 0)
+			break;
+		total += rd;
+	}
+	genClose(fd);
+
+	return total;
+}
+
+static int classifyExecHeader(const u8 *header, int header_len)
+{
+	u32 magic;
+
+	if (header_len < 4)
+		return -1;
+
+	memcpy(&magic, header, sizeof(magic));
+	if (magic == KELF_MAGIC || magic == XLF_MAGIC)
+		return 2;  // Encrypted KELF/XLF payload.
+
+	if (magic != ELF_MAGIC)
+		return -1;
+
+	/*
+	 * Validate key ELF header fields when enough bytes are available:
+	 *  e_type at 0x10, e_machine at 0x12.
+	 */
+	if (header_len >= 20) {
+		u16 e_type, e_machine;
+		memcpy(&e_type, header + 16, sizeof(e_type));
+		memcpy(&e_machine, header + 18, sizeof(e_machine));
+		if ((e_type != 2) && (e_type != 3))
+			return -1;
+		if (e_machine != 8)
+			return -1;
+	}
+
+	return 1;
+}
+
+static int classifyExecByExtension(const char *path)
+{
+	if (genCmpFileExt(path, "KELF") || genCmpFileExt(path, "XLF"))
+		return 2;
+	if (genCmpFileExt(path, "ELF"))
+		return 1;
+
+	return -1;
+}
+
+static int tryCheckExecPath(const char *path, int *opened_any)
+{
+	u8 header[64];
+	int opened_file = 0;
+	int header_size;
+	int kind;
+
+	header_size = readExecHeader(path, header, sizeof(header), &opened_file);
+	if (opened_file && opened_any != NULL)
+		*opened_any = 1;
+
+	if (header_size < 0)
+		return -1;  // open failure
+	if (header_size < 4)
+		return 0;  // open success but not enough data
+
+	kind = classifyExecHeader(header, header_size);
+	return kind;
 }
 
 static void normalizeLaunchArgPath(const char *in_path, char *out_path)
@@ -82,12 +169,11 @@ static void normalizeLaunchArgPath(const char *in_path, char *out_path)
 //--------------------------------------------------------------
 int checkELFheader(char *path)
 {
-	elf_header_t elf_head;
-	u8 *boot_elf = (u8 *)&elf_head;
-	elf_header_t *eh = (elf_header_t *)boot_elf;
-	int fd, ret, read_bytes, total_read;
-	char fullpath[MAX_PATH], openpath[MAX_PATH], tmp[MAX_PATH], *p;
-	u32 magic;
+	int ret, kind, opened_any, fallback_kind;
+	char fullpath[MAX_PATH], tmp[MAX_PATH];
+
+	if (path == NULL || path[0] == '\0')
+		return -1;
 
 	strcpy(fullpath, path);
 	if (!strncmp(fullpath, "cdfs", 4))
@@ -104,100 +190,53 @@ int checkELFheader(char *path)
 	if (!strncmp(fullpath, "ata", 3))
 		loadAtaModules();
 #endif
-	if (!strncmp(fullpath, "mc", 2) 
-		|| !strncmp(fullpath, "vmc", 3)
-		|| !strncmp(fullpath, "rom", 3)
-		|| !strncmp(fullpath, "cdrom", 5)
-#ifdef MMCE
-		|| !strncmp(fullpath, "mmce", 4)
-#endif
-#ifdef XFROM
-		|| (console_is_PSX && !strncmp(fullpath, "xfrom", 5))
-#endif
-		|| !strncmp(fullpath, "cdfs", 4)) {
-		;  //fullpath is already correct
-	} else if (!strncmp(fullpath, "hdd0:", 5)) {
-		p = &path[5];
-		if (*p == '/')
-			p++;
-		sprintf(tmp, "hdd0:%s", p);
-		p = strchr(tmp, '/');
-		sprintf(fullpath, "pfs0:%s", p);
-		*p = 0;
-		if ((ret = mountParty(tmp)) < 0)
-			goto error;
-		fullpath[3] += ret;
-#ifdef DVRP
-	} else if (!strncmp(fullpath, "dvr_hdd0:", 9)) {
-		if (!console_is_PSX)
-			goto error;
-		p = &path[9];
-		if (*p == '/')
-			p++;
-		sprintf(tmp, "dvr_hdd0:%s", p);
-		p = strchr(tmp, '/');
-		sprintf(fullpath, "dvr_pfs0:%s", p);
-		*p = 0;
-		if ((ret = mountDVRPParty(tmp)) < 0)
-			goto error;
-		fullpath[7] += ret;
-#endif
-	} else if (!strncmp(fullpath, "usb", 3)) {
-		if (genFixPath(path, fullpath) < 0)
-			strcpy(fullpath, path);
-	} else if (!strncmp(fullpath, "mass", 4)) {
-		char *pathSep;
 
-		pathSep = strchr(path, '/');
-		if (pathSep && (pathSep - path < 7) && pathSep[-1] == ':')
-			strcpy(fullpath + (pathSep - path), pathSep + 1);
-	} else if (!strncmp(fullpath, "ata", 3)) {
-		char *pathSep;
+	opened_any = 0;
 
-		pathSep = strchr(path, '/');
-		if (pathSep && (pathSep - path < 7) && pathSep[-1] == ':')
-			strcpy(fullpath + (pathSep - path), pathSep + 1);
-#ifdef MX4SIO
-	} else if (!strncmp(fullpath, "mx4sio:", 7)) {
-		if (genFixPath(path, fullpath) < 0)
-			goto error;
-#endif
-	} else if (!strncmp(fullpath, "host:", 5)) {
-		if (path[5] == '/')
-			strcpy(fullpath + 5, path + 6);
-	} else {
-		return 0;  //return 0 for unrecognized device
+	/* 1) Try raw path first. */
+	kind = tryCheckExecPath(path, &opened_any);
+	if (kind > 0)
+		return kind;
+
+	/* 2) Try host path without the extra slash after device separator. */
+	if (!strncmp(path, "host:/", 6)) {
+		snprintf(tmp, sizeof(tmp), "host:%s", path + 6);
+		kind = tryCheckExecPath(tmp, &opened_any);
+		if (kind > 0)
+			return kind;
 	}
-	if ((fd = openExecPathForRead(fullpath, openpath)) < 0)
-		goto error;
+
+	/* 3) Try generic fixed path (includes HDD partition mount/translation). */
+	ret = genFixPath(path, fullpath);
+	if ((ret >= -99) && strcmp(fullpath, path)) {
+		kind = tryCheckExecPath(fullpath, &opened_any);
+		if (kind > 0)
+			return kind;
+	}
+
+	/* 4) Resolve generic memory card alias explicitly. */
+	if (!strncmp(path, "mc:/", 4)) {
+		snprintf(tmp, sizeof(tmp), "mc0:%s", path + 3);
+		kind = tryCheckExecPath(tmp, &opened_any);
+		if (kind > 0)
+			return kind;
+		snprintf(tmp, sizeof(tmp), "mc1:%s", path + 3);
+		kind = tryCheckExecPath(tmp, &opened_any);
+		if (kind > 0)
+			return kind;
+	}
 
 	/*
-	 * Some device stacks do not reliably report size via SEEK_END.
-	 * Only header bytes are needed, so seek to start and proceed.
+	 * 5) Last-resort fallback:
+	 * if the file opens but header read is unreliable, trust known executable
+	 * extensions to avoid false negatives on some device stacks.
 	 */
-	if (genLseek(fd, 0, SEEK_SET) < 0) {
-		genClose(fd);
-		if ((fd = openExecPathForRead(fullpath, openpath)) < 0)
-			goto error;
+	if (opened_any) {
+		fallback_kind = classifyExecByExtension(path);
+		if (fallback_kind > 0)
+			return fallback_kind;
 	}
-	memset(&elf_head, 0, sizeof(elf_head));
-	total_read = 0;
-	while (total_read < (int)sizeof(elf_header_t)) {
-		read_bytes = genRead(fd, boot_elf + total_read, sizeof(elf_header_t) - total_read);
-		if (read_bytes <= 0)
-			break;
-		total_read += read_bytes;
-	}
-	genClose(fd);
-	if (total_read < (int)(sizeof(u32) + sizeof(eh->type)))
-		goto error;
 
-	memcpy(&magic, eh->ident, sizeof(magic));
-	if (magic == KELF_MAGIC || magic == XLF_MAGIC)
-		return 2;  // encrypted KELF/XLF payload
-	if (magic == ELF_MAGIC)
-		return 1;  // valid ELF header
-	goto error;
 error:
 	return -1;  //return -1 for failed check
 }
