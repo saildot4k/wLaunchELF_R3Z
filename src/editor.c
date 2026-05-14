@@ -1053,7 +1053,12 @@ static int Open(int Win, char *path)
 	if (path[0] == '\0')
 		goto abort;
 
-	genFixPath(path, filePath);
+	strncpy(filePath, path, MAX_PATH - 1);
+	filePath[MAX_PATH - 1] = '\0';
+	if (genFixPath(path, filePath) < 0) {
+		strncpy(filePath, path, MAX_PATH - 1);
+		filePath[MAX_PATH - 1] = '\0';
+	}
 	fd = genOpen(filePath, O_RDONLY);
 
 	if (fd >= 0) {
@@ -1178,7 +1183,12 @@ static void Save(int Win)
 
 	if (!strncmp(Path[Win], "cdfs", 4))
 		goto abort;
-	genFixPath(Path[Win], filePath);
+	strncpy(filePath, Path[Win], MAX_PATH - 1);
+	filePath[MAX_PATH - 1] = '\0';
+	if (genFixPath(Path[Win], filePath) < 0) {
+		strncpy(filePath, Path[Win], MAX_PATH - 1);
+		filePath[MAX_PATH - 1] = '\0';
+	}
 
 	fd = genOpen(filePath, O_CREAT | O_WRONLY | O_TRUNC);
 
@@ -1191,7 +1201,8 @@ static void Save(int Win)
 		ret = 1;
 	}
 
-	genClose(fd);
+	if (fd >= 0)
+		genClose(fd);
 	if (!strncmp(filePath, "pfs", 3))
 		unmountParty(filePath[3] - '0');
 
@@ -1239,7 +1250,12 @@ static void Save_As(int Win)
 	} else
 		goto abort;
 
-	genFixPath(Path[Win], filePath);
+	strncpy(filePath, Path[Win], MAX_PATH - 1);
+	filePath[MAX_PATH - 1] = '\0';
+	if (genFixPath(Path[Win], filePath) < 0) {
+		strncpy(filePath, Path[Win], MAX_PATH - 1);
+		filePath[MAX_PATH - 1] = '\0';
+	}
 
 	fd = genOpen(filePath, O_CREAT | O_WRONLY | O_TRUNC);
 

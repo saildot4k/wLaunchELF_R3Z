@@ -86,7 +86,7 @@ int checkELFheader(char *path)
 	elf_header_t elf_head;
 	u8 *boot_elf = (u8 *)&elf_head;
 	elf_header_t *eh = (elf_header_t *)boot_elf;
-	int fd, ret, read_bytes;
+	int fd, ret, read_bytes, total_read;
 	char fullpath[MAX_PATH], openpath[MAX_PATH], tmp[MAX_PATH], *p;
 	u32 magic;
 
@@ -145,7 +145,7 @@ int checkELFheader(char *path)
 #endif
 	} else if (!strncmp(fullpath, "usb", 3)) {
 		if (genFixPath(path, fullpath) < 0)
-			goto error;
+			strcpy(fullpath, path);
 	} else if (!strncmp(fullpath, "mass", 4)) {
 		char *pathSep;
 
@@ -181,9 +181,16 @@ int checkELFheader(char *path)
 		if ((fd = openExecPathForRead(fullpath, openpath)) < 0)
 			goto error;
 	}
-	read_bytes = genRead(fd, boot_elf, sizeof(elf_header_t));
+	memset(&elf_head, 0, sizeof(elf_head));
+	total_read = 0;
+	while (total_read < (int)sizeof(elf_header_t)) {
+		read_bytes = genRead(fd, boot_elf + total_read, sizeof(elf_header_t) - total_read);
+		if (read_bytes <= 0)
+			break;
+		total_read += read_bytes;
+	}
 	genClose(fd);
-	if (read_bytes < (int)sizeof(u32))
+	if (total_read < (int)(sizeof(u32) + sizeof(eh->type)))
 		goto error;
 
 	memcpy(&magic, eh->ident, sizeof(magic));

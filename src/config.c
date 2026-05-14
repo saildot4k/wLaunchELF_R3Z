@@ -318,7 +318,7 @@ test:
 //------------------------------
 char *preloadCNF(char *path)
 {
-	int fd, tst, rd, total;
+	int fd, tst, rd, total, cnf_seek_size;
 	size_t CNF_size;
 	char cnf_path[MAX_PATH];
 	char probe;
@@ -333,13 +333,13 @@ char *preloadCNF(char *path)
 		return NULL;
 	}
 
-	CNF_size = (size_t)genLseek(fd, 0, SEEK_END);
-	DPRINTF("%s: CNF_size=%u\n", __func__, (unsigned int)CNF_size);
-	if (CNF_size > 0 && genLseek(fd, 0, SEEK_SET) >= 0) {
+	cnf_seek_size = genLseek(fd, 0, SEEK_END);
+	DPRINTF("%s: CNF_size=%d\n", __func__, cnf_seek_size);
+	if (cnf_seek_size > 0 && genLseek(fd, 0, SEEK_SET) >= 0) {
+		CNF_size = (size_t)cnf_seek_size;
 		RAM_p = (char *)memalign(64, CNF_size + 1);
 		if (RAM_p == NULL) {
-			genClose(fd);
-			goto failed_load;
+			goto fallback_stream;
 		}
 
 		rd = genRead(fd, RAM_p, CNF_size);  //Read CNF as one long string
@@ -356,6 +356,7 @@ char *preloadCNF(char *path)
 	 * Some stacks may fail SEEK_END/SEEK_SET even though reads are valid.
 	 * Retry with a streamed read and conservative size cap.
 	 */
+fallback_stream:
 	genClose(fd);
 	fd = genOpen(cnf_path, O_RDONLY);
 	if (fd < 0)

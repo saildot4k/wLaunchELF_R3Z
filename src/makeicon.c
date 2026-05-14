@@ -336,7 +336,7 @@ int make_iconsys(char *title, char *iconname, char *filename)
 
 	strcpy((char *)icon_sys.head, "PS2D");
 	icon_sys.nlOffset = 0;  //0=automagically wordwrap, otherwise newline position(multiple of 2)
-	strcpy_sjis((short *)&icon_sys.title, title);
+	transcpy_sjis((char *)icon_sys.title, (const unsigned char *)title);
 
 	icon_sys.trans = 0x40;
 	// default values from mcIconSysGen

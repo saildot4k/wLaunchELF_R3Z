@@ -435,7 +435,7 @@ void nonDialog(char *message);
 int keyboard(char *out, int max);
 void genLimObjName(char *uLE_path, int reserve);
 int genFixPath(const char *inp_path, char *gen_path);
-int genOpen(char *path, int mode);
+int genOpen(const char *path, int mode);
 int genLseek(int fd, int where, int how);
 int genRead(int fd, void *buf, int size);
 int genWrite(int fd, void *buf, int size);

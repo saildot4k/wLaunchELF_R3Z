@@ -9,6 +9,9 @@ on:
   repository_dispatch:
     types: [run_build]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 permissions:
   contents: read
 
@@ -94,26 +97,47 @@ jobs:
       run: |
         ls -R
 
-    - name: Create release
+    - name: Publish latest automated build release
       if: github.ref == 'refs/heads/master'
-      uses: marvinpinto/action-automatic-releases@latest
-      with:
-        repo_token: "${{ secrets.GITHUB_TOKEN }}"
-        automatic_release_tag: "latest"
-        title: "Latest automated build"
-        prerelease: false
-        files: |
-               WLE/**/*.ELF
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        tag="latest"
+        title="Latest automated build"
 
-    - name: Create release
+        if gh release view "$tag" >/dev/null 2>&1; then
+          gh release edit "$tag" --title "$title"
+        else
+          gh release create "$tag" --title "$title" --notes "Automated build for ${GITHUB_SHA}" --target "${GITHUB_SHA}"
+        fi
+
+        mapfile -d '' assets < <(find WLE -type f -name '*.ELF' -print0)
+        if [ "${#assets[@]}" -eq 0 ]; then
+          echo "No ELF assets found under WLE/." >&2
+          exit 1
+        fi
+        gh release upload "$tag" "${assets[@]}" --clobber
+
+    - name: Publish language files release
       if: github.ref == 'refs/heads/master'
-      uses: marvinpinto/action-automatic-releases@latest
-      with:
-        repo_token: "${{ secrets.GITHUB_TOKEN }}"
-        automatic_release_tag: "language-files"
-        title: "Translations"
-        files: |
-               Lang/*.LNG
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        tag="language-files"
+        title="Translations"
+
+        if gh release view "$tag" >/dev/null 2>&1; then
+          gh release edit "$tag" --title "$title"
+        else
+          gh release create "$tag" --title "$title" --notes "Automated language files for ${GITHUB_SHA}" --target "${GITHUB_SHA}"
+        fi
+
+        mapfile -d '' assets < <(find Lang -type f -name '*.LNG' -print0)
+        if [ "${#assets[@]}" -eq 0 ]; then
+          echo "No language assets found under Lang/." >&2
+          exit 1
+        fi
+        gh release upload "$tag" "${assets[@]}" --clobber
 
   trigger-auto-update:
     if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'

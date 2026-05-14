@@ -309,7 +309,7 @@ static void Set_CNF_Path(void);
 static int reloadConfig(void);
 static void decConfig(void);
 static void incConfig(void);
-static int exists(char *path);
+static int exists(const char *path);
 static void CleanUp(void);
 static void Execute(char *pathin);
 static void Reset(void);
@@ -1836,7 +1836,7 @@ static void startKbd(void)
 		PS2KbdInit();
 		ps2kbd_opened = 1;
 		if (setting->kbdmap_file[0]) {
-			if ((kbd_fd = fileXioOpen(PS2KBD_DEVFILE, O_RDONLY)) >= 0) {
+			if ((kbd_fd = fileXioOpen(PS2KBD_DEVFILE, O_RDONLY, 0)) >= 0) {
 				DPRINTF("kbd_fd=%d; Loading Kbd map file \"%s\"\r\n", kbd_fd, setting->kbdmap_file);
 				if (loadExternalFile(setting->kbdmap_file, &mapBase, &mapSize)) {
 					if (mapSize == 0x600) {
@@ -2134,7 +2134,7 @@ static void incConfig(void)
 //---------------------------------------------------------------------------
 //exists.  Tests if a file exists or not
 //------------------------------
-static int exists(char *path)
+static int exists(const char *path)
 {
 	int fd;
 

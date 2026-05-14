@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
 	wipeUserMem();
 
 	if (argc < 2) {  // arg1=path to ELF, arg2=partition to mount
-		sio_putsn("# wle: argc < 2\n");
+		sio_puts("# wle: argc < 2\n");
 		SifExitRpc();
 		return -EINVAL;
 	}
@@ -95,15 +95,15 @@ int main(int argc, char *argv[])
 		args[0] = path;
 		///ISRA: based on config
 		/* if (strncmp(path, "hdd", 3) == 0 && (path[3] >= '0' && path[3] <= ':')) { Final IOP reset, to fill the IOP with the default modules.
-               It appears that it was once a thing for the booting software to leave the IOP with the required IOP modules.
-               This can be seen in OSDSYS v1.0x (no IOP reboot) and the mechanism to boot DVD player updates (OSDSYS will get LoadExecPS2 to load SIO2 modules).
-               However, it changed with the introduction of the HDD unit, as the software booted may be built with a different SDK revision.
+	               It appears that it was once a thing for the booting software to leave the IOP with the required IOP modules.
+	               This can be seen in OSDSYS v1.0x (no IOP reboot) and the mechanism to boot DVD player updates (OSDSYS will get LoadExecPS2 to load SIO2 modules).
+	               However, it changed with the introduction of the HDD unit, as the software booted may be built with a different SDK revision.
 
-               Reboot the IOP, to leave it in a clean & consistent state.
-               But do not do that for boot targets on other devices, for backward-compatibility with older (homebrew) software.
+	               Reboot the IOP, to leave it in a clean & consistent state.
+	               But do not do that for boot targets on other devices, for backward-compatibility with older (homebrew) software.
 		} */
 		if (rebootiop) {
-			sio_putsn("# wle: rst iop\n");
+			sio_puts("# wle: rst iop\n");
 			while (!SifIopReset("", 0));
 			while (!SifIopSync());
 		}
@@ -114,10 +114,10 @@ int main(int argc, char *argv[])
 		FlushCache(2);
 
 		ExecPS2((void *)elfdata.epc, (void *)elfdata.gp, 1, args);
-		sio_putsn("# wle: post ExecPS2\n");
+		sio_puts("# wle: post ExecPS2\n");
 		return 0;
 	} else {
-		sio_putsn("# wle: SifLoadElf fail\n");
+		sio_puts("# wle: SifLoadElf fail\n");
 		SifExitRpc();
 		return -ENOENT;
 	}

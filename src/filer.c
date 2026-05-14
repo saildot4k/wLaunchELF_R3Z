@@ -1109,11 +1109,17 @@ int genRemove(char *path)
 //------------------------------
 //endfunc genRemove
 //--------------------------------------------------------------
-int genOpen(char *path, int mode)
+int genOpen(const char *path, int mode)
 {
+	char open_path[MAX_PATH];
+
+	if (path == NULL || path[0] == '\0')
+		return -1;
 	DPRINTF("%s: '%s' @ %d\n", __FUNCTION__, path, mode);
-	genLimObjName(path, 0);
-	return fileXioOpen(path, mode, fileMode);
+	strncpy(open_path, path, MAX_PATH - 1);
+	open_path[MAX_PATH - 1] = '\0';
+	genLimObjName(open_path, 0);
+	return fileXioOpen(open_path, mode, fileMode);
 }
 //------------------------------
 //endfunc genOpen
@@ -1475,7 +1481,7 @@ void initHOST(void)
 
 	load_ps2host();
 	host_error = 0;
-	if ((fd = fileXioOpen("host:elflist.txt", O_RDONLY)) >= 0) {
+	if ((fd = fileXioOpen("host:elflist.txt", O_RDONLY, 0)) >= 0) {
 		fileXioClose(fd);
 		host_elflist = 1;
 	} else {
@@ -1518,7 +1524,7 @@ int readHOST(const char *path, FILEINFO *info, int max)
 				host_next[contentptr] = 0;
 				snprintf(host_path, MAX_PATH - 1, "%s%s", "host:", host_next);
 				clear_mcTable(&info[hostcount].stats);
-				if ((hfd = fileXioOpen(makeHostPath(Win_path, host_path), O_RDONLY)) >= 0) {
+				if ((hfd = fileXioOpen(makeHostPath(Win_path, host_path), O_RDONLY, 0)) >= 0) {
 					fileXioClose(hfd);
 					info[hostcount].stats.AttrFile = MC_ATTR_norm_file;
 					makeFslPath(info[hostcount++].name, host_next);
@@ -2405,7 +2411,7 @@ int Rename(const char *path, const FILEINFO *file, const char *name)
 		if ((test = fileXioDopen(newPath)) >= 0) {  //Does folder of same name exist ?
 			fileXioDclose(test);
 			ret = -EEXIST;
-		} else if ((test = fileXioOpen(newPath, O_RDONLY)) >= 0) {  //Does file of same name exist ?
+		} else if ((test = fileXioOpen(newPath, O_RDONLY, 0)) >= 0) {  //Does file of same name exist ?
 			fileXioClose(test);
 			ret = -EEXIST;
 		} else {  //No file/folder of the same name exists
@@ -2442,7 +2448,7 @@ int Rename(const char *path, const FILEINFO *file, const char *name)
 				fileXioDclose(temp_fd);
 			}
 		} else if (file->stats.AttrFile & sceMcFileAttrFile) {  //Rename a file ?
-			ret = (temp_fd = fileXioOpen(oldPath, O_RDONLY));
+			ret = (temp_fd = fileXioOpen(oldPath, O_RDONLY, 0));
 			if (temp_fd >= 0) {
 				ret = fileXioIoctl(temp_fd, IOCTL_RENAME, (void *)newPath);
 				fileXioClose(temp_fd);
