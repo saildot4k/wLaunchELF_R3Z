@@ -2240,7 +2240,7 @@ int IsSupportedFileType(char *path)
 {
 	if (strchr(path, ':') != NULL) {
 		if (genCmpFileExt(path, "ELF") || genCmpFileExt(path, "XLF") || genCmpFileExt(path, "KELF")) {
-			return (checkELFheader(path) > 0);
+			return (checkELFheader(path) >= 0);
 		} else if (isTextEditorFileType(path) || (genCmpFileExt(path, "JPG") || genCmpFileExt(path, "JPEG"))) {
 			return 1;
 		} else
@@ -2756,9 +2756,16 @@ int i, d;
 //---------------------------------------------------------------------------
 int uLE_InitializeRegion(void)
 {
-	int ROMVER_fd;
 	int read_len;
 	static int TVMode = -1;
+	int i;
+	int ROMVER_fd;
+	size_t stdio_read_len;
+	FILE *romver_file;
+	char path_buf[32];
+	static const char *romver_paths[] = {
+	    "rom0:ROMVER",
+	};
 
 	// Keep default mode available even before ROMVER can be read.
 	if (TVMode < 0)
@@ -2770,18 +2777,42 @@ int uLE_InitializeRegion(void)
 
 	ensureCoreIoStackReady();
 
-	ROMVER_fd = genOpen("rom0:ROMVER", O_RDONLY);
-	if (ROMVER_fd < 0)
-		ROMVER_fd = genOpen("rom0:/ROMVER", O_RDONLY);
-	if (ROMVER_fd < 0) {
-		rough_region = 'X';
-		return TVMode;
+	memset(ROMVER_data, 0, sizeof(ROMVER_data));
+
+	/*
+	 * Prefer fileXio path (genOpen/genRead), but keep a stdio fallback because
+	 * newer SDK/runtime stacks can expose ROM through one backend but not the other.
+	 */
+	read_len = -1;
+	for (i = 0; i < (int)(sizeof(romver_paths) / sizeof(romver_paths[0])); i++) {
+		strncpy(path_buf, romver_paths[i], sizeof(path_buf) - 1);
+		path_buf[sizeof(path_buf) - 1] = '\0';
+		ROMVER_fd = genOpen(path_buf, O_RDONLY);
+		if (ROMVER_fd < 0)
+			continue;
+		read_len = genRead(ROMVER_fd, ROMVER_data, sizeof(ROMVER_data) - 1);
+		genClose(ROMVER_fd);
+		if (read_len > 0)
+			break;
+		memset(ROMVER_data, 0, sizeof(ROMVER_data));
 	}
 
-	memset(ROMVER_data, 0, sizeof(ROMVER_data));
-	read_len = genRead(ROMVER_fd, ROMVER_data, sizeof(ROMVER_data) - 1);
-	genClose(ROMVER_fd);
 	if (read_len <= 0) {
+		for (i = 0; i < (int)(sizeof(romver_paths) / sizeof(romver_paths[0])); i++) {
+			romver_file = fopen(romver_paths[i], "rb");
+			if (romver_file == NULL)
+				continue;
+			stdio_read_len = fread(ROMVER_data, 1, sizeof(ROMVER_data) - 1, romver_file);
+			fclose(romver_file);
+			if (stdio_read_len > 0) {
+				read_len = (int)stdio_read_len;
+				break;
+			}
+			memset(ROMVER_data, 0, sizeof(ROMVER_data));
+		}
+	}
+
+	if (read_len <= 0 || ROMVER_data[0] == '\0') {
 		memset(ROMVER_data, 0, sizeof(ROMVER_data));
 		rough_region = 'X';
 		return TVMode;

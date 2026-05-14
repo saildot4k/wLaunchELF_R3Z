@@ -1053,8 +1053,7 @@ static int Open(int Win, char *path)
 	if (path[0] == '\0')
 		goto abort;
 
-	if (genFixPath(path, filePath) < 0)
-		goto abort;
+	genFixPath(path, filePath);
 	fd = genOpen(filePath, O_RDONLY);
 
 	if (fd >= 0) {

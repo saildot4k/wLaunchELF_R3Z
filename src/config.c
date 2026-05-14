@@ -318,10 +318,12 @@ test:
 //------------------------------
 char *preloadCNF(char *path)
 {
-	int fd, tst;
+	int fd, tst, rd, total;
 	size_t CNF_size;
 	char cnf_path[MAX_PATH];
+	char probe;
 	char *RAM_p;
+	const int CNF_MAX_SIZE = 128 * 1024;
 
 	fd = -1;
 	if ((tst = genFixPath(path, cnf_path)) >= 0)
@@ -330,17 +332,71 @@ char *preloadCNF(char *path)
 	failed_load:
 		return NULL;
 	}
-	CNF_size = genLseek(fd, 0, SEEK_END);
-	DPRINTF("%s: CNF_size=%d\n", __func__, CNF_size);
-	genLseek(fd, 0, SEEK_SET);
-	RAM_p = (char *)memalign(64, CNF_size);
+
+	CNF_size = (size_t)genLseek(fd, 0, SEEK_END);
+	DPRINTF("%s: CNF_size=%u\n", __func__, (unsigned int)CNF_size);
+	if (CNF_size > 0 && genLseek(fd, 0, SEEK_SET) >= 0) {
+		RAM_p = (char *)memalign(64, CNF_size + 1);
+		if (RAM_p == NULL) {
+			genClose(fd);
+			goto failed_load;
+		}
+
+		rd = genRead(fd, RAM_p, CNF_size);  //Read CNF as one long string
+		genClose(fd);
+		if (rd <= 0) {
+			free(RAM_p);
+			goto failed_load;
+		}
+		RAM_p[rd] = '\0';  //Terminate the CNF string
+		return RAM_p;
+	}
+
+	/*
+	 * Some stacks may fail SEEK_END/SEEK_SET even though reads are valid.
+	 * Retry with a streamed read and conservative size cap.
+	 */
+	genClose(fd);
+	fd = genOpen(cnf_path, O_RDONLY);
+	if (fd < 0)
+		goto failed_load;
+
+	RAM_p = (char *)memalign(64, CNF_MAX_SIZE + 1);
 	if (RAM_p == NULL) {
 		genClose(fd);
 		goto failed_load;
 	}
-	genRead(fd, RAM_p, CNF_size);  //Read CNF as one long string
+	memset(RAM_p, 0, CNF_MAX_SIZE + 1);
+
+	total = 0;
+	while (total < CNF_MAX_SIZE) {
+		int chunk = CNF_MAX_SIZE - total;
+		if (chunk > 4096)
+			chunk = 4096;
+
+		rd = genRead(fd, RAM_p + total, chunk);
+		if (rd < 0) {
+			free(RAM_p);
+			genClose(fd);
+			goto failed_load;
+		}
+		if (rd == 0)
+			break;
+		total += rd;
+	}
+	if (total == CNF_MAX_SIZE && genRead(fd, &probe, 1) > 0) {
+		// Reject suspiciously large CNF payloads.
+		free(RAM_p);
+		genClose(fd);
+		goto failed_load;
+	}
+
 	genClose(fd);
-	RAM_p[CNF_size] = '\0';  //Terminate the CNF string
+	if (total <= 0) {
+		free(RAM_p);
+		goto failed_load;
+	}
+	RAM_p[total] = '\0';
 	return RAM_p;
 }
 //------------------------------
