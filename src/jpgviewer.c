@@ -24,6 +24,36 @@ int PicRotate, FullScreen;
 #define BADJPG 0
 #define LOADED 1
 
+static size_t boundedStringLen(const char *str, size_t maxLen)
+{
+	size_t len = 0;
+	while ((len < maxLen) && (str[len] != '\0')) {
+		len++;
+	}
+	return len;
+}
+
+static void buildFilePath(char *dst, size_t dstSize, const char *dir, const char *name)
+{
+	size_t dirLen, nameLen;
+
+	if ((dst == NULL) || (dstSize == 0)) {
+		return;
+	}
+
+	dirLen = boundedStringLen(dir, dstSize - 1);
+	memcpy(dst, dir, dirLen);
+
+	if (dirLen >= (dstSize - 1)) {
+		dst[dstSize - 1] = '\0';
+		return;
+	}
+
+	nameLen = boundedStringLen(name, dstSize - dirLen - 1);
+	memcpy(dst + dirLen, name, nameLen);
+	dst[dirLen + nameLen] = '\0';
+}
+
 //--------------------------------------------------------------
 static void Command_List(void)
 {
@@ -664,7 +694,7 @@ void JpgViewer(char *file)
 							++thumb_num;
 					} /* end for */
 						if (thumb_test[jpg_browser_sel] == NOTLOADED && !(files[jpg_browser_sel].stats.AttrFile & sceMcFileAttrSubdir)) {
-							snprintf(jpgpath, sizeof(jpgpath), "%s%s", path, files[jpg_browser_sel].name);
+							buildFilePath(jpgpath, sizeof(jpgpath), path, files[jpg_browser_sel].name);
 							loadSkin(THUMB_PIC, jpgpath, thumb_top + thumb_num);
 							thumb_test[jpg_browser_sel] = testthumb;
 						} /* end if notloaded */
@@ -746,7 +776,7 @@ void JpgViewer(char *file)
 					}
 
 						if (thumb_load) {
-							snprintf(jpgpath, sizeof(jpgpath), "%s%s", path, files[top + i].name);
+							buildFilePath(jpgpath, sizeof(jpgpath), path, files[top + i].name);
 							loadSkin(THUMB_PIC, jpgpath, thumb_num + thumb_top);
 							thumb_test[top + i] = testthumb;
 						}
@@ -912,7 +942,7 @@ void JpgViewer(char *file)
 				} else {
 				//pushed OK for a file
 				restart:
-					snprintf(jpgpath, sizeof(jpgpath), "%s%s", path, files[jpg_browser_sel].name);
+					buildFilePath(jpgpath, sizeof(jpgpath), path, files[jpg_browser_sel].name);
 
 					SlideShowBegin = 1;
 
@@ -924,7 +954,7 @@ void JpgViewer(char *file)
 							i = jpg_browser_sel + 1;
 							SlideShowBegin = 0;
 						}
-						snprintf(jpgpath, sizeof(jpgpath), "%s%s", path, files[i].name);
+						buildFilePath(jpgpath, sizeof(jpgpath), path, files[i].name);
 						loadPic();
 						PicRotate = 0;
 						if (testjpg)

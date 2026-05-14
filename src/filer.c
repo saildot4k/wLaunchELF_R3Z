@@ -864,8 +864,15 @@ void setPartyList(void)
 			strcmp(dirEnt.name, "__common"))
 			continue;
 	*/
-		strncpy(parties[nparties], dirEnt.name, MAX_PART_NAME);
-		parties[nparties++][MAX_PART_NAME] = '\0';
+		{
+			size_t len = 0;
+			while ((len < MAX_PART_NAME) && (dirEnt.name[len] != '\0')) {
+				len++;
+			}
+			memcpy(parties[nparties], dirEnt.name, len);
+			parties[nparties][len] = '\0';
+			nparties++;
+		}
 	}
 	fileXioDclose(hddFd);
 }
@@ -901,8 +908,15 @@ void setDVRPPartyList(void)
 			strcmp(dirEnt.name, "__common"))
 			continue;
 	*/
-		strncpy(parties[ndvrpparties], dirEnt.name, MAX_PART_NAME);
-		parties[ndvrpparties++][MAX_PART_NAME] = '\0';
+		{
+			size_t len = 0;
+			while ((len < MAX_PART_NAME) && (dirEnt.name[len] != '\0')) {
+				len++;
+			}
+			memcpy(parties[ndvrpparties], dirEnt.name, len);
+			parties[ndvrpparties][len] = '\0';
+			ndvrpparties++;
+		}
 	}
 	fileXioDclose(hddFd);
 }
@@ -1541,7 +1555,7 @@ int readHOST(const char *path, FILEINFO *info, int max)
 			elflistchar = elflisttxt[rv];
 			if ((elflistchar == 0x0a) || (rv == size)) {
 				host_next[contentptr] = 0;
-				snprintf(host_path, MAX_PATH - 1, "%s%s", "host:", host_next);
+				snprintf(host_path, sizeof(host_path), "host:%.*s", (int)(sizeof(host_path) - sizeof("host:")), host_next);
 				clear_mcTable(&info[hostcount].stats);
 				if ((hfd = fileXioOpen(makeHostPath(Win_path, host_path), O_RDONLY, 0)) >= 0) {
 					fileXioClose(hfd);
@@ -1555,9 +1569,8 @@ int readHOST(const char *path, FILEINFO *info, int max)
 				contentptr = 0;
 				if (hostcount > max)
 					break;
-			} else if (elflistchar != 0x0d) {
-				host_next[contentptr] = elflistchar;
-				contentptr++;
+			} else if ((elflistchar != 0x0d) && (contentptr < (MAX_PATH - 1))) {
+				host_next[contentptr++] = elflistchar;
 			}
 		}
 		free(elflisttxt);

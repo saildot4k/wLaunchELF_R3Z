@@ -722,8 +722,29 @@ void FtpClient_OnDataWrite(FtpClient *pClient)
 					*/
 					// end of MS-style LIST format
 				}
-				strcat(buffer, pInfo->m_Name);
-				strcat(buffer, "\r\n");
+				{
+					size_t used = strlen(buffer);
+					size_t room = sizeof(buffer) - used;
+					size_t name_len = 0;
+
+					if (room > 1) {
+						while ((name_len < (room - 1)) && (pInfo->m_Name[name_len] != '\0')) {
+							name_len++;
+						}
+						memcpy(buffer + used, pInfo->m_Name, name_len);
+						used += name_len;
+						buffer[used] = '\0';
+					}
+
+					if (used < (sizeof(buffer) - 1)) {
+						buffer[used++] = '\r';
+						buffer[used] = '\0';
+					}
+					if (used < (sizeof(buffer) - 1)) {
+						buffer[used++] = '\n';
+						buffer[used] = '\0';
+					}
+				}
 				//				sprintf(buffer,"%srwxr-xr-x user group %d Jan 01 00:01 %s\r\n",(FT_DIRECTORY == pInfo->m_eType) ? "d" : "-", pInfo->m_iSize, pInfo->m_Name);
 				send(pClient->m_iDataSocket, buffer, strlen(buffer), 0);
 			} else
