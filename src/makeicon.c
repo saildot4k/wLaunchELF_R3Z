@@ -303,21 +303,33 @@ int make_icon(char *icontext, char *filename)
 	tex_printXY((const unsigned char *)icontext, 0, 0, 0xFFFF);      // (string,xpos,ypos,color)
 	u32 tex_size = tex_compresRLE();          // compress the texture, overwrites tex_buffer
 
-	FILE *f = fopen(filename, "wb");  //open/create the file
-	if (f == NULL)
+	int fd = genOpen(filename, FIO_O_CREAT | FIO_O_WRONLY | FIO_O_TRUNC);  // open/create the file
+	if (fd < 0)
 		return -1;
-	fwrite(&icn_head, sizeof(icn_head), 1, f);
+	if (genWrite(fd, (void *)&icn_head, sizeof(icn_head)) != sizeof(icn_head))
+		goto io_error;
 	for (i = 0; i < icn_head.num_vertices; i++) {
-		fwrite(&icn_vertices[i], sizeof(icn_vertices[i]), 1, f);
-		fwrite(&normals[i / 3], sizeof(normals[i / 3]), 1, f);
-		fwrite(&texdata[i], sizeof(texdata[i]), 1, f);
+		if (genWrite(fd, (void *)&icn_vertices[i], sizeof(icn_vertices[i])) != sizeof(icn_vertices[i]))
+			goto io_error;
+		if (genWrite(fd, (void *)&normals[i / 3], sizeof(normals[i / 3])) != sizeof(normals[i / 3]))
+			goto io_error;
+		if (genWrite(fd, (void *)&texdata[i], sizeof(texdata[i])) != sizeof(texdata[i]))
+			goto io_error;
 	}
-	fwrite(&icn_anim_head, sizeof(icn_anim_head), 1, f);
-	fwrite(&framedata, 1, sizeof(framedata), f);
-	fwrite(&tex_size, 4, 1, f);
-	fwrite(tex_buffer, 1, tex_size, f);
-	fclose(f);
+	if (genWrite(fd, (void *)&icn_anim_head, sizeof(icn_anim_head)) != sizeof(icn_anim_head))
+		goto io_error;
+	if (genWrite(fd, (void *)&framedata, sizeof(framedata)) != sizeof(framedata))
+		goto io_error;
+	if (genWrite(fd, (void *)&tex_size, sizeof(tex_size)) != sizeof(tex_size))
+		goto io_error;
+	if (genWrite(fd, (void *)tex_buffer, tex_size) != (int)tex_size)
+		goto io_error;
+	genClose(fd);
 	return 0;
+
+io_error:
+	genClose(fd);
+	return -1;
 }
 //--------------------------------------------------------------
 /*
@@ -331,6 +343,7 @@ int make_iconsys(char *title, char *iconname, char *filename)
 {
 	// mcIcon is defined as part of libmc
 	mcIcon icon_sys;
+	int fd;
 
 	memset(((void *)&icon_sys), 0, sizeof(icon_sys));
 
@@ -360,11 +373,15 @@ int make_iconsys(char *title, char *iconname, char *filename)
 	strcpy((char *)icon_sys.copy, iconname);
 	strcpy((char *)icon_sys.del, iconname);
 
-	FILE *f = fopen(filename, "wb");  // open/create the file
-	if (f == NULL)
+	fd = genOpen(filename, FIO_O_CREAT | FIO_O_WRONLY | FIO_O_TRUNC);  // open/create the file
+	if (fd < 0)
 		return -1;
-	fwrite(&icon_sys, 1, sizeof(icon_sys), f);
-	fclose(f);
+
+	if (genWrite(fd, (void *)&icon_sys, sizeof(icon_sys)) != sizeof(icon_sys)) {
+		genClose(fd);
+		return -1;
+	}
+	genClose(fd);
 
 	return 0;
 }

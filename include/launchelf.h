@@ -24,7 +24,6 @@
 #include <libhdd.h>
 #include <libmc.h>
 #include <libpad.h>
-#include <sys/stat.h>
 #include <iopheap.h>
 #include <errno.h>
 #include <fileXio_rpc.h>
@@ -35,7 +34,6 @@
 #include <slib.h>
 #include <smem.h>
 #include <smod.h>
-#include <sys/fcntl.h>
 #include <debug.h>
 #include <gsKit.h>
 #include <dmaKit.h>
@@ -309,7 +307,7 @@ void loadAtaModules(void);
 
 /* elf.c */
 int checkELFheader(char *filename);
-void RunLoaderElf(char *filename, char *party, const char *selected_path);
+void RunLoaderElf(char *filename, char *party, const char *selected_path, int exec_kind);
 
 /* draw.c */
 #define BACKGROUND_PIC 0
@@ -435,6 +433,7 @@ void nonDialog(char *message);
 int keyboard(char *out, int max);
 void genLimObjName(char *uLE_path, int reserve);
 int genFixPath(const char *inp_path, char *gen_path);
+/* mode must use fileXio-compatible flags (FIO_O_*). */
 int genOpen(const char *path, int mode);
 int genLseek(int fd, int where, int how);
 int genRead(int fd, void *buf, int size);

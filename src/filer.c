@@ -1514,7 +1514,7 @@ void initHOST(void)
 
 	load_ps2host();
 	host_error = 0;
-	if ((fd = fileXioOpen("host:elflist.txt", O_RDONLY, 0)) >= 0) {
+	if ((fd = fileXioOpen("host:elflist.txt", FIO_O_RDONLY, 0)) >= 0) {
 		fileXioClose(fd);
 		host_elflist = 1;
 	} else {
@@ -1540,7 +1540,7 @@ int readHOST(const char *path, FILEINFO *info, int max)
 	if (!strncmp(path, "host:/", 6))
 		strcpy(host_path + 5, path + 6);
 	if ((host_elflist) && !strcmp(host_path, "host:")) {
-		if ((hfd = fileXioOpen("host:elflist.txt", O_RDONLY, 0)) < 0)
+		if ((hfd = fileXioOpen("host:elflist.txt", FIO_O_RDONLY, 0)) < 0)
 			return 0;
 		if ((size = fileXioLseek(hfd, 0, SEEK_END)) <= 0) {
 			fileXioClose(hfd);
@@ -1557,7 +1557,7 @@ int readHOST(const char *path, FILEINFO *info, int max)
 				host_next[contentptr] = 0;
 				snprintf(host_path, sizeof(host_path), "host:%.*s", (int)(sizeof(host_path) - sizeof("host:")), host_next);
 				clear_mcTable(&info[hostcount].stats);
-				if ((hfd = fileXioOpen(makeHostPath(Win_path, host_path), O_RDONLY, 0)) >= 0) {
+				if ((hfd = fileXioOpen(makeHostPath(Win_path, host_path), FIO_O_RDONLY, 0)) >= 0) {
 					fileXioClose(hfd);
 					info[hostcount].stats.AttrFile = MC_ATTR_norm_file;
 					makeFslPath(info[hostcount++].name, host_next);
@@ -1761,7 +1761,7 @@ static int getGameTitle(const char *path, const FILEINFO *file, unsigned char *o
 		if (!genCmpFileExt(tmpdir, "psu"))  //Find the extension, if any. If it's anything other than a PSU file
 			goto get_PS1_GameTitle;         //then it may be a PS1 save
 		//Here we know that the object needing a title is a PSU file
-		if ((fd = genOpen(tmpdir, O_RDONLY)) < 0)
+		if ((fd = genOpen(tmpdir, FIO_O_RDONLY)) < 0)
 			goto finish;  //Abort if open fails
 		tst = genRead(fd, (void *)&PSU_head, sizeof(PSU_head));
 		if (tst != sizeof(PSU_head))
@@ -1790,7 +1790,7 @@ static int getGameTitle(const char *path, const FILEINFO *file, unsigned char *o
 	//First try to find a valid PS2 icon.sys file inside the folder
 	strcpy(tmpdir, dir);
 	strcat(tmpdir, "icon.sys");
-	if ((fd = genOpen(tmpdir, O_RDONLY)) >= 0) {
+	if ((fd = genOpen(tmpdir, FIO_O_RDONLY)) >= 0) {
 		if ((size = genLseek(fd, 0, SEEK_END)) <= 0x100)
 			goto finish;
 		genLseek(fd, 0xC0, SEEK_SET);
@@ -1801,7 +1801,7 @@ static int getGameTitle(const char *path, const FILEINFO *file, unsigned char *o
 	strcat(tmpdir, file->name);  //PS1 save file should have same name as folder
 
 get_PS1_GameTitle:
-	if ((fd = genOpen(tmpdir, O_RDONLY)) < 0)
+	if ((fd = genOpen(tmpdir, FIO_O_RDONLY)) < 0)
 		goto finish;  //PS1 gamesave file needed
 	if ((size = genLseek(fd, 0, SEEK_END)) < 0x2000)
 		goto finish;  //Min size is 8K
@@ -2326,7 +2326,7 @@ void make_title_cfg(const char *path, const FILEINFO *file, char *_msg0)
 	char new_title_cfg[MAX_PATH];
 	strcpy(new_title_cfg, path);
 	strcat(new_title_cfg, "title.cfg");
-	if ((fd = genOpen(new_title_cfg, O_CREAT | O_WRONLY | O_TRUNC)) < 0) {
+	if ((fd = genOpen(new_title_cfg, FIO_O_CREAT | FIO_O_WRONLY | FIO_O_TRUNC)) < 0) {
 		snprintf(_msg0, MAX_PATH, "Error opening title.cfg");
 		return;
 	} else {
@@ -2444,7 +2444,7 @@ int Rename(const char *path, const FILEINFO *file, const char *name)
 		if ((test = fileXioDopen(newPath)) >= 0) {  //Does folder of same name exist ?
 			fileXioDclose(test);
 			ret = -EEXIST;
-		} else if ((test = fileXioOpen(newPath, O_RDONLY, 0)) >= 0) {  //Does file of same name exist ?
+		} else if ((test = fileXioOpen(newPath, FIO_O_RDONLY, 0)) >= 0) {  //Does file of same name exist ?
 			fileXioClose(test);
 			ret = -EEXIST;
 		} else {  //No file/folder of the same name exists
@@ -2481,7 +2481,7 @@ int Rename(const char *path, const FILEINFO *file, const char *name)
 				fileXioDclose(temp_fd);
 			}
 		} else if (file->stats.AttrFile & sceMcFileAttrFile) {  //Rename a file ?
-			ret = (temp_fd = fileXioOpen(oldPath, O_RDONLY, 0));
+			ret = (temp_fd = fileXioOpen(oldPath, FIO_O_RDONLY, 0));
 			if (temp_fd >= 0) {
 				ret = fileXioIoctl(temp_fd, IOCTL_RENAME, (void *)newPath);
 				fileXioClose(temp_fd);
@@ -2707,7 +2707,7 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 				makeHostPath(tmp + 5, tmp + 6);
 #endif
 			if (setting->PSU_DateNames && setting->PSU_NoOverwrite) {
-				if (0 <= (out_fd = genOpen(tmp, O_RDONLY))) {  //Name conflict ?
+				if (0 <= (out_fd = genOpen(tmp, FIO_O_RDONLY))) {  //Name conflict ?
 					genClose(out_fd);
 					out_fd = -1;
 					return 0;
@@ -2715,7 +2715,7 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 			}
 			//here tmp is the name of an existing file, to be removed before making new one
 			genRemove(tmp);
-			if (0 > (out_fd = genOpen(tmp, O_WRONLY | O_TRUNC | O_CREAT)))
+			if (0 > (out_fd = genOpen(tmp, FIO_O_WRONLY | FIO_O_TRUNC | FIO_O_CREAT)))
 				return -1;  //return error on failure to create PSU file
 
 			PM_file[recurses + 1] = out_fd;
@@ -2799,7 +2799,7 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 			if (snprintf(tmp, sizeof(tmp), "%s/PS2_MC_Backup_Attributes.BUP.bin", out) >= (int)sizeof(tmp))
 				return -1;
 			genRemove(tmp);
-			out_fd = genOpen(tmp, O_WRONLY | O_CREAT);
+			out_fd = genOpen(tmp, FIO_O_WRONLY | FIO_O_CREAT);
 
 			if (out_fd >= 0) {
 				size = genWrite(out_fd, (void *)&file.stats, 64);
@@ -2816,7 +2816,7 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 			if (!strncmp(tmp, "host:/", 6))
 				makeHostPath(tmp + 5, tmp + 6);
 #endif
-			in_fd = genOpen(tmp, O_RDONLY);
+			in_fd = genOpen(tmp, FIO_O_RDONLY);
 
 			if (in_fd >= 0) {
 				size = genRead(in_fd, (void *)&file.stats, 64);  //Read stats for the save folder
@@ -2987,7 +2987,7 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 		if (!genCmpFileExt(in, "psu"))
 			goto non_PSU_RESTORE_init;  //if not a PSU file, go do normal pasting
 
-		in_fd = genOpen(in, O_RDONLY);
+		in_fd = genOpen(in, FIO_O_RDONLY);
 
 		if (in_fd < 0)
 			return -1;
@@ -3030,7 +3030,7 @@ non_PSU_RESTORE_init:
 		if (!strncmp(in, "host:/", 6))
 			makeHostPath(in + 5, in + 6);
 #endif
-		in_fd = genOpen(in, O_RDONLY);
+		in_fd = genOpen(in, FIO_O_RDONLY);
 		if (in_fd < 0)
 			goto copy_file_exit;
 		size = genLseek(in_fd, 0, SEEK_END);
@@ -3061,7 +3061,7 @@ non_PSU_RESTORE_init:
 #endif
 		genLimObjName(out, 0);                                //Limit dest file name
 		genRemove(out);                                       //Remove old file if present
-		out_fd = genOpen(out, O_WRONLY | O_TRUNC | O_CREAT);  //Create new file
+		out_fd = genOpen(out, FIO_O_WRONLY | FIO_O_TRUNC | FIO_O_CREAT);  //Create new file
 		if (out_fd < 0)
 			goto copy_file_exit;
 	}
@@ -3993,7 +3993,7 @@ int BrowserModePopup(void)
 						if (!strncmp(tmp, "cdrom", 5))
 							strcat(tmp, ";1");
 						if (res >= 0) {
-							fd = genOpen(tmp, O_RDONLY);
+							fd = genOpen(tmp, FIO_O_RDONLY);
 							if (fd >= 0) {
 								test = genLseek(fd, 0, SEEK_END);
 								if (test == 55016) {
@@ -4415,7 +4415,7 @@ int getFilePath(char *out, int cnfmode)
 								goto DoneIcon;
 							}
 							strcat(tmp1, "icon.sys");
-							if ((ret = genOpen(tmp1, O_RDONLY)) >= 0) {  //if old "icon.sys" file exists
+							if ((ret = genOpen(tmp1, FIO_O_RDONLY)) >= 0) {  //if old "icon.sys" file exists
 								genClose(ret);
 							sprintf(msg1,
 							        "\n\"icon.sys\" %s.\n\n%s ?", LNG(file_alredy_exists),
@@ -4433,7 +4433,7 @@ int getFilePath(char *out, int cnfmode)
 								goto DoneIcon;
 							}
 							strcat(tmp1, "icon.icn");
-							if ((ret = genOpen(tmp1, O_RDONLY)) >= 0) {  //if old "icon.icn" file exists
+							if ((ret = genOpen(tmp1, FIO_O_RDONLY)) >= 0) {  //if old "icon.icn" file exists
 								genClose(ret);
 							sprintf(msg1,
 							        "\n\"icon.icn\" %s.\n\n%s ?", LNG(file_alredy_exists),

@@ -55,7 +55,7 @@ static int readExecHeader(const char *path, u8 *header, int header_len, int *ope
 	if (path == NULL || path[0] == '\0')
 		return -1;
 
-	fd = genOpen(path, O_RDONLY);
+	fd = genOpen(path, FIO_O_RDONLY);
 	if (fd < 0)
 		return -1;
 
@@ -80,7 +80,6 @@ static int readExecHeader(const char *path, u8 *header, int header_len, int *ope
 static int classifyExecHeader(const u8 *header, int header_len)
 {
 	u32 magic;
-	u32 magic_at_0x80;
 
 	if (header_len < 4)
 		return -1;
@@ -88,16 +87,6 @@ static int classifyExecHeader(const u8 *header, int header_len)
 	memcpy(&magic, header, sizeof(magic));
 	if (magic == KELF_MAGIC || magic == XLF_MAGIC)
 		return 2;  // Encrypted KELF/XLF payload.
-
-	/*
-	 * Some encrypted launchable payloads keep an ELF header at offset 0x80.
-	 * Detect those too so they can be routed through encrypted loading.
-	 */
-	if (header_len >= (0x80 + (int)sizeof(u32))) {
-		memcpy(&magic_at_0x80, header + 0x80, sizeof(magic_at_0x80));
-		if (magic_at_0x80 == ELF_MAGIC)
-			return 2;
-	}
 
 	if (magic != ELF_MAGIC)
 		return -1;
@@ -259,7 +248,7 @@ error:
 // Modified version of loader from Independence
 //	(C) 2003 Marcus R. Brown <mrbrown@0xd6.org>
 //------------------------------
-void RunLoaderElf(char *filename, char *party, const char *selected_path)
+void RunLoaderElf(char *filename, char *party, const char *selected_path, int exec_kind)
 {
 #define ELFLOAD_ARGC 3
 	u8 *boot_elf;
@@ -348,7 +337,10 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path)
 			memset(eph[i].vaddr + eph[i].filesz, 0,
 			       eph[i].memsz - eph[i].filesz);
 	}
-	argv[2] = (setting->reboot_iop_elf_load) ? "-r" : "-nr";
+	if (exec_kind == 2)
+		argv[2] = (setting->reboot_iop_elf_load) ? "-er" : "-enr";
+	else
+		argv[2] = (setting->reboot_iop_elf_load) ? "-r" : "-nr";
 	/* Let's go.  */
 	SifExitRpc();
 	FlushCache(0);
@@ -357,7 +349,7 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path)
 	ExecPS2((void *)eh->entry, NULL, ELFLOAD_ARGC, argv);
 }
 //------------------------------
-//End of func:  void RunLoaderElf(char *filename, char *party, const char *selected_path)
+//End of func:  void RunLoaderElf(char *filename, char *party, const char *selected_path, int exec_kind)
 //--------------------------------------------------------------
 //End of file:  elf.c
 //--------------------------------------------------------------

@@ -175,7 +175,7 @@ void GetHddInfo(void)
 
 			if (Treat == TREAT_PFS) {  //Starts clause for TREAT_PFS
 				sprintf(tmp, "hdd0:%s", PartyInfo[numParty].Name);
-				partitionFd = fileXioOpen(tmp, O_RDONLY, 0);
+				partitionFd = fileXioOpen(tmp, FIO_O_RDONLY, 0);
 				if (partitionFd >= 0) {
 					for (i = 0, size = 0; i < infoDirEnt.stat.private_0 + 1; i++) {
 						rv = fileXioIoctl2(partitionFd, HIOCGETSIZE, &i, 4, NULL, 0);
@@ -503,9 +503,9 @@ int CreateParty(char *party, int size)
 	}
 	strcpy(party, tmpName);
 	/*	if(remSize <= 0)*/
-	ret = hddMakeFilesystem(size, party, O_RDWR | O_CREAT);
+	ret = hddMakeFilesystem(size, party, FS_GROUP_APPLICATION);
 	/*	else{
-		ret = hddMakeFilesystem(2048, party, O_RDWR | O_CREAT);
+		ret = hddMakeFilesystem(2048, party, FS_GROUP_APPLICATION);
 		hddGetFilesystemList(hddFs, MAX_PARTITIONS);
 		for(i=0; i<MAX_PARTITIONS; i++){
 			if(!strcmp(hddFs[i].filename+5, party))
@@ -650,7 +650,7 @@ int RenameGame(PARTYINFO Info, char *newName)
 	if (ret == 0) {
 		strcpy(PartyInfo[Info.Count].Game.Name, newName);
 		/*	if(mountParty("hdd0:HDLoader Settings")>=0){
-			if((fd=genOpen("pfs0:/gamelist.log", O_RDONLY)) >= 0){
+			if((fd=genOpen("pfs0:/gamelist.log", FIO_O_RDONLY)) >= 0){
 				genClose(fd);
 				if(fileXioRemove("pfs0:/gamelist.log")!=0)
 					ret=0;

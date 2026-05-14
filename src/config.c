@@ -284,7 +284,7 @@ static int saveSkinCNF(char *CNF)
 	CNF_size = storeSkinCNF(tmp);
 
 	ret = genFixPath(CNF, cnf_path);
-	if ((ret < 0) || ((fd = genOpen(cnf_path, O_CREAT | O_WRONLY | O_TRUNC)) < 0)) {
+	if ((ret < 0) || ((fd = genOpen(cnf_path, FIO_O_CREAT | FIO_O_WRONLY | FIO_O_TRUNC)) < 0)) {
 		return -1;  //Failed open
 	}
 	ret = genWrite(fd, &tmp, CNF_size);
@@ -365,7 +365,7 @@ char *preloadCNF(char *path)
 
 	fd = -1;
 	if ((tst = genFixPath(path, cnf_path)) >= 0)
-		fd = genOpen(cnf_path, O_RDONLY);
+		fd = genOpen(cnf_path, FIO_O_RDONLY);
 	if (fd < 0) {
 	failed_load:
 		return NULL;
@@ -396,7 +396,7 @@ char *preloadCNF(char *path)
 	 */
 fallback_stream:
 	genClose(fd);
-	fd = genOpen(cnf_path, O_RDONLY);
+	fd = genOpen(cnf_path, FIO_O_RDONLY);
 	if (fd < 0)
 		goto failed_load;
 
@@ -692,7 +692,7 @@ void saveConfig(char *mainMsg, char *CNF)
 	strcpy(c, LaunchElfDir);
 	strcat(c, CNF);
 	ret = genFixPath(c, cnf_path);
-	if ((ret >= 0) && ((fd = genOpen(cnf_path, O_RDONLY)) >= 0))
+	if ((ret >= 0) && ((fd = genOpen(cnf_path, FIO_O_RDONLY)) >= 0))
 		genClose(fd);
 	else {                                //Start of clause for failure to use LaunchElfDir
 		if (setting->CNF_Path[0] == 0) {  //if NO CNF Path override defined
@@ -710,7 +710,7 @@ void saveConfig(char *mainMsg, char *CNF)
 	}  //End of clause for failure to use LaunchElfDir
 
 	ret = genFixPath(c, cnf_path);
-	if ((ret < 0) || ((fd = genOpen(cnf_path, O_CREAT | O_WRONLY | O_TRUNC)) < 0)) {
+	if ((ret < 0) || ((fd = genOpen(cnf_path, FIO_O_CREAT | FIO_O_WRONLY | FIO_O_TRUNC)) < 0)) {
 		sprintf(c, "mc%d:/SYS-CONF", getLaunchMcPort());
 		if ((fd = fileXioDopen(c)) >= 0) {
 			fileXioDclose(fd);
@@ -721,7 +721,7 @@ void saveConfig(char *mainMsg, char *CNF)
 			strcat(c, CNF);
 		}
 		ret = genFixPath(c, cnf_path);
-		if ((fd = genOpen(cnf_path, O_CREAT | O_WRONLY | O_TRUNC)) < 0) {
+		if ((fd = genOpen(cnf_path, FIO_O_CREAT | FIO_O_WRONLY | FIO_O_TRUNC)) < 0) {
 			sprintf(mainMsg, "%s %s", LNG(Failed_To_Save), CNF);
 			return;
 		}
@@ -840,7 +840,7 @@ int loadConfig(char *mainMsg, char *CNF)
 
 	fd = -1;
 	if ((tst = genFixPath(path, cnf_path)) >= 0)
-		fd = genOpen(cnf_path, O_RDONLY);
+		fd = genOpen(cnf_path, FIO_O_RDONLY);
 	if (fd < 0) {
 		char strtmp[MAX_PATH], *p;
 		int pos;
@@ -853,14 +853,14 @@ int loadConfig(char *mainMsg, char *CNF)
 		strcpy(strtmp + pos - 9, "LNCHELF");   //Replace LAUNCHELF with LNCHELF (for CD)
 		strcpy(strtmp + pos - 2, path + pos);  //Add index+extension too
 		if ((tst = genFixPath(strtmp, cnf_path)) >= 0)
-			fd = genOpen(cnf_path, O_RDONLY);
+			fd = genOpen(cnf_path, FIO_O_RDONLY);
 		if (fd < 0) {
 			mcport = getLaunchMcPort();
 			if (mcport == 1 || mcport == 0) {
 				sprintf(strtmp, "mc%d:/SYS-CONF/", mcport);
 				strcpy(cnf_path, strtmp);
 				strcat(cnf_path, CNF);
-				fd = genOpen(cnf_path, O_RDONLY);
+				fd = genOpen(cnf_path, FIO_O_RDONLY);
 				if (fd >= 0)
 					strcpy(LaunchElfDir, strtmp);
 			}
@@ -2004,7 +2004,7 @@ static void saveNetworkSettings(char *Message)
 	// to new file later.
 
 	if (genFixPath("uLE:/IPCONFIG.DAT", path) >= 0)
-		in_fd = genOpen(path, O_RDONLY);
+		in_fd = genOpen(path, FIO_O_RDONLY);
 	else
 		in_fd = -1;
 
@@ -2041,7 +2041,7 @@ static void saveNetworkSettings(char *Message)
 
 	// Writing the data out
 
-	out_fd = genOpen(path, O_WRONLY | O_TRUNC | O_CREAT);
+	out_fd = genOpen(path, FIO_O_WRONLY | FIO_O_TRUNC | FIO_O_CREAT);
 	if (out_fd >= 0) {
 		mcSync(0, NULL, &ret);
 		genWrite(out_fd, firstline, strlen(firstline));

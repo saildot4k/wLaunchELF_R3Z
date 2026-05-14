@@ -546,7 +546,7 @@ static void getIpConfig(void)
 	char path[MAX_PATH];
 
 	if (genFixPath("uLE:/IPCONFIG.DAT", path) >= 0)
-		fd = genOpen(path, O_RDONLY);
+		fd = genOpen(path, FIO_O_RDONLY);
 	else
 		fd = -1;
 
@@ -1409,8 +1409,7 @@ static int loadExternalFile(char *argPath, void **fileBaseP, int *fileSizeP)
 {  //The first three variables are local variants similar to the arguments
 	char filePath[MAX_PATH];
 	void *fileBase;
-	int fileSize;
-	FILE *File;
+	int fileSize, fd, seek_size, read_size, total, rd;
 
 	fileBase = NULL;
 	fileSize = 0;
@@ -1418,19 +1417,32 @@ static int loadExternalFile(char *argPath, void **fileBaseP, int *fileSizeP)
 	getExternalFilePath(argPath, filePath);
 
 	//Here 'filePath' is a valid path for file I/O operations
-	//Which means we can now use generic file I/O
-	File = fopen(filePath, "r");
-	if (File != NULL) {
-		fseek(File, 0, SEEK_END);
-		fileSize = ftell(File);
-		fseek(File, 0, SEEK_SET);
-		if (fileSize) {
-			if ((fileBase = memalign(64, fileSize)) > 0) {
-				fread(fileBase, 1, fileSize, File);
-			} else
+	//Which means we can now use generic fileXio I/O
+	fd = genOpen(filePath, FIO_O_RDONLY);
+	if (fd >= 0) {
+		seek_size = genLseek(fd, 0, SEEK_END);
+		if (seek_size > 0 && genLseek(fd, 0, SEEK_SET) >= 0) {
+			fileSize = seek_size;
+			fileBase = memalign(64, fileSize);
+			if (fileBase != NULL) {
+				total = 0;
+				while (total < fileSize) {
+					read_size = fileSize - total;
+					rd = genRead(fd, (u8 *)fileBase + total, read_size);
+					if (rd <= 0)
+						break;
+					total += rd;
+				}
+				if (total != fileSize) {
+					free(fileBase);
+					fileBase = NULL;
+					fileSize = 0;
+				}
+			} else {
 				fileSize = 0;
+			}
 		}
-		fclose(File);
+		genClose(fd);
 	}
 	*fileBaseP = fileBase;
 	*fileSizeP = fileSize;
@@ -1846,7 +1858,7 @@ static void startKbd(void)
 		PS2KbdInit();
 		ps2kbd_opened = 1;
 		if (setting->kbdmap_file[0]) {
-			if ((kbd_fd = fileXioOpen(PS2KBD_DEVFILE, O_RDONLY, 0)) >= 0) {
+			if ((kbd_fd = fileXioOpen(PS2KBD_DEVFILE, FIO_O_RDONLY, 0)) >= 0) {
 				DPRINTF("kbd_fd=%d; Loading Kbd map file \"%s\"\r\n", kbd_fd, setting->kbdmap_file);
 				if (loadExternalFile(setting->kbdmap_file, &mapBase, &mapSize)) {
 					if (mapSize == 0x600) {
@@ -2158,7 +2170,7 @@ static int exists(const char *path)
 {
 	int fd;
 
-	fd = genOpen(path, O_RDONLY);
+	fd = genOpen(path, FIO_O_RDONLY);
 	if (fd < 0)
 		return 0;
 	genClose(fd);
@@ -2299,7 +2311,7 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 			goto CheckELF_path;
 		strcpy(fullpath, "mc0:");
 		strcat(fullpath, path + 3);
-		if (checkELFheader(fullpath) > 0)
+		if ((t = checkELFheader(fullpath)) > 0)
 			goto ELFchecked;
 		fullpath[2] = '1';
 		goto CheckELF_fullpath;
@@ -2432,7 +2444,7 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		else
 			strcpy(path, default_OSDSYS_path);
 
-		fd = genOpen(path, O_RDONLY);
+		fd = genOpen(path, FIO_O_RDONLY);
 		if (fd >= 0)
 			goto close_fd_and_launch_OSDSYS;
 		if (strncmp(path, "mc:", 3) != 0)
@@ -2440,11 +2452,11 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		strcpy(fullpath, path);
 		path[2] = '0';
 		strcpy(path + 3, fullpath + 2);
-		fd = genOpen(path, O_RDONLY);
+		fd = genOpen(path, FIO_O_RDONLY);
 		if (fd >= 0)
 			goto close_fd_and_launch_OSDSYS;
 		path[2] = '1';
-		fd = genOpen(path, O_RDONLY);
+		fd = genOpen(path, FIO_O_RDONLY);
 		if (fd >= 0)
 			goto close_fd_and_launch_OSDSYS;
 		if (fd < 0)
@@ -2689,7 +2701,7 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 			goto ELFnotFound;
 	ELFchecked:
 			CleanUp();
-			RunLoaderElf(fullpath, party, path);
+			RunLoaderElf(fullpath, party, path, t);
 	} else {  //Invalid path
 		t = 0;
 	ELFnotFound:
@@ -2797,8 +2809,6 @@ int uLE_InitializeRegion(void)
 	static int TVMode = -1;
 	int i;
 	int ROMVER_fd;
-	size_t stdio_read_len;
-	FILE *romver_file;
 	char path_buf[32];
 	static const char *romver_paths[] = {
 	    "rom0:ROMVER",
@@ -2816,37 +2826,18 @@ int uLE_InitializeRegion(void)
 
 	memset(ROMVER_data, 0, sizeof(ROMVER_data));
 
-	/*
-	 * Prefer fileXio path (genOpen/genRead), but keep a stdio fallback because
-	 * newer SDK/runtime stacks can expose ROM through one backend but not the other.
-	 */
 	read_len = -1;
 	for (i = 0; i < (int)(sizeof(romver_paths) / sizeof(romver_paths[0])); i++) {
 		strncpy(path_buf, romver_paths[i], sizeof(path_buf) - 1);
 		path_buf[sizeof(path_buf) - 1] = '\0';
-		ROMVER_fd = genOpen(path_buf, O_RDONLY);
+		ROMVER_fd = genOpen(path_buf, FIO_O_RDONLY);
 		if (ROMVER_fd < 0)
 			continue;
 		read_len = genRead(ROMVER_fd, ROMVER_data, sizeof(ROMVER_data) - 1);
 		genClose(ROMVER_fd);
 		if (read_len > 0)
 			break;
-		memset(ROMVER_data, 0, sizeof(ROMVER_data));
-	}
-
-	if (read_len <= 0) {
-		for (i = 0; i < (int)(sizeof(romver_paths) / sizeof(romver_paths[0])); i++) {
-			romver_file = fopen(romver_paths[i], "rb");
-			if (romver_file == NULL)
-				continue;
-			stdio_read_len = fread(ROMVER_data, 1, sizeof(ROMVER_data) - 1, romver_file);
-			fclose(romver_file);
-			if (stdio_read_len > 0) {
-				read_len = (int)stdio_read_len;
-				break;
-			}
 			memset(ROMVER_data, 0, sizeof(ROMVER_data));
-		}
 	}
 
 	if (read_len <= 0 || ROMVER_data[0] == '\0') {

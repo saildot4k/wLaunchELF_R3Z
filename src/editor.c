@@ -1059,7 +1059,7 @@ static int Open(int Win, char *path)
 		strncpy(filePath, path, MAX_PATH - 1);
 		filePath[MAX_PATH - 1] = '\0';
 	}
-	fd = genOpen(filePath, O_RDONLY);
+	fd = genOpen(filePath, FIO_O_RDONLY);
 
 	if (fd >= 0) {
 		size = genLseek(fd, 0, SEEK_END);
@@ -1072,7 +1072,7 @@ static int Open(int Win, char *path)
 		 */
 		if (genLseek(fd, 0, SEEK_SET) < 0) {
 			genClose(fd);
-			fd = genOpen(filePath, O_RDONLY);
+			fd = genOpen(filePath, FIO_O_RDONLY);
 			if (fd < 0)
 				goto done;
 		}
@@ -1201,7 +1201,7 @@ static void Save(int Win)
 		filePath[MAX_PATH - 1] = '\0';
 	}
 
-	fd = genOpen(filePath, O_CREAT | O_WRONLY | O_TRUNC);
+	fd = genOpen(filePath, FIO_O_CREAT | FIO_O_WRONLY | FIO_O_TRUNC);
 
 	if (fd >= 0) {
 		if (TextMode[Win] == OTHER && TextBuffer[Win][TextSize[Win]] == '\n')
@@ -1268,7 +1268,7 @@ static void Save_As(int Win)
 		filePath[MAX_PATH - 1] = '\0';
 	}
 
-	fd = genOpen(filePath, O_CREAT | O_WRONLY | O_TRUNC);
+	fd = genOpen(filePath, FIO_O_CREAT | FIO_O_WRONLY | FIO_O_TRUNC);
 
 	if (fd >= 0) {
 		if (TextMode[Win] == OTHER && TextBuffer[Win][TextSize[Win]] == '\n')

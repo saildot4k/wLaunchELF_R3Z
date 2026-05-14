@@ -194,7 +194,7 @@ void Load_External_Language(void)
 
 		error_id = -2;
 		genFixPath(setting->lang_file, filePath);
-		fd = genOpen(filePath, O_RDONLY);
+		fd = genOpen(filePath, FIO_O_RDONLY);
 		if (fd >= 0) {  //if file opened OK
 			int file_size = genLseek(fd, 0, SEEK_END);
 

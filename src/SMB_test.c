@@ -114,7 +114,7 @@ int saveSMBCNF(char *CNFpath)
 	CNF_size = storeSMBCNF(tmp);
 
 	ret = genFixPath(CNFpath, cnf_path);  //Fix raw path argument
-	if ((ret < 0) || ((fd = genOpen(cnf_path, O_CREAT | O_WRONLY | O_TRUNC)) < 0)) {
+	if ((ret < 0) || ((fd = genOpen(cnf_path, FIO_O_CREAT | FIO_O_WRONLY | FIO_O_TRUNC)) < 0)) {
 		return -1;  //Failed open
 	}
 	ret = genWrite(fd, &tmp, CNF_size);

@@ -68,7 +68,7 @@ int main(int argc, char *argv[])
 	static t_ExecData elfdata;
 	char *target, *path;
 	char *args[1];
-	int ret, rebootiop = 0;
+	int ret, rebootiop = 0, prefer_encrypted = 0;
 	u32 loader_epc;
 
 	// Initialize
@@ -91,13 +91,29 @@ int main(int argc, char *argv[])
 	target = argv[0];
 	path = argv[1];
 	if (argc > 2) {
-		rebootiop = (!strcmp("-r", argv[2]));
+		if (!strcmp("-r", argv[2])) {
+			rebootiop = 1;
+		} else if (!strcmp("-nr", argv[2])) {
+			rebootiop = 0;
+		} else if (!strcmp("-er", argv[2])) {
+			prefer_encrypted = 1;
+			rebootiop = 1;
+		} else if (!strcmp("-enr", argv[2])) {
+			prefer_encrypted = 1;
+			rebootiop = 0;
+		}
 	}
 	//Writeback data cache before loading ELF.
 	FlushCache(0);
-	ret = SifLoadElf(target, &elfdata);
-	if (ret != 0)
+	if (prefer_encrypted) {
 		ret = SifLoadElfEncrypted(target, &elfdata);
+		if (ret != 0)
+			ret = SifLoadElf(target, &elfdata);
+	} else {
+		ret = SifLoadElf(target, &elfdata);
+		if (ret != 0)
+			ret = SifLoadElfEncrypted(target, &elfdata);
+	}
 
 	if (ret == 0) {
 		args[0] = path;
