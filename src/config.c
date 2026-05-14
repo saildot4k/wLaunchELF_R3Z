@@ -842,28 +842,26 @@ int loadConfig(char *mainMsg, char *CNF)
 	if ((tst = genFixPath(path, cnf_path)) >= 0)
 		fd = genOpen(cnf_path, FIO_O_RDONLY);
 	if (fd < 0) {
-		char strtmp[MAX_PATH], *p;
-		int pos;
+		char strtmp[MAX_PATH];
+		int ports_to_try[2];
+		int port_count = 0;
+		int port_ix;
 
-		p = strrchr(path, '.');  //make p point to extension
-		if (*(p - 1) != 'F')     //is this an indexed CNF
-			p--;                 //then make p point to index
-		pos = (p - path);
-		strcpy(strtmp, path);
-		strcpy(strtmp + pos - 9, "LNCHELF");   //Replace LAUNCHELF with LNCHELF (for CD)
-		strcpy(strtmp + pos - 2, path + pos);  //Add index+extension too
-		if ((tst = genFixPath(strtmp, cnf_path)) >= 0)
+		mcport = getLaunchMcPort();
+		if (mcport == 0 || mcport == 1)
+			ports_to_try[port_count++] = mcport;
+		if (mcport != 0)
+			ports_to_try[port_count++] = 0;
+		if (mcport != 1)
+			ports_to_try[port_count++] = 1;
+
+		for (port_ix = 0; port_ix < port_count && fd < 0; port_ix++) {
+			sprintf(strtmp, "mc%d:/SYS-CONF/", ports_to_try[port_ix]);
+			strcpy(cnf_path, strtmp);
+			strcat(cnf_path, CNF);
 			fd = genOpen(cnf_path, FIO_O_RDONLY);
-		if (fd < 0) {
-			mcport = getLaunchMcPort();
-			if (mcport == 1 || mcport == 0) {
-				sprintf(strtmp, "mc%d:/SYS-CONF/", mcport);
-				strcpy(cnf_path, strtmp);
-				strcat(cnf_path, CNF);
-				fd = genOpen(cnf_path, FIO_O_RDONLY);
-				if (fd >= 0)
-					strcpy(LaunchElfDir, strtmp);
-			}
+			if (fd >= 0)
+				strcpy(LaunchElfDir, strtmp);
 		}
 	}
 	if (fd < 0) {
