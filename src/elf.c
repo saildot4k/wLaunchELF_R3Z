@@ -47,8 +47,7 @@ typedef struct
 
 static int openExecPathForRead(const char *path, char *resolved_path)
 {
-	strncpy(resolved_path, path, MAX_PATH - 1);
-	resolved_path[MAX_PATH - 1] = '\0';
+	snprintf(resolved_path, MAX_PATH, "%s", path);
 	return genOpen(resolved_path, O_RDONLY);
 }
 
@@ -56,8 +55,7 @@ static void normalizeLaunchArgPath(const char *in_path, char *out_path)
 {
 	char *sep;
 
-	strncpy(out_path, in_path, MAX_PATH - 1);
-	out_path[MAX_PATH - 1] = '\0';
+	snprintf(out_path, MAX_PATH, "%s", in_path);
 	sep = strchr(out_path, ':');
 	if (sep == NULL)
 		return;

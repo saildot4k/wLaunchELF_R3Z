@@ -254,8 +254,7 @@ static void formatBrowserPathForDisplay(const char *path, char *display_path)
 		return;
 	}
 
-	strncpy(display_path, path, MAX_PATH - 1);
-	display_path[MAX_PATH - 1] = '\0';
+	snprintf(display_path, MAX_PATH, "%s", path);
 }
 
 //char debugs[4096]; //For debug display strings. Comment it out when unused
@@ -422,19 +421,13 @@ int getHddDVRPParty(const char *path, const FILEINFO *file, char *party, char *d
 //--------------------------------------------------------------
 int mountDVRPParty(const char *party)
 {
-	int i, j;
+	int i;
 
 	for (i = 0; i < MOUNT_LIMIT; i++) {  //Here we check already mounted PFS indexes
 		if (!strcmp(party, mountedDVRPParty[i]))
 			goto return_i;
 	}
 
-	for (i = 0, j = -1; i < MOUNT_LIMIT; i++) {  //Here we search for a free PFS index
-		if (mountedDVRPParty[i][0] == 0) {
-			j = i;
-			break;
-		}
-	}
 	if (strcmp(party, "dvr_hdd0:__xdata") == 0) {
 		i = 1;
 	} else if (strcmp(party, "dvr_hdd0:__xcontents") == 0) {
@@ -819,7 +812,7 @@ int readCD(const char *path, FILEINFO *info, int max)
 			info[n].stats.Reserve2 = 0;
 		} else
 			continue;  //Skip entry which is neither a file nor a folder
-		strncpy((char *)info[n].stats.EntryName, info[n].name, 32);
+		snprintf((char *)info[n].stats.EntryName, 32, "%.31s", info[n].name);
 		memcpy((void *)&info[n].stats._Create, record.stat.ctime, 8);
 		memcpy((void *)&info[n].stats._Modify, record.stat.mtime, 8);
 		n++;
@@ -1251,7 +1244,7 @@ int readVMC(const char *path, FILEINFO *info, int max)
 			info[i].stats.Reserve2 = dirbuf.stat.hisize;
 		} else
 			continue;  //Skip entry which is neither a file nor a folder
-		strncpy((char *)info[i].stats.EntryName, info[i].name, 32);
+		snprintf((char *)info[i].stats.EntryName, 32, "%.31s", info[i].name);
 		memcpy((void *)&info[i].stats._Create, dirbuf.stat.ctime, 8);
 		memcpy((void *)&info[i].stats._Modify, dirbuf.stat.mtime, 8);
 		i++;
@@ -1312,7 +1305,7 @@ int readHDD(const char *path, FILEINFO *info, int max)
 			info[i].stats.Reserve2 = dirbuf.stat.hisize;
 		} else
 			continue;  //Skip entry which is neither a file nor a folder
-		strncpy((char *)info[i].stats.EntryName, info[i].name, 32);
+		snprintf((char *)info[i].stats.EntryName, 32, "%.31s", info[i].name);
 		memcpy((void *)&info[i].stats._Create, dirbuf.stat.ctime, 8);
 		memcpy((void *)&info[i].stats._Modify, dirbuf.stat.mtime, 8);
 		i++;
@@ -1377,7 +1370,7 @@ int readHDDDVRP(const char *path, FILEINFO *info, int max)
 			info[i].stats.Reserve2 = dirbuf.stat.hisize;
 		} else
 			continue;  //Skip entry which is neither a file nor a folder
-		strncpy((char *)info[i].stats.EntryName, info[i].name, 32);
+		snprintf((char *)info[i].stats.EntryName, 32, "%.31s", info[i].name);
 		memcpy((void *)&info[i].stats._Create, dirbuf.stat.ctime, 8);
 		memcpy((void *)&info[i].stats._Modify, dirbuf.stat.mtime, 8);
 		i++;
@@ -1443,7 +1436,7 @@ int readGENERIC(const char *path, FILEINFO *info, int max)
 			DPRINTF("%s:UNKNOWN_FILEMODE:('%s', 0x%x, siz:%d, attr:%d)\n", record.name, record.stat.mode, record.stat.size, record.stat.attr);
 			continue;  //Skip entry which is neither a file nor a folder
 		}
-		strncpy((char *)info[n].stats.EntryName, info[n].name, 32);
+		snprintf((char *)info[n].stats.EntryName, 32, "%.31s", info[n].name);
 		memcpy((void *)&info[n].stats._Create, record.stat.ctime, 8);
 		memcpy((void *)&info[n].stats._Modify, record.stat.mtime, 8);
 		n++;
@@ -1529,7 +1522,7 @@ int readHOST(const char *path, FILEINFO *info, int max)
 	char Win_path[MAX_PATH];
 
 	initHOST();
-	snprintf(host_path, MAX_PATH - 1, "%s", path);
+	snprintf(host_path, MAX_PATH, "%s", path);
 	if (!strncmp(path, "host:/", 6))
 		strcpy(host_path + 5, path + 6);
 	if ((host_elflist) && !strcmp(host_path, "host:")) {
@@ -2312,20 +2305,21 @@ u64 getFileSize(const char *path, const FILEINFO *file)
 void make_title_cfg(const char *path, const FILEINFO *file, char *_msg0)
 {
 	int fd;
-	char title_cfg_buffer[128], ELF_NAME[64];
-	strcpy(ELF_NAME, file->name);
-	ELF_NAME[strlen(ELF_NAME)-4] = '\0';//kill extension, we can do this freely without checking string length because feature is only enabled on .ELF files
-	sprintf(title_cfg_buffer,"title=%s\nboot=%s", ELF_NAME, file->name);
+	char title_cfg_buffer[2 * MAX_NAME + 16], ELF_NAME[MAX_NAME];
+
+	snprintf(ELF_NAME, sizeof(ELF_NAME), "%s", file->name);
+	ELF_NAME[strlen(ELF_NAME) - 4] = '\0';  //kill extension, we can do this freely without checking string length because feature is only enabled on .ELF files
+	snprintf(title_cfg_buffer, sizeof(title_cfg_buffer), "title=%s\nboot=%s", ELF_NAME, file->name);
 	char new_title_cfg[MAX_PATH];
-	strcpy(new_title_cfg,path);
+	strcpy(new_title_cfg, path);
 	strcat(new_title_cfg, "title.cfg");
 	if ((fd = genOpen(new_title_cfg, O_CREAT | O_WRONLY | O_TRUNC)) < 0) {
-			sprintf(_msg0, "Error opening title.cfg");
-			return;
-		} else {
-			genWrite(fd, title_cfg_buffer, strlen(title_cfg_buffer));
-			genClose(fd);
-		}
+		snprintf(_msg0, MAX_PATH, "Error opening title.cfg");
+		return;
+	} else {
+		genWrite(fd, title_cfg_buffer, strlen(title_cfg_buffer));
+		genClose(fd);
+	}
 
 }
 //------------------------------
@@ -2444,13 +2438,13 @@ int Rename(const char *path, const FILEINFO *file, const char *name)
 			mcGetInfo(path[2] - '0', 0, &mctype_PSx, NULL, NULL);
 			mcSync(0, NULL, &test);
 			if (mctype_PSx == 2)  //PS2 MC ?
-				strncpy((void *)file->stats.EntryName, name, 32);
+				snprintf((char *)file->stats.EntryName, 32, "%.31s", name);
 			mcSetFileInfo(path[2] - '0', 0, oldPath + 4, &file->stats, 0x0010);  //Fix file stats
 			mcSync(0, NULL, &test);
 			if (ret == -4)
 				ret = -EEXIST;
 			else {  //PS1 MC !
-				strncpy((void *)file->stats.EntryName, name, 32);
+				snprintf((char *)file->stats.EntryName, 32, "%.31s", name);
 				mcSetFileInfo(path[2] - '0', 0, oldPath + 4, &file->stats, 0x0010);  //Fix file stats
 				mcSync(0, NULL, &test);
 				if (ret == -4)
@@ -2789,7 +2783,8 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 		}
 		//Here a destination folder, or a PSU file exists, ready to receive files
 		if (PasteMode == PM_MC_BACKUP) {  //MC Backup mode folder paste preparation
-			sprintf(tmp, "%s/PS2_MC_Backup_Attributes.BUP.bin", out);
+			if (snprintf(tmp, sizeof(tmp), "%s/PS2_MC_Backup_Attributes.BUP.bin", out) >= (int)sizeof(tmp))
+				return -1;
 			genRemove(tmp);
 			out_fd = genOpen(tmp, O_WRONLY | O_CREAT);
 
@@ -2802,7 +2797,8 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 					genClose(PM_file[recurses + 1]);
 			}
 		} else if (PasteMode == PM_MC_RESTORE) {  //MC Restore mode folder paste preparation
-			sprintf(tmp, "%s/PS2_MC_Backup_Attributes.BUP.bin", in);
+			if (snprintf(tmp, sizeof(tmp), "%s/PS2_MC_Backup_Attributes.BUP.bin", in) >= (int)sizeof(tmp))
+				return -1;
 #ifdef ETH
 			if (!strncmp(tmp, "host:/", 6))
 				makeHostPath(tmp + 5, tmp + 6);
@@ -4465,16 +4461,16 @@ int getFilePath(char *out, int cnfmode)
 						}
 #endif
 						strcat(tmp2, files[browser_sel].name);
-						if ((x = fileXioMount(tmp, tmp2, FIO_MT_RDWR)) >= 0) {
+							if ((x = fileXioMount(tmp, tmp2, FIO_MT_RDWR)) >= 0) {
 							if ((j >= 0) && (j < MOUNT_LIMIT)) {
 								vmc_PartyIndex[i] = j;
 								Party_vmcIndex[j] = i;
 							}
-							vmcMounted[i] = 1;
-							sprintf(path, "%s/", tmp);
-							browser_cd = TRUE;
-							cnfmode = NON_CNF;
-							strcpy(ext, cnfmode_extL[cnfmode]);
+								vmcMounted[i] = 1;
+								snprintf(path, sizeof(path), "%.*s/", (int)sizeof(path) - 2, tmp);
+								browser_cd = TRUE;
+								cnfmode = NON_CNF;
+								strcpy(ext, cnfmode_extL[cnfmode]);
 						} else {
 							sprintf(msg1, "\n'%s vmc%d:' for \"%s\"\nResult=%d",
 							        LNG(Mount), i, tmp2, x);
@@ -4482,7 +4478,7 @@ int getFilePath(char *out, int cnfmode)
 						}
 					}  //ends MOUNTVMCx
 					else if (ret == OPEN_TEXTEDITOR) {
-						sprintf(tmp1, "%s%s", path, files[browser_sel].name);
+						snprintf(tmp1, sizeof(tmp1), "%s%s", path, files[browser_sel].name);
 						TextEditor(tmp1);
 						strcpy(cursorEntry, files[browser_sel].name);
 						browser_pushed = FALSE;
@@ -4792,12 +4788,22 @@ int getFilePath(char *out, int cnfmode)
 				drawOpSprite(RIM_colour, x1, y1, x2, y2);
 				drawOpSprite(LED_colour, x1 + RIM_w, y1 + RIM_w, x2 - RIM_w, y2 - RIM_w);
 			}  //ends clause for clipboard indicator
-			if (browser_pushed) {
-				char display_path[MAX_PATH];
+				if (browser_pushed) {
+					char display_path[MAX_PATH];
+					int msg0_prefix;
+					int msg0_path_len;
 
-				formatBrowserPathForDisplay(path, display_path);
-				sprintf(msg0, "%s: %s", LNG(Path), display_path);
-			}
+					formatBrowserPathForDisplay(path, display_path);
+					msg0_prefix = snprintf(msg0, sizeof(msg0), "%s: ", LNG(Path));
+					if (msg0_prefix < 0 || msg0_prefix >= (int)sizeof(msg0))
+						msg0[sizeof(msg0) - 1] = '\0';
+					else {
+						msg0_path_len = (int)sizeof(msg0) - msg0_prefix - 1;
+						if (msg0_path_len < 0)
+							msg0_path_len = 0;
+						snprintf(msg0 + msg0_prefix, sizeof(msg0) - msg0_prefix, "%.*s", msg0_path_len, display_path);
+					}
+				}
 
 			//Tooltip section
 			if (cnfmode) {  //cnfmode indicates configurable file selection

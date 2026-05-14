@@ -37,7 +37,7 @@ EE_OBJS = main.o config.o elf.o draw.o loader_elf.o filer.o \
 
 EE_INCS := -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include -Iinclude
 
-EE_LDFLAGS := -L$(PS2DEV)/gsKit/lib -L$(PS2SDK)/ports/lib -Liop/oldlibs/libcdvd/lib -s
+EE_LDFLAGS := -L$(PS2DEV)/gsKit/lib -L$(PS2SDK)/ports/lib -Liop/oldlibs/libcdvd/lib -s -Wl,--no-warn-mismatch
 EE_JPEG_LIBS := -ljpeg
 ifneq ($(wildcard $(PS2SDK)/ports/lib/libjpeg_ps2_addons.a),)
 EE_JPEG_LIBS := -ljpeg_ps2_addons -ljpeg

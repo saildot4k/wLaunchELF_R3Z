@@ -145,7 +145,7 @@ u64 msTime()
 //---------------------------------------------------------------------------
 int readpad_noKBnoRepeat(void)
 {
-	int port, state;
+	int port;
 
 	WaitSema(semPoll);
 

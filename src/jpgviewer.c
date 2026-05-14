@@ -102,12 +102,15 @@ static void Command_List(void)
 			printXY(LNG(Right_Joystick_Vertical_Zoom), x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 			if (swapKeys)
-				sprintf(tmp, "\xff1: %s", LNG(FullScreen_Mode));
+				sprintf(tmp, "\xFF"
+				             "1: %s", LNG(FullScreen_Mode));
 			else
-				sprintf(tmp, "\xff0: %s", LNG(FullScreen_Mode));
+				sprintf(tmp, "\xFF"
+				             "0: %s", LNG(FullScreen_Mode));
 			printXY(tmp, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
-			sprintf(tmp, "\xff3: %s", LNG(Exit_To_Jpg_Browser));
+			sprintf(tmp, "\xFF"
+			             "3: %s", LNG(Exit_To_Jpg_Browser));
 			printXY(tmp, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 
@@ -660,11 +663,11 @@ void JpgViewer(char *file)
 						if (i >= top && thumb_test[i] == LOADED)
 							++thumb_num;
 					} /* end for */
-					if (thumb_test[jpg_browser_sel] == NOTLOADED && !(files[jpg_browser_sel].stats.AttrFile & sceMcFileAttrSubdir)) {
-						sprintf(jpgpath, "%s%s", path, files[jpg_browser_sel].name);
-						loadSkin(THUMB_PIC, jpgpath, thumb_top + thumb_num);
-						thumb_test[jpg_browser_sel] = testthumb;
-					} /* end if notloaded */
+						if (thumb_test[jpg_browser_sel] == NOTLOADED && !(files[jpg_browser_sel].stats.AttrFile & sceMcFileAttrSubdir)) {
+							snprintf(jpgpath, sizeof(jpgpath), "%s%s", path, files[jpg_browser_sel].name);
+							loadSkin(THUMB_PIC, jpgpath, thumb_top + thumb_num);
+							thumb_test[jpg_browser_sel] = testthumb;
+						} /* end if notloaded */
 					if (rows_down == 1) {
 						if (++jpg_browser_sel >= old_jpg_browser_sel) {
 							rows_down = 0;
@@ -742,11 +745,11 @@ void JpgViewer(char *file)
 						goto frame;
 					}
 
-					if (thumb_load) {
-						sprintf(jpgpath, "%s%s", path, files[top + i].name);
-						loadSkin(THUMB_PIC, jpgpath, thumb_num + thumb_top);
-						thumb_test[top + i] = testthumb;
-					}
+						if (thumb_load) {
+							snprintf(jpgpath, sizeof(jpgpath), "%s%s", path, files[top + i].name);
+							loadSkin(THUMB_PIC, jpgpath, thumb_num + thumb_top);
+							thumb_test[top + i] = testthumb;
+						}
 
 					if (thumb_test[top + i] == LOADED) {
 						gsKit_prim_sprite_texture(gsGlobal,
@@ -807,18 +810,24 @@ void JpgViewer(char *file)
 			}  //ends clause for scrollbar
 			msg0[0] = '\0';
 			if (jpg_browser_pushed)
-				sprintf(msg0, "%s %s: %s", LNG(Jpg_Viewer), LNG(Path), path);
+				snprintf(msg0, sizeof(msg0), "%s %s: %.*s", LNG(Jpg_Viewer), LNG(Path), (int)sizeof(msg0) - 20, path);
 
 			//Tooltip section
 			msg1[0] = '\0';
 			if (swapKeys)
-				sprintf(msg1, "\xff1:%s", LNG(View));
+				sprintf(msg1, "\xFF"
+				              "1:%s", LNG(View));
 			else
-				sprintf(msg1, "\xff0:%s", LNG(View));
+				sprintf(msg1, "\xFF"
+				              "0:%s", LNG(View));
 			if (jpg_browser_mode == LIST)
-				sprintf(tmp, " \xff3:%s \xff2:%s", LNG(Up), LNG(Thumb));
+				sprintf(tmp, " \xFF"
+				             "3:%s \xFF"
+				             "2:%s", LNG(Up), LNG(Thumb));
 			else
-				sprintf(tmp, " \xff3:%s \xff2:%s", LNG(Up), LNG(List));
+				sprintf(tmp, " \xFF"
+				             "3:%s \xFF"
+				             "2:%s", LNG(Up), LNG(List));
 			strcat(msg1, tmp);
 			sprintf(tmp, " Sel:%s Start:%s L1/R1:%dsec L2:",
 			        LNG(Exit), LNG(SlideShow), SlideShowTime);
@@ -903,7 +912,7 @@ void JpgViewer(char *file)
 				} else {
 				//pushed OK for a file
 				restart:
-					sprintf(jpgpath, "%s%s", path, files[jpg_browser_sel].name);
+					snprintf(jpgpath, sizeof(jpgpath), "%s%s", path, files[jpg_browser_sel].name);
 
 					SlideShowBegin = 1;
 
@@ -915,7 +924,7 @@ void JpgViewer(char *file)
 							i = jpg_browser_sel + 1;
 							SlideShowBegin = 0;
 						}
-						sprintf(jpgpath, "%s%s", path, files[i].name);
+						snprintf(jpgpath, sizeof(jpgpath), "%s%s", path, files[i].name);
 						loadPic();
 						PicRotate = 0;
 						if (testjpg)

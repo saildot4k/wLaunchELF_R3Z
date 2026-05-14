@@ -73,6 +73,44 @@ static const char LK_ID[SETTING_LK_COUNT][10] = {
 char PathPad[MAX_PATH_PAD][MAX_PATH];
 SETTING *setting = NULL;
 static SETTING *tmpsetting;
+
+static void formatLabelValue(char *dst, size_t dst_size, const char *label, const char *value)
+{
+	int prefix_len;
+	int value_len;
+
+	if (dst_size == 0)
+		return;
+	prefix_len = snprintf(dst, dst_size, "  %s: ", label ? label : "");
+	if (prefix_len < 0 || prefix_len >= (int)dst_size) {
+		dst[dst_size - 1] = '\0';
+		return;
+	}
+
+	value_len = (int)dst_size - prefix_len - 1;
+	if (value_len < 0)
+		value_len = 0;
+	snprintf(dst + prefix_len, dst_size - prefix_len, "%.*s", value_len, value ? value : "");
+}
+
+static void formatQuotedPathMessage(char *dst, size_t dst_size, const char *prefix, const char *path)
+{
+	int prefix_len;
+	int path_len;
+
+	if (dst_size == 0)
+		return;
+	prefix_len = snprintf(dst, dst_size, "%s \"", prefix ? prefix : "");
+	if (prefix_len < 0 || prefix_len >= (int)dst_size) {
+		dst[dst_size - 1] = '\0';
+		return;
+	}
+
+	path_len = (int)dst_size - prefix_len - 3;  // room for '"' '.' and '\0'
+	if (path_len < 0)
+		path_len = 0;
+	snprintf(dst + prefix_len, dst_size - prefix_len, "%.*s\".", path_len, path ? path : "");
+}
 //---------------------------------------------------------------------------
 // End of declarations
 // Start of functions
@@ -465,7 +503,7 @@ int loadSkinCNF(char *path)
 		scanSkinCNF(name, value);
 	free(RAM_p);
 	updateScreenMode();
-	if (setting->skin)
+	if (setting->skin[0] != '\0')
 		loadSkin(BACKGROUND_PIC, 0, 0);
 	return 0;
 }
@@ -483,9 +521,9 @@ void loadSkinBrowser(void)
 	getFilePath(path, TEXT_CNF);  // No Filtering, Be Careful.
 	tst = loadSkinCNF(path);
 	if (tst < 0)
-		sprintf(mess, "%s \"%s\".", LNG(Failed_To_Load), path);
+		formatQuotedPathMessage(mess, sizeof(mess), LNG(Failed_To_Load), path);
 	else
-		sprintf(mess, "%s \"%s\".", LNG(Loaded_Config), path);
+		formatQuotedPathMessage(mess, sizeof(mess), LNG(Loaded_Config), path);
 
 	drawMsg(mess);
 }
@@ -788,7 +826,7 @@ void initConfig(void)
 int loadConfig(char *mainMsg, char *CNF)
 {
 	int i, fd, tst, len, mcport, var_cnt, CNF_version;
-	char tsts[20];
+	char tsts[MAX_PATH];
 	char path[MAX_PATH];
 	char cnf_path[MAX_PATH];
 	char *RAM_p, *CNF_p, *name, *value;
@@ -855,8 +893,8 @@ int loadConfig(char *mainMsg, char *CNF)
 			continue;
 
 		for (i = 0; i < SETTING_LK_COUNT; i++) {
-			sprintf(tsts, "LK_%s_E%n", LK_ID[i], &len);
-			if (!strncmp(name, tsts, len)) {
+			len = snprintf(tsts, sizeof(tsts), "LK_%s_E", LK_ID[i]);
+			if ((len > 0) && (len < (int)sizeof(tsts)) && !strncmp(name, tsts, len)) {
 				strcpy(setting->LK_Path[i], value);
 				setting->LK_Flag[i] = 1;
 				break;
@@ -956,14 +994,15 @@ int loadConfig(char *mainMsg, char *CNF)
 			setting->PSU_NoOverwrite = atoi(value);
 		else if (!strcmp(name, "FB_NoIcons"))
 			setting->FB_NoIcons = atoi(value);
-		//----------
-		else {
-			for (i = 0; i < SETTING_LK_BTN_COUNT; i++) {
-				sprintf(tsts, "LK_%s_Title", LK_ID[i]);
-				if (!strcmp(name, tsts)) {
-					strncpy(setting->LK_Title[i], value, MAX_ELF_TITLE - 1);
-					break;
-				}
+			//----------
+			else {
+				for (i = 0; i < SETTING_LK_BTN_COUNT; i++) {
+					snprintf(tsts, sizeof(tsts), "LK_%s_Title", LK_ID[i]);
+					if (!strcmp(name, tsts)) {
+						strncpy(setting->LK_Title[i], value, MAX_ELF_TITLE - 1);
+						setting->LK_Title[i][MAX_ELF_TITLE - 1] = '\0';
+						break;
+					}
 			}
 			if (i < SETTING_LK_BTN_COUNT)
 				continue;
@@ -1141,9 +1180,9 @@ static void Config_Skin(void)
 			y += FONT_HEIGHT;
 
 			if (strlen(setting->skin) == 0)
-				sprintf(c, "  %s: %s", LNG(Skin_Path), LNG(NULL));
+				formatLabelValue(c, sizeof(c), LNG(Skin_Path), LNG(NULL));
 			else
-				sprintf(c, "  %s: %s", LNG(Skin_Path), setting->skin);
+				formatLabelValue(c, sizeof(c), LNG(Skin_Path), setting->skin);
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 
@@ -1156,9 +1195,9 @@ static void Config_Skin(void)
 			y += FONT_HEIGHT;
 
 			if (strlen(setting->GUI_skin) == 0)
-				sprintf(c, "  %s %s: %s", LNG(GUI), LNG(Skin_Path), LNG(NULL));
+				snprintf(c, sizeof(c), "  %s %s: %.900s", LNG(GUI), LNG(Skin_Path), LNG(NULL));
 			else
-				sprintf(c, "  %s %s: %s", LNG(GUI), LNG(Skin_Path), setting->GUI_skin);
+				snprintf(c, sizeof(c), "  %s %s: %.900s", LNG(GUI), LNG(Skin_Path), setting->GUI_skin);
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 
@@ -1776,7 +1815,7 @@ static void Config_Startup(void)
 					getFilePath(setting->LK_Path[SETTING_LK_ESR], LK_ELF_CNF);
 					if (!strncmp(setting->LK_Path[SETTING_LK_ESR], "mc0", 3) ||
 					    !strncmp(setting->LK_Path[SETTING_LK_ESR], "mc1", 3)) {
-						sprintf(c, "mc%s", &setting->LK_Path[SETTING_LK_ESR][3]);
+						snprintf(c, sizeof(c), "mc%.*s", (int)sizeof(c) - 3, &setting->LK_Path[SETTING_LK_ESR][3]);
 						strcpy(setting->LK_Path[SETTING_LK_ESR], c);
 					}
 					if (setting->LK_Path[SETTING_LK_ESR][0])
@@ -1785,7 +1824,7 @@ static void Config_Startup(void)
 					getFilePath(setting->LK_Path[SETTING_LK_OSDSYS], TEXT_CNF);
 					if (!strncmp(setting->LK_Path[SETTING_LK_OSDSYS], "mc0", 3) ||
 					    !strncmp(setting->LK_Path[SETTING_LK_OSDSYS], "mc1", 3)) {
-						sprintf(c, "mc%s", &setting->LK_Path[SETTING_LK_OSDSYS][3]);
+						snprintf(c, sizeof(c), "mc%.*s", (int)sizeof(c) - 3, &setting->LK_Path[SETTING_LK_OSDSYS][3]);
 						strcpy(setting->LK_Path[SETTING_LK_OSDSYS], c);
 					}
 					if (setting->LK_Path[SETTING_LK_OSDSYS][0])
@@ -1841,33 +1880,31 @@ static void Config_Startup(void)
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 
-			sprintf(c, "  %s: %s", LNG(USB_Keyboard_IRX), (strlen(setting->usbkbd_file) == 0) ? LNG(DEFAULT) : setting->usbkbd_file);
+			formatLabelValue(c, sizeof(c), LNG(USB_Keyboard_IRX), (strlen(setting->usbkbd_file) == 0) ? LNG(DEFAULT) : setting->usbkbd_file);
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 
-			sprintf(c, "  %s: %s", LNG(USB_Keyboard_Map), (strlen(setting->kbdmap_file) == 0)? LNG(DEFAULT) : setting->kbdmap_file);
+			formatLabelValue(c, sizeof(c), LNG(USB_Keyboard_Map), (strlen(setting->kbdmap_file) == 0) ? LNG(DEFAULT) : setting->kbdmap_file);
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 
-			sprintf(c, "  %s: %s", LNG(CNF_Path_override), (strlen(setting->CNF_Path) == 0) ? LNG(NONE) : setting->CNF_Path);
+			formatLabelValue(c, sizeof(c), LNG(CNF_Path_override), (strlen(setting->CNF_Path) == 0) ? LNG(NONE) : setting->CNF_Path);
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 
-			sprintf(c, "  %s: %s", LNG(Language_File), (strlen(setting->lang_file) == 0)? LNG(DEFAULT) : setting->lang_file);
+			formatLabelValue(c, sizeof(c), LNG(Language_File), (strlen(setting->lang_file) == 0) ? LNG(DEFAULT) : setting->lang_file);
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 
-			sprintf(c, "  %s: %s", LNG(Font_File), (strlen(setting->font_file) == 0)? LNG(DEFAULT):setting->font_file);
+			formatLabelValue(c, sizeof(c), LNG(Font_File), (strlen(setting->font_file) == 0) ? LNG(DEFAULT) : setting->font_file);
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 
-			sprintf(c, "  ESR elf: %s", 
-				(strlen(setting->LK_Path[SETTING_LK_ESR]) == 0) ? LNG(DEFAULT) : setting->LK_Path[SETTING_LK_ESR]);
+			formatLabelValue(c, sizeof(c), "ESR elf", (strlen(setting->LK_Path[SETTING_LK_ESR]) == 0) ? LNG(DEFAULT) : setting->LK_Path[SETTING_LK_ESR]);
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 
-			sprintf(c, "  OSDSYS kelf: %s", (strlen(setting->LK_Path[SETTING_LK_OSDSYS]) == 0)?
-				LNG(DEFAULT) : setting->LK_Path[SETTING_LK_OSDSYS]);
+			formatLabelValue(c, sizeof(c), "OSDSYS kelf", (strlen(setting->LK_Path[SETTING_LK_OSDSYS]) == 0) ? LNG(DEFAULT) : setting->LK_Path[SETTING_LK_OSDSYS]);
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 
@@ -2017,7 +2054,7 @@ static void saveNetworkSettings(char *Message)
 			mcSync(0, NULL, &ret);
 		}
 
-		sprintf(Message, "%s %s", LNG(Saved), path);
+			snprintf(Message, MAX_PATH, "%s %.*s", LNG(Saved), MAX_PATH - 4, path);
 
 		genClose(out_fd);
 	}
@@ -2033,18 +2070,22 @@ static void ipStringToOctet(char *ip, int ip_octet[4])
 	// Rewritten 22/10/05
 
 	char oct_str[5];
-	int oct_cnt, i;
+	int oct_cnt, i, oct_len;
 
 	oct_cnt = 0;
-	oct_str[0] = 0;
+	oct_len = 0;
+	oct_str[0] = '\0';
 
 	for (i = 0; ((i <= strlen(ip)) && (oct_cnt < 4)); i++) {
-		if ((ip[i] == '.') | (i == strlen(ip))) {
+		if ((ip[i] == '.') || (i == strlen(ip))) {
 			ip_octet[oct_cnt] = atoi(oct_str);
 			oct_cnt++;
-			oct_str[0] = 0;
-		} else
-			sprintf(oct_str, "%s%c", oct_str, ip[i]);
+			oct_len = 0;
+			oct_str[0] = '\0';
+		} else if (oct_len < (int)sizeof(oct_str) - 1) {
+			oct_str[oct_len++] = ip[i];
+			oct_str[oct_len] = '\0';
+		}
 	}
 }
 //---------------------------------------------------------------------------
@@ -2213,7 +2254,18 @@ static void Config_Network(void)
 			y += FONT_HEIGHT / 2;
 
 			uLE_related(path, "uLE:/IPCONFIG.DAT");  //Get save target.
-			sprintf(c, "  %s \"%s\"", LNG(Save_to), path);
+			{
+				int path_len;
+				int prefix_len = snprintf(c, sizeof(c), "  %s \"", LNG(Save_to));
+				if (prefix_len < 0 || prefix_len >= (int)sizeof(c))
+					c[sizeof(c) - 1] = '\0';
+				else {
+					path_len = (int)sizeof(c) - prefix_len - 2;  // room for '"' and '\0'
+					if (path_len < 0)
+						path_len = 0;
+					snprintf(c + prefix_len, sizeof(c) - prefix_len, "%.*s\"", path_len, path);
+				}
+			}
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 
@@ -2369,14 +2421,14 @@ void config(char *mainMsg, char *CNF)
 				}
 			} else if ((swapKeys && new_pad & PAD_CROSS) || (!swapKeys && new_pad & PAD_CIRCLE)) {
 				event |= 2;  //event |= valid pad command
-				if (s < CONFIG_MAIN_AFT_BTNS) {
-					getFilePath(setting->LK_Path[s], TRUE);
-					if (!strncmp(setting->LK_Path[s], "mc0", 3) ||
-					    !strncmp(setting->LK_Path[s], "mc1", 3)) {
-						sprintf(c, "mc%s", &setting->LK_Path[s][3]);
-						strcpy(setting->LK_Path[s], c);
-					}
-				} else if (s == CONFIG_MAIN_SHOW_TITLES)
+					if (s < CONFIG_MAIN_AFT_BTNS) {
+						getFilePath(setting->LK_Path[s], TRUE);
+						if (!strncmp(setting->LK_Path[s], "mc0", 3) ||
+						    !strncmp(setting->LK_Path[s], "mc1", 3)) {
+							snprintf(c, sizeof(c), "mc%.*s", (int)sizeof(c) - 3, &setting->LK_Path[s][3]);
+							strcpy(setting->LK_Path[s], c);
+						}
+					} else if (s == CONFIG_MAIN_SHOW_TITLES)
 					setting->Show_Titles = !setting->Show_Titles;
 				else if (s == CONFIG_MAIN_FILENAME)
 					setting->Hide_Paths = !setting->Hide_Paths;

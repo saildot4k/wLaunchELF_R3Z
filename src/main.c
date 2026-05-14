@@ -947,7 +947,7 @@ IMPORT_BIN2C(extflash_irx);
 IMPORT_BIN2C(xfromman_irx);
 static void load_pflash(void)
 {
-	int ID, ret;
+	int ID __attribute__((unused)), ret;
 		ID = SifExecModuleBuffer(extflash_irx, size_extflash_irx, 0, NULL, &ret);
 		DPRINTF(" [PFLASH]: ID=%d, ret=%d\n", ID, ret);
 		ID = SifExecModuleBuffer(xfromman_irx, size_xfromman_irx, 0, NULL, &ret);
@@ -1091,9 +1091,19 @@ static void ShowDebugInfo(void)
 				sprintf(TextRow, "Specific System Update KELF == \"B%cEXEC-SYSTEM/osd%03x.elf\"", rough_region, (ROMVersion+10)&~0x0F);
 				PrintRow(-1, TextRow);
 			}
-			snprintf(TextRow, sizeof(TextRow), "boot_path == \"%s\"", boot_path);
+			{
+				int max_path = (int)sizeof(TextRow) - (int)strlen("boot_path == \"\"") - 1;
+				if (max_path < 0)
+					max_path = 0;
+				snprintf(TextRow, sizeof(TextRow), "boot_path == \"%.*s\"", max_path, boot_path);
+			}
 			PrintRow(-1, TextRow);
-			snprintf(TextRow, sizeof(TextRow), "LaunchElfDir == \"%s\"", LaunchElfDir);
+			{
+				int max_path = (int)sizeof(TextRow) - (int)strlen("LaunchElfDir == \"\"") - 1;
+				if (max_path < 0)
+					max_path = 0;
+				snprintf(TextRow, sizeof(TextRow), "LaunchElfDir == \"%.*s\"", max_path, LaunchElfDir);
+			}
 #ifndef SMB
 			PrintRow(-1, TextRow);
 #else
@@ -2050,17 +2060,27 @@ static void Validate_CNF_Path(void)
 static void Set_CNF_Path(void)
 {
 	char *tmp;
+	int prefix_len, path_len;
+	const char *validity;
 
 	getFilePath(setting->CNF_Path, CNF_PATH_CNF);
 	if ((tmp = strrchr(setting->CNF_Path, '/')))
 		tmp[1] = '\0';
 	Validate_CNF_Path();
 
-	if (!strcmp(setting->CNF_Path, LaunchElfDir))
-		sprintf(mainMsg, "%s ", LNG(Valid));
-	else
-		sprintf(mainMsg, "%s ", LNG(Bogus));
-	sprintf(mainMsg + 6, "%s = \"%s\"", LNG(CNF_Path), setting->CNF_Path);
+	validity = (!strcmp(setting->CNF_Path, LaunchElfDir)) ? LNG(Valid) : LNG(Bogus);
+	prefix_len = snprintf(mainMsg, sizeof(mainMsg), "%s %s = \"", validity, LNG(CNF_Path));
+	if (prefix_len < 0)
+		return;
+	if (prefix_len >= (int)sizeof(mainMsg)) {
+		mainMsg[sizeof(mainMsg) - 1] = '\0';
+		return;
+	}
+
+	path_len = (int)sizeof(mainMsg) - prefix_len - 2;  // room for closing quote + '\0'
+	if (path_len < 0)
+		path_len = 0;
+	snprintf(mainMsg + prefix_len, sizeof(mainMsg) - prefix_len, "%.*s\"", path_len, setting->CNF_Path);
 }
 //------------------------------
 //endfunc Set_CNF_Path
@@ -2259,7 +2279,7 @@ static void Execute(char *pathin)
 	char tmp[MAX_PATH];
 	static char path[MAX_PATH];
 	static char fullpath[MAX_PATH];
-	static char party[40];
+	static char party[MAX_PATH];
 	char *p;
 	int x, t = 0;
 	char dvdpl_path[] = "mc0:/BREXEC-DVDPLAYER/dvdplayer.elf";
@@ -2294,9 +2314,9 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		if ((t = checkELFheader(path)) <= 0)
 			goto ELFnotFound;
 		//coming here means the ELF is fine
-		sprintf(party, "hdd0:%s", path + 6);
+		snprintf(party, sizeof(party), "hdd0:%s", path + 6);
 		p = strchr(party, '/');
-		sprintf(fullpath, "pfs0:%s", p);
+		snprintf(fullpath, sizeof(fullpath), "pfs0:%s", p);
 		*p = 0;
 		goto ELFchecked;
 		} else if (!strncmp(path, "dvr_hdd0:/", 10)) {
@@ -2307,9 +2327,9 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 			if ((t = checkELFheader(path)) <= 0)
 				goto ELFnotFound;
 			//coming here means the ELF is fine
-			sprintf(party, "dvr_hdd0:%s", path + 10);
+			snprintf(party, sizeof(party), "dvr_hdd0:%s", path + 10);
 			p = strchr(party, '/');
-			sprintf(fullpath, "dvr_pfs0:%s", p);
+			snprintf(fullpath, sizeof(fullpath), "dvr_pfs0:%s", p);
 			*p = 0;
 			goto ELFchecked;
 #else

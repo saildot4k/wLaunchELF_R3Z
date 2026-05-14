@@ -3,7 +3,7 @@
 //---------------------------------------------------------------------------
 #include "launchelf.h"
 
-#define lang(id, name, value) u8 Str_##name[] = value;
+#define lang(id, name, value) char Str_##name[] = value;
 #include "lang.h"
 #undef lang
 
@@ -16,7 +16,7 @@ Language Lang_Default[] = {
 Language Lang_String[sizeof(Lang_Default) / sizeof(Lang_Default[0])];
 Language Lang_Extern[sizeof(Lang_Default) / sizeof(Lang_Default[0])];
 
-Language *External_Lang_Buffer = NULL;
+void *External_Lang_Buffer = NULL;
 
 //---------------------------------------------------------------------------
 // get_LANG_string is the main parser called for each language dependent
@@ -29,9 +29,9 @@ Language *External_Lang_Buffer = NULL;
 // and various error codes less than -1 (-2 etc) for various syntax errors,
 // which also applies to EOF occurring where valid macro parts are expected.
 //---------------------------------------------------------------------------
-int get_LANG_string(u8 **LANG_p_p, u8 **id_p_p, u8 **value_p_p)
+int get_LANG_string(char **LANG_p_p, char **id_p_p, char **value_p_p)
 {
-	u8 *cp, *ip, *vp, *tp = *LANG_p_p;
+	char *cp, *ip, *vp, *tp = *LANG_p_p;
 	int ret, length;
 
 	ip = NULL;
@@ -177,8 +177,8 @@ void Load_External_Language(void)
 	int test = 0;
 	u32 index = 0;
 	char filePath[MAX_PATH];
-	u8 *file_bp, *file_tp, *lang_bp, *lang_tp, *oldf_tp = NULL;
-	u8 *id_p, *value_p;
+	char *file_bp, *file_tp, *lang_bp, *lang_tp, *oldf_tp = NULL;
+	char *id_p, *value_p;
 	int lang_size = 0;
 	int fd;
 
@@ -201,7 +201,7 @@ void Load_External_Language(void)
 			error_id = -3;
 			if (file_size > 0) {  //if file size OK
 				error_id = -4;
-				file_bp = (u8 *)malloc(file_size + 1);
+				file_bp = malloc(file_size + 1);
 				if (file_bp == NULL)
 					goto aborted_1;
 
@@ -228,7 +228,7 @@ void Load_External_Language(void)
 				//Here lang_size is the space needed for real language buffer,
 
 				error_id = -7;
-				lang_bp = (u8 *)malloc(lang_size + 1);  //allocate real language buffer
+				lang_bp = malloc(lang_size + 1);  //allocate real language buffer
 				if (lang_bp == NULL)
 					goto release_1;
 
@@ -245,7 +245,7 @@ void Load_External_Language(void)
 					lang_tp[test] = '\0';                 //transfer a terminator
 					lang_tp += test + 1;                  //move dest pointer past this string
 				}
-				External_Lang_Buffer = (Language *)lang_bp;  //Save base pointer for releases
+				External_Lang_Buffer = lang_bp;  //Save base pointer for releases
 				Lang = Lang_Extern;
 				error_id = 0;
 			release_1:
@@ -257,7 +257,7 @@ void Load_External_Language(void)
 	}      // end if language file string set
 
 	if (error_id < -1) {
-		u8 tmp_s[80 * 8], t1_s[102], t2_s[102];
+		char tmp_s[4096], t1_s[102], t2_s[102];
 		int pos = 0, stp = 0;
 		sprintf(tmp_s,
 		        "LNG loading failed with error_id==%d and test==%d\n"

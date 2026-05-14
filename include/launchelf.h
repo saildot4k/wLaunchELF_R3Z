@@ -489,7 +489,7 @@ enum {
 
 extern Language Lang_String[];
 extern Language Lang_Default[];
-extern Language *External_Lang_Buffer;
+extern void *External_Lang_Buffer;
 
 void Init_Default_Language(void);
 void Load_External_Language(void);
