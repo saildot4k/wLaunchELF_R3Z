@@ -10,8 +10,6 @@ extern int size_loader_elf;
 
 // ELF-loading stuff
 #define ELF_MAGIC 0x464c457f
-#define KELF_MAGIC 0x464c454b
-#define XLF_MAGIC 0x00464c58
 #define ELF_PT_LOAD 1
 
 //------------------------------
@@ -85,8 +83,13 @@ static int classifyExecHeader(const u8 *header, int header_len)
 		return -1;
 
 	memcpy(&magic, header, sizeof(magic));
-	if (magic == KELF_MAGIC || magic == XLF_MAGIC)
-		return 2;  // Encrypted KELF/XLF payload.
+
+	/*
+	 * Heuristic requested for additional encrypted KELF variants:
+	 * byte[0] == 0x01 and byte[2] == 0x00.
+	 */
+	if (header[0] == 0x01 && header[2] == 0x00)
+		return 2;
 
 	if (magic != ELF_MAGIC)
 		return -1;
