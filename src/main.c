@@ -2688,8 +2688,8 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		if ((t = checkELFheader(fullpath)) <= 0)
 			goto ELFnotFound;
 	ELFchecked:
-		CleanUp();
-		RunLoaderElf(fullpath, party);
+			CleanUp();
+			RunLoaderElf(fullpath, party, path);
 	} else {  //Invalid path
 		t = 0;
 	ELFnotFound:

@@ -80,6 +80,7 @@ static int readExecHeader(const char *path, u8 *header, int header_len, int *ope
 static int classifyExecHeader(const u8 *header, int header_len)
 {
 	u32 magic;
+	u32 magic_at_0x80;
 
 	if (header_len < 4)
 		return -1;
@@ -87,6 +88,16 @@ static int classifyExecHeader(const u8 *header, int header_len)
 	memcpy(&magic, header, sizeof(magic));
 	if (magic == KELF_MAGIC || magic == XLF_MAGIC)
 		return 2;  // Encrypted KELF/XLF payload.
+
+	/*
+	 * Some encrypted launchable payloads keep an ELF header at offset 0x80.
+	 * Detect those too so they can be routed through encrypted loading.
+	 */
+	if (header_len >= (0x80 + (int)sizeof(u32))) {
+		memcpy(&magic_at_0x80, header + 0x80, sizeof(magic_at_0x80));
+		if (magic_at_0x80 == ELF_MAGIC)
+			return 2;
+	}
 
 	if (magic != ELF_MAGIC)
 		return -1;
@@ -120,7 +131,7 @@ static int classifyExecByExtension(const char *path)
 
 static int tryCheckExecPath(const char *path, int *opened_any)
 {
-	u8 header[64];
+	u8 header[256];
 	int opened_file = 0;
 	int header_size;
 	int kind;
@@ -248,7 +259,7 @@ error:
 // Modified version of loader from Independence
 //	(C) 2003 Marcus R. Brown <mrbrown@0xd6.org>
 //------------------------------
-void RunLoaderElf(char *filename, char *party)
+void RunLoaderElf(char *filename, char *party, const char *selected_path)
 {
 #define ELFLOAD_ARGC 3
 	u8 *boot_elf;
@@ -257,6 +268,10 @@ void RunLoaderElf(char *filename, char *party)
 	void *pdata;
 	int i;
 	char *argv[ELFLOAD_ARGC], bootpath[256], launchpath[MAX_PATH];
+	const char *handoff_path = NULL;
+
+	if (selected_path != NULL && selected_path[0] != '\0')
+		handoff_path = selected_path;
 
 	if ((!strncmp(party, "hdd0:", 5)) && (!strncmp(filename, "pfs0:", 5))) {
 		if (0 > fileXioMount("pfs0:", party, FIO_MT_RDONLY)) {
@@ -275,7 +290,10 @@ void RunLoaderElf(char *filename, char *party)
 		}
 
 		argv[0] = filename;
-		normalizeLaunchArgPath(bootpath, launchpath);
+		if ((handoff_path != NULL) && !strncmp(handoff_path, "hdd0:/", 6))
+			normalizeLaunchArgPath(handoff_path, launchpath);
+		else
+			normalizeLaunchArgPath(bootpath, launchpath);
 		argv[1] = launchpath;
 #ifdef DVRP
 	} else if ((!strncmp(party, "dvr_hdd0:", 9)) && (!strncmp(filename, "dvr_pfs0:", 9))) {
@@ -294,12 +312,15 @@ void RunLoaderElf(char *filename, char *party)
 			sprintf(bootpath, "%s:%s", party, filename);
 		}
 		argv[0] = filename;
-		normalizeLaunchArgPath(bootpath, launchpath);
+		if ((handoff_path != NULL) && !strncmp(handoff_path, "dvr_hdd0:/", 10))
+			normalizeLaunchArgPath(handoff_path, launchpath);
+		else
+			normalizeLaunchArgPath(bootpath, launchpath);
 		argv[1] = launchpath;
 #endif
 	} else {
 		argv[0] = filename;
-		normalizeLaunchArgPath(filename, launchpath);
+		normalizeLaunchArgPath((handoff_path != NULL) ? handoff_path : filename, launchpath);
 		argv[1] = launchpath;
 	}
 
@@ -333,7 +354,7 @@ void RunLoaderElf(char *filename, char *party)
 	ExecPS2((void *)eh->entry, NULL, ELFLOAD_ARGC, argv);
 }
 //------------------------------
-//End of func:  void RunLoaderElf(char *filename, char *party)
+//End of func:  void RunLoaderElf(char *filename, char *party, const char *selected_path)
 //--------------------------------------------------------------
 //End of file:  elf.c
 //--------------------------------------------------------------

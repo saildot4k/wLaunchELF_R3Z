@@ -309,7 +309,7 @@ void loadAtaModules(void);
 
 /* elf.c */
 int checkELFheader(char *filename);
-void RunLoaderElf(char *filename, char *);
+void RunLoaderElf(char *filename, char *party, const char *selected_path);
 
 /* draw.c */
 #define BACKGROUND_PIC 0
