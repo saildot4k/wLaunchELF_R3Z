@@ -249,6 +249,18 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 	        (handoff_path != NULL) ? handoff_path : "",
 	        (party != NULL) ? party : "");
 
+	/*
+	 * Normal ELF on non-HDD/non-partitioned targets can use direct
+	 * LoadExecPS2 handoff, which matches standard PS2SDK launch behavior.
+	 */
+	if (exec_kind == 1 && (party == NULL || party[0] == '\0')) {
+		char *direct_args[1];
+		direct_args[0] = (char *)((handoff_path != NULL) ? handoff_path : filename);
+		DPRINTF("RunLoaderElf: direct LoadExecPS2('%s', argv0='%s')\n", filename, direct_args[0]);
+		LoadExecPS2(filename, 1, direct_args);
+		return;
+	}
+
 	if ((!strncmp(party, "hdd0:", 5)) && (!strncmp(filename, "pfs0:", 5))) {
 		if (0 > fileXioMount("pfs0:", party, FIO_MT_RDONLY)) {
 			//Some error occurred, it could be due to something else having used pfs0
