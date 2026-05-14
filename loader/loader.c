@@ -107,8 +107,8 @@ static void wle_log(const char *fmt, ...)
 	vsnprintf(msg, sizeof(msg), fmt, args);
 	va_end(args);
 
-	sio_puts(msg);
 	printf("%s", msg);
+	fflush(stdout);
 }
 
 //--------------------------------------------------------------
@@ -130,6 +130,7 @@ int main(int argc, char *argv[])
 
 	// Initialize
 	SifInitRpc(0);
+	wle_log("# wle: loader start argc=%d\n", argc);
 	/*
 	 * In DEBUG builds this loader can be linked above 0x100000.
 	 * Avoid wiping memory in that case, or we may erase the currently

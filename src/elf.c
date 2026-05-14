@@ -141,6 +141,25 @@ static int tryCheckExecPath(const char *path, int *opened_any)
 	return kind;
 }
 
+static void normalizeLoadfileTargetPath(const char *in_path, char *out_path, size_t out_size)
+{
+	char *sep;
+
+	snprintf(out_path, out_size, "%s", in_path);
+	sep = strchr(out_path, ':');
+	if (sep == NULL || sep[1] == '\0')
+		return;
+
+	/* Keep APA/HDD style untouched (e.g. hdd0:part:pfs:/path). */
+	if (!strncmp(out_path, "hdd0:", 5) || !strncmp(out_path, "dvr_hdd0:", 9) ||
+	    !strncmp(out_path, "pfs", 3) || !strncmp(out_path, "dvr_pfs", 7))
+		return;
+
+	/* LOADFILE can be picky about "dev:/path"; normalize to "dev:path". */
+	if (sep[1] == '/' || sep[1] == '\\')
+		memmove(sep + 1, sep + 2, strlen(sep + 2) + 1);
+}
+
 //--------------------------------------------------------------
 //End of data declarations
 //--------------------------------------------------------------
@@ -240,14 +259,17 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 	void *pdata;
 	int i;
 	char *argv[ELFLOAD_ARGC], bootpath[256];
+	static char exec_target[MAX_PATH];
 	const char *handoff_path = NULL;
 
 	if (selected_path != NULL && selected_path[0] != '\0')
 		handoff_path = selected_path;
+	normalizeLoadfileTargetPath(filename, exec_target, sizeof(exec_target));
 	DPRINTF("RunLoaderElf: exec_kind=%d reboot_iop=%d target='%s' handoff='%s' party='%s'\n",
 	        exec_kind, reboot_iop_elf_load, filename,
 	        (handoff_path != NULL) ? handoff_path : "",
 	        (party != NULL) ? party : "");
+	DPRINTF("RunLoaderElf: normalized target='%s'\n", exec_target);
 
 	if ((!strncmp(party, "hdd0:", 5)) && (!strncmp(filename, "pfs0:", 5))) {
 		if (0 > fileXioMount("pfs0:", party, FIO_MT_RDONLY)) {
@@ -265,7 +287,7 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 			sprintf(bootpath, "%s:%s", party, filename);
 		}
 
-		argv[0] = filename;
+		argv[0] = exec_target;
 		if ((handoff_path != NULL) && !strncmp(handoff_path, "hdd0:/", 6))
 			argv[1] = (char *)handoff_path;
 		else
@@ -286,14 +308,14 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 		} else {
 			sprintf(bootpath, "%s:%s", party, filename);
 		}
-		argv[0] = filename;
+		argv[0] = exec_target;
 		if ((handoff_path != NULL) && !strncmp(handoff_path, "dvr_hdd0:/", 10))
 			argv[1] = (char *)handoff_path;
 		else
 			argv[1] = bootpath;
 #endif
 	} else {
-		argv[0] = filename;
+		argv[0] = exec_target;
 		argv[1] = (char *)((handoff_path != NULL) ? handoff_path : filename);
 	}
 
