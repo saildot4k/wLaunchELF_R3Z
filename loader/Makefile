@@ -5,8 +5,12 @@ EE_ASFLAGS += -EL -G0
 ###dlanor: old LaunchELF used LA=0x90000, SA=0xB0000, SS=0x08000
 ###dlanor: The values below were implemented in LaunchELF v3.50
 LOADADDR  = 0x90000
-STACKADDR = 0xA8000
-STACKSIZE = 0x04000
+#
+# Current loader grew larger than historical builds; keep stack in free space
+# above the loaded image but below 0x100000, because non-DEBUG mode wipes
+# user memory starting at 0x100000.
+STACKADDR = 0x0FC000
+STACKSIZE = 0x08000
 
 ifeq ($(DEBUG),1)
 LOADADDR  = 0x1700000
