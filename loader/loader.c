@@ -69,10 +69,18 @@ int main(int argc, char *argv[])
 	char *target, *path;
 	char *args[1];
 	int ret, rebootiop = 0;
+	u32 loader_epc;
 
 	// Initialize
 	SifInitRpc(0);
-	wipeUserMem();
+	/*
+	 * In DEBUG builds this loader can be linked above 0x100000.
+	 * Avoid wiping memory in that case, or we may erase the currently
+	 * running loader image before SifLoadElf executes.
+	 */
+	loader_epc = (u32)&main;
+	if (loader_epc < 0x100000)
+		wipeUserMem();
 
 	if (argc < 2) {  // arg1=path to ELF, arg2=partition to mount
 		sio_puts("# wle: argc < 2\n");

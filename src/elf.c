@@ -267,11 +267,14 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path)
 	elf_pheader_t *eph;
 	void *pdata;
 	int i;
-	char *argv[ELFLOAD_ARGC], bootpath[256], launchpath[MAX_PATH];
+	char *argv[ELFLOAD_ARGC], bootpath[256], launchpath[MAX_PATH], execpath[MAX_PATH];
 	const char *handoff_path = NULL;
+	const char *exec_target = filename;
 
 	if (selected_path != NULL && selected_path[0] != '\0')
 		handoff_path = selected_path;
+	normalizeLaunchArgPath(filename, execpath);
+	exec_target = execpath;
 
 	if ((!strncmp(party, "hdd0:", 5)) && (!strncmp(filename, "pfs0:", 5))) {
 		if (0 > fileXioMount("pfs0:", party, FIO_MT_RDONLY)) {
@@ -289,7 +292,7 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path)
 			sprintf(bootpath, "%s:%s", party, filename);
 		}
 
-		argv[0] = filename;
+		argv[0] = (char *)exec_target;
 		if ((handoff_path != NULL) && !strncmp(handoff_path, "hdd0:/", 6))
 			normalizeLaunchArgPath(handoff_path, launchpath);
 		else
@@ -311,7 +314,7 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path)
 		} else {
 			sprintf(bootpath, "%s:%s", party, filename);
 		}
-		argv[0] = filename;
+		argv[0] = (char *)exec_target;
 		if ((handoff_path != NULL) && !strncmp(handoff_path, "dvr_hdd0:/", 10))
 			normalizeLaunchArgPath(handoff_path, launchpath);
 		else
@@ -319,7 +322,7 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path)
 		argv[1] = launchpath;
 #endif
 	} else {
-		argv[0] = filename;
+		argv[0] = (char *)exec_target;
 		normalizeLaunchArgPath((handoff_path != NULL) ? handoff_path : filename, launchpath);
 		argv[1] = launchpath;
 	}
