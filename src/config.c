@@ -352,24 +352,16 @@ test:
 //-----------------------------
 //endfunc saveSkinBrowser
 //---------------------------------------------------------------------------
-//preloadCNF loads an entire CNF file into RAM it allocates
-//------------------------------
-char *preloadCNF(char *path)
+static char *preloadCNFFd(int fd, const char *cnf_path)
 {
-	int fd, tst, rd, total, cnf_seek_size;
+	int rd, total, cnf_seek_size;
 	size_t CNF_size;
-	char cnf_path[MAX_PATH];
 	char probe;
 	char *RAM_p;
 	const int CNF_MAX_SIZE = 128 * 1024;
 
-	fd = -1;
-	if ((tst = genFixPath(path, cnf_path)) >= 0)
-		fd = genOpen(cnf_path, FIO_O_RDONLY);
-	if (fd < 0) {
-	failed_load:
+	if (fd < 0)
 		return NULL;
-	}
 
 	cnf_seek_size = genLseek(fd, 0, SEEK_END);
 	DPRINTF("%s: CNF_size=%d\n", __func__, cnf_seek_size);
@@ -384,7 +376,7 @@ char *preloadCNF(char *path)
 		genClose(fd);
 		if (rd <= 0) {
 			free(RAM_p);
-			goto failed_load;
+			return NULL;
 		}
 		RAM_p[rd] = '\0';  //Terminate the CNF string
 		return RAM_p;
@@ -398,12 +390,12 @@ fallback_stream:
 	genClose(fd);
 	fd = genOpen(cnf_path, FIO_O_RDONLY);
 	if (fd < 0)
-		goto failed_load;
+		return NULL;
 
 	RAM_p = (char *)memalign(64, CNF_MAX_SIZE + 1);
 	if (RAM_p == NULL) {
 		genClose(fd);
-		goto failed_load;
+		return NULL;
 	}
 	memset(RAM_p, 0, CNF_MAX_SIZE + 1);
 
@@ -417,7 +409,7 @@ fallback_stream:
 		if (rd < 0) {
 			free(RAM_p);
 			genClose(fd);
-			goto failed_load;
+			return NULL;
 		}
 		if (rd == 0)
 			break;
@@ -427,16 +419,31 @@ fallback_stream:
 		// Reject suspiciously large CNF payloads.
 		free(RAM_p);
 		genClose(fd);
-		goto failed_load;
+		return NULL;
 	}
 
 	genClose(fd);
 	if (total <= 0) {
 		free(RAM_p);
-		goto failed_load;
+		return NULL;
 	}
 	RAM_p[total] = '\0';
 	return RAM_p;
+}
+//preloadCNF loads an entire CNF file into RAM it allocates
+//------------------------------
+char *preloadCNF(char *path)
+{
+	int fd, tst;
+	char cnf_path[MAX_PATH];
+
+	fd = -1;
+	if ((tst = genFixPath(path, cnf_path)) >= 0)
+		fd = genOpen(cnf_path, FIO_O_RDONLY);
+	if (fd < 0)
+		return NULL;
+
+	return preloadCNFFd(fd, cnf_path);
 }
 //------------------------------
 //endfunc preloadCNF
@@ -869,10 +876,9 @@ int loadConfig(char *mainMsg, char *CNF)
 		sprintf(mainMsg, "%s %s", LNG(Failed_To_Load), CNF);
 		return -1;
 	}
-	// This point is only reached after succefully opening CNF
-	genClose(fd);
-
-	if ((RAM_p = preloadCNF(cnf_path)) == NULL)
+	// This point is only reached after succesfully opening CNF.
+	// Reuse this open descriptor to avoid probing/opening the same CNF twice.
+	if ((RAM_p = preloadCNFFd(fd, cnf_path)) == NULL)
 		goto failed_load;
 	CNF_p = RAM_p;
 

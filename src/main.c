@@ -541,14 +541,35 @@ static void getIpConfig(void)
 	int fd;
 	int i;
 	int len;
+	int preferred_port;
+	int ports_to_try[2];
+	int port_ix;
 	char c;
 	char buf[IPCONF_MAX_LEN];
 	char path[MAX_PATH];
+	char candidate[MAX_PATH];
 
-	if (genFixPath("uLE:/IPCONFIG.DAT", path) >= 0)
+	fd = -1;
+
+	// Prefer IPCONFIG in the same directory as the launched ELF.
+	snprintf(candidate, sizeof(candidate), "%sIPCONFIG.DAT", LaunchElfDir);
+	if (genFixPath(candidate, path) >= 0)
 		fd = genOpen(path, FIO_O_RDONLY);
-	else
-		fd = -1;
+
+	// Fallback to SYS-CONF on memory cards, preferring current MC slot.
+	if (fd < 0) {
+		preferred_port = 0;
+		if (!strncmp(LaunchElfDir, "mc1", 3))
+			preferred_port = 1;
+		ports_to_try[0] = preferred_port;
+		ports_to_try[1] = preferred_port ^ 1;
+
+		for (port_ix = 0; port_ix < 2 && fd < 0; port_ix++) {
+			snprintf(candidate, sizeof(candidate), "mc%d:/SYS-CONF/IPCONFIG.DAT", ports_to_try[port_ix]);
+			if (genFixPath(candidate, path) >= 0)
+				fd = genOpen(path, FIO_O_RDONLY);
+		}
+	}
 
 	if (fd >= 0) {
 		bzero(buf, IPCONF_MAX_LEN);
@@ -3106,7 +3127,8 @@ int main(int argc, char *argv[])
 
 	//It's time to load and init drivers
 	DPRINTF("Getting IPCONFIG\n");
-	getIpConfig();
+	if (boot != BOOT_DEVICE_HOST)
+		getIpConfig();
 
 	WaitTime = Timer();
 	DPRINTF("setup pad\n");
