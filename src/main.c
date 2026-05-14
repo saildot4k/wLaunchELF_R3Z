@@ -2299,48 +2299,55 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		sprintf(fullpath, "pfs0:%s", p);
 		*p = 0;
 		goto ELFchecked;
+		} else if (!strncmp(path, "dvr_hdd0:/", 10)) {
 #ifdef DVRP
-	} else if (!strncmp(path, "dvr_hdd0:/", 10)) {
-		if (!console_is_PSX)
+			if (!console_is_PSX)
+				goto ELFnotFound;
+			loadDVRPHddModules();
+			if ((t = checkELFheader(path)) <= 0)
+				goto ELFnotFound;
+			//coming here means the ELF is fine
+			sprintf(party, "dvr_hdd0:%s", path + 10);
+			p = strchr(party, '/');
+			sprintf(fullpath, "dvr_pfs0:%s", p);
+			*p = 0;
+			goto ELFchecked;
+#else
 			goto ELFnotFound;
-		loadDVRPHddModules();
-		if ((t = checkELFheader(path)) <= 0)
-			goto ELFnotFound;
-		//coming here means the ELF is fine
-		sprintf(party, "dvr_hdd0:%s", path + 10);
-		p = strchr(party, '/');
-		sprintf(fullpath, "dvr_pfs0:%s", p);
-		*p = 0;
-		goto ELFchecked;
 #endif
+		} else if (!strncmp(path, "xfrom", 5)) {
 #ifdef XFROM
-	} else if (!strncmp(path, "xfrom", 5)) {
-		if (!console_is_PSX)
+			if (!console_is_PSX)
+				goto ELFnotFound;
+			loadFlashModules();
+			if ((t = checkELFheader(path)) <= 0)
+				goto ELFnotFound;
+			strcpy(fullpath, path);
+			goto ELFchecked;
+#else
 			goto ELFnotFound;
-		loadFlashModules();
-		if ((t = checkELFheader(path)) <= 0)
-			goto ELFnotFound;
-		strcpy(fullpath, path);
-		goto ELFchecked;
 #endif
+		} else if (!strncmp(path, "mx4sio:", 7)) {
 #ifdef MX4SIO
-	} else if (!strncmp(path, "mx4sio:", 7)) {
-		if (!mx4sio_driver_running && !loadMx4sioModules())
+			if (!mx4sio_driver_running && !loadMx4sioModules())
+				goto ELFnotFound;
+			if ((t = checkELFheader(path)) <= 0)
+				goto ELFnotFound;
+			party[0] = 0;
+			strcpy(fullpath, path);
+			goto ELFchecked;
+#else
 			goto ELFnotFound;
-		if ((t = checkELFheader(path)) <= 0)
-			goto ELFnotFound;
-		party[0] = 0;
-		strcpy(fullpath, path);
-		goto ELFchecked;
 #endif
-#ifdef MMCE
 		} else if (!strncmp(path, "mmce", 4)) {
+#ifdef MMCE
 			loadMmceModules();
 			if ((t = checkELFheader(path)) <= 0)
 				goto ELFnotFound;
 			strcpy(fullpath, path);
 			goto ELFchecked;
-		}
+#else
+			goto ELFnotFound;
 #endif
 		} else if (!strncmp(path, "usb", 3)) {
 			char *pathSep;
@@ -2380,19 +2387,21 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 			if (pathSep && (pathSep - path < 7) && pathSep[-1] == ':')
 				strcpy(fullpath + (pathSep - path), pathSep + 1);
 			goto ELFchecked;
+		} else if (!strncmp(path, "host:", 5)) {
 #ifdef ETH
-	} else if (!strncmp(path, "host:", 5)) {
-		initHOST();
-		party[0] = 0;
-		strcpy(fullpath, "host:");
-		if (path[5] == '/')
-			strcat(fullpath, path + 6);
-		else
-			strcat(fullpath, path + 5);
-		makeHostPath(fullpath, fullpath);
-		goto CheckELF_fullpath;
+			initHOST();
+			party[0] = 0;
+			strcpy(fullpath, "host:");
+			if (path[5] == '/')
+				strcat(fullpath, path + 6);
+			else
+				strcat(fullpath, path + 5);
+			makeHostPath(fullpath, fullpath);
+			goto CheckELF_fullpath;
+#else
+			goto ELFnotFound;
 #endif
-	} else if (!stricmp(path, setting->Misc_OSDSYS)) {
+		} else if (!stricmp(path, setting->Misc_OSDSYS)) {
 		char arg0[20], arg1[20], arg2[20], arg3[40];
 		char *args[4] = {arg0, arg1, arg2, arg3};
 		char kelf_loader[40];
