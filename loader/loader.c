@@ -31,7 +31,6 @@
 #include "iopcontrol.h"
 #include "sifrpc.h"
 #include "loadfile.h"
-#include "loadfile-common.h"
 #include "sio.h"
 #include "string.h"
 #include "stdio.h"
@@ -61,43 +60,6 @@ static void wipeUserMem(void)
 	}
 }
 
-static int wleLoadElfRpc(const char *path, int encrypted, t_ExecData *data)
-{
-	SifRpcClientData_t lf_cd;
-	struct _lf_elf_load_arg arg;
-	int res;
-	int fno;
-
-	if (path == NULL || data == NULL)
-		return -EINVAL;
-
-	memset(&lf_cd, 0, sizeof(lf_cd));
-	sceSifInitRpc(0);
-	while ((res = sceSifBindRpc(&lf_cd, 0x80000006, 0)) >= 0 && !lf_cd.server)
-		nopdelay();
-	if (res < 0)
-		return -SCE_EBINDMISS;
-
-	memset(&arg, 0, sizeof(arg));
-	strncpy(arg.path, path, LF_PATH_MAX - 1);
-	arg.path[LF_PATH_MAX - 1] = '\0';
-	strncpy(arg.secname, "all", LF_ARG_MAX - 1);
-	arg.secname[LF_ARG_MAX - 1] = '\0';
-
-	fno = encrypted ? LF_F_MG_ELF_LOAD : LF_F_ELF_LOAD;
-	if (sceSifCallRpc(&lf_cd, fno, 0, &arg, sizeof(arg), &arg, sizeof(t_ExecData), NULL, NULL) < 0)
-		return -SCE_ECALLMISS;
-
-	if (arg.epc == 0)
-		return -SCE_ELOADMISS;
-
-	data->epc = arg.epc;
-	data->gp = arg.gp;
-	data->sp = 0;
-	data->dummy = 0;
-	return 0;
-}
-
 static void wle_log(const char *fmt, ...)
 {
 	char msg[192];
@@ -107,6 +69,7 @@ static void wle_log(const char *fmt, ...)
 	vsnprintf(msg, sizeof(msg), fmt, args);
 	va_end(args);
 
+	sio_putsn(msg);
 	printf("%s", msg);
 	fflush(stdout);
 }
@@ -123,9 +86,6 @@ int main(int argc, char *argv[])
 	char *args[1];
 	int ret, rebootiop = 0, prefer_encrypted = 0;
 	u32 loader_epc;
-	char alt_target[1025];
-	const char *targets[2];
-	int target_count = 1, target_ix;
 	char dbg[192];
 
 	// Initialize
@@ -162,56 +122,35 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	targets[0] = target;
-	alt_target[0] = '\0';
-	{
-		char *sep;
-		strncpy(alt_target, target, sizeof(alt_target) - 1);
-		alt_target[sizeof(alt_target) - 1] = '\0';
-		sep = strchr(alt_target, ':');
-		if (sep != NULL && sep[1] != '\0') {
-			if (sep[1] == '/' || sep[1] == '\\') {
-				memmove(sep + 1, sep + 2, strlen(sep + 2) + 1);
-			} else if (strlen(alt_target) + 1 < sizeof(alt_target)) {
-				memmove(sep + 2, sep + 1, strlen(sep + 1) + 1);
-				sep[1] = '/';
-			}
-		}
-		if (strcmp(alt_target, target) != 0) {
-			targets[target_count++] = alt_target;
-		}
-	}
-
 	//Writeback data cache before loading ELF.
 	FlushCache(0);
+	SifLoadFileInit();
 
-	ret = -ENOENT;
-	for (target_ix = 0; target_ix < target_count; target_ix++) {
-		memset(&elfdata, 0, sizeof(elfdata));
-		snprintf(dbg, sizeof(dbg), "# wle: try target[%d] %s mode=%s\n", target_ix, targets[target_ix], prefer_encrypted ? "enc-first" : "plain");
+	memset(&elfdata, 0, sizeof(elfdata));
+	snprintf(dbg, sizeof(dbg), "# wle: try target %s mode=%s\n", target, prefer_encrypted ? "enc-first" : "plain");
+	wle_log("%s", dbg);
+	if (prefer_encrypted) {
+		ret = SifLoadElfEncrypted(target, &elfdata);
+		snprintf(dbg, sizeof(dbg), "# wle: SifLoadElfEncrypted ret=%d epc=0x%08lx gp=0x%08lx\n", ret, (unsigned long)elfdata.epc, (unsigned long)elfdata.gp);
 		wle_log("%s", dbg);
-		if (prefer_encrypted) {
-			ret = wleLoadElfRpc(targets[target_ix], 1, &elfdata);
-			snprintf(dbg, sizeof(dbg), "# wle: wleLoadElfRpc(enc) ret=%d epc=0x%08lx gp=0x%08lx\n", ret, (unsigned long)elfdata.epc, (unsigned long)elfdata.gp);
-			wle_log("%s", dbg);
-			if (ret != 0)
-				ret = wleLoadElfRpc(targets[target_ix], 0, &elfdata);
-			snprintf(dbg, sizeof(dbg), "# wle: wleLoadElfRpc(plain) ret=%d epc=0x%08lx gp=0x%08lx\n", ret, (unsigned long)elfdata.epc, (unsigned long)elfdata.gp);
-			wle_log("%s", dbg);
-		} else {
-			/* Normal ELF path: do not use encrypted loader fallback. */
-			ret = wleLoadElfRpc(targets[target_ix], 0, &elfdata);
-			snprintf(dbg, sizeof(dbg), "# wle: wleLoadElfRpc(plain) ret=%d epc=0x%08lx gp=0x%08lx\n", ret, (unsigned long)elfdata.epc, (unsigned long)elfdata.gp);
+		if (ret != 0 || elfdata.epc == 0)
+			ret = SifLoadElf(target, &elfdata);
+		snprintf(dbg, sizeof(dbg), "# wle: SifLoadElf ret=%d epc=0x%08lx gp=0x%08lx\n", ret, (unsigned long)elfdata.epc, (unsigned long)elfdata.gp);
+		wle_log("%s", dbg);
+	} else {
+		ret = SifLoadElf(target, &elfdata);
+		snprintf(dbg, sizeof(dbg), "# wle: SifLoadElf ret=%d epc=0x%08lx gp=0x%08lx\n", ret, (unsigned long)elfdata.epc, (unsigned long)elfdata.gp);
+		wle_log("%s", dbg);
+		if (ret != 0 || elfdata.epc == 0) {
+			ret = SifLoadElfEncrypted(target, &elfdata);
+			snprintf(dbg, sizeof(dbg), "# wle: SifLoadElfEncrypted ret=%d epc=0x%08lx gp=0x%08lx\n", ret, (unsigned long)elfdata.epc, (unsigned long)elfdata.gp);
 			wle_log("%s", dbg);
 		}
-
-		if (ret == 0 && elfdata.epc != 0 && (elfdata.epc & 0x3) == 0) {
-			target = (char *)targets[target_ix];
-			break;
-		}
-
-		ret = -ENOENT;
 	}
+
+	if (!(ret == 0 && elfdata.epc != 0 && (elfdata.epc & 0x3) == 0))
+		ret = -ENOENT;
+	SifLoadFileExit();
 
 	if (ret == 0) {
 		args[0] = path;
