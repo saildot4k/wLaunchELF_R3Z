@@ -1066,12 +1066,23 @@ static int Open(int Win, char *path)
 		if (size > 512 * 1024)
 			goto done;
 
-		// Try fast path first (seekable filesystems with known non-zero size), then fallback to streamed read.
-		if (size > 0 && genLseek(fd, 0, SEEK_SET) >= 0) {
+		/*
+		 * Rewind after size probe. Some stacks fail SEEK_END or keep the
+		 * file pointer at EOF, which would otherwise yield blank reads.
+		 */
+		if (genLseek(fd, 0, SEEK_SET) < 0) {
+			genClose(fd);
+			fd = genOpen(filePath, O_RDONLY);
+			if (fd < 0)
+				goto done;
+		}
+
+		// Try fast path for known positive size, otherwise fallback to streamed read.
+		if (size > 0) {
 			if ((TextBuffer[Win] = malloc(size + 256)) != NULL) {
 				memset(TextBuffer[Win], 0, size + 256);
-				rd = (size > 0) ? genRead(fd, TextBuffer[Win], size) : 0;
-				if (rd < 0 || (size > 0 && rd == 0)) {
+				rd = genRead(fd, TextBuffer[Win], size);
+				if (rd < 0 || rd == 0) {
 					free(TextBuffer[Win]);
 					TextBuffer[Win] = NULL;
 					goto done;

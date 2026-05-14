@@ -45,32 +45,33 @@ typedef struct
 	u32 align;
 } elf_pheader_t;
 
-static void normalizeLaunchArgPath(const char *in_path, char *out_path);
-
 static int openExecPathForRead(const char *path, char *resolved_path)
 {
-	char alt_path[MAX_PATH];
+	strncpy(resolved_path, path, MAX_PATH - 1);
+	resolved_path[MAX_PATH - 1] = '\0';
+	return genOpen(resolved_path, O_RDONLY);
+}
+
+static void normalizeLaunchArgPath(const char *in_path, char *out_path)
+{
 	char *sep;
-	int fd;
 
-	normalizeLaunchArgPath(path, resolved_path);
-	fd = genOpen(resolved_path, O_RDONLY);
-	if (fd >= 0)
-		return fd;
+	strncpy(out_path, in_path, MAX_PATH - 1);
+	out_path[MAX_PATH - 1] = '\0';
+	sep = strchr(out_path, ':');
+	if (sep == NULL)
+		return;
 
-	/* Compatibility fallback for stacks that still accept "mass:foo" style. */
-	strcpy(alt_path, resolved_path);
-	sep = strchr(alt_path, ':');
-	if (sep && sep[1] == '/') {
-		memmove(sep + 1, sep + 2, strlen(sep + 2) + 1);
-		fd = genOpen(alt_path, O_RDONLY);
-		if (fd >= 0) {
-			strcpy(resolved_path, alt_path);
-			return fd;
-		}
-	}
+	// Keep APA/HDD handoff format unchanged (e.g. hdd0:partition:pfs:/path).
+	if (!strncmp(out_path, "hdd0:", 5) || !strncmp(out_path, "dvr_hdd0:", 9) ||
+	    !strncmp(out_path, "pfs", 3) || !strncmp(out_path, "dvr_pfs", 7))
+		return;
 
-	return -1;
+	if (sep[1] == 0 || sep[1] == '/' || sep[1] == '\\')
+		return;
+
+	memmove(sep + 2, sep + 1, strlen(sep + 1) + 1);
+	sep[1] = '/';
 }
 //--------------------------------------------------------------
 //End of data declarations
@@ -194,43 +195,16 @@ int checkELFheader(char *path)
 		goto error;
 
 	memcpy(&magic, eh->ident, sizeof(magic));
-	if (magic == ELF_MAGIC && eh->type == 2)
-		return 1;  // successful ELF check
 	if (magic == KELF_MAGIC || magic == XLF_MAGIC)
 		return 2;  // encrypted KELF/XLF payload
-
-	if (magic != ELF_MAGIC)
-		goto error;
-	if (eh->type != 2)
-		goto error;
-
-	return 1;  //return 1 for successful check
+	if (magic == ELF_MAGIC)
+		return 1;  // valid ELF header
+	goto error;
 error:
 	return -1;  //return -1 for failed check
 }
 //------------------------------
 //End of func:  int checkELFheader(const char *path)
-//--------------------------------------------------------------
-static void normalizeLaunchArgPath(const char *in_path, char *out_path)
-{
-	char *sep;
-
-	strcpy(out_path, in_path);
-	sep = strchr(out_path, ':');
-	if (sep == NULL)
-		return;
-
-	// Keep APA/HDD handoff format unchanged (e.g. hdd0:partition:pfs:/path).
-	if (!strncmp(out_path, "hdd0:", 5) || !strncmp(out_path, "dvr_hdd0:", 9) ||
-	    !strncmp(out_path, "pfs", 3) || !strncmp(out_path, "dvr_pfs", 7))
-		return;
-
-	if (sep[1] == 0 || sep[1] == '/' || sep[1] == '\\')
-		return;
-
-	memmove(sep + 2, sep + 1, strlen(sep + 1) + 1);
-	sep[1] = '/';
-}
 //--------------------------------------------------------------
 // RunLoaderElf loads LOADER.ELF from program memory and passes
 // args of selected ELF and partition to it

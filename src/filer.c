@@ -1111,7 +1111,8 @@ int genRemove(char *path)
 //--------------------------------------------------------------
 int genOpen(const char *path, int mode)
 {
-	char open_path[MAX_PATH];
+	char open_path[MAX_PATH], alt_path[MAX_PATH], *sep;
+	int fd;
 
 	if (path == NULL || path[0] == '\0')
 		return -1;
@@ -1119,7 +1120,32 @@ int genOpen(const char *path, int mode)
 	strncpy(open_path, path, MAX_PATH - 1);
 	open_path[MAX_PATH - 1] = '\0';
 	genLimObjName(open_path, 0);
-	return fileXioOpen(open_path, mode, fileMode);
+	fd = fileXioOpen(open_path, mode, fileMode);
+	if (fd >= 0)
+		return fd;
+
+	/*
+	 * Path-style compatibility fallback:
+	 * try both "dev:/path" and "dev:path" when one style fails.
+	 */
+	strncpy(alt_path, open_path, MAX_PATH - 1);
+	alt_path[MAX_PATH - 1] = '\0';
+	sep = strchr(alt_path, ':');
+	if (sep == NULL || sep[1] == '\0')
+		return fd;
+
+	if (sep[1] == '/' || sep[1] == '\\') {
+		memmove(sep + 1, sep + 2, strlen(sep + 2) + 1);
+	} else {
+		size_t len = strlen(alt_path);
+		if (len + 1 >= MAX_PATH)
+			return fd;
+		memmove(sep + 2, sep + 1, strlen(sep + 1) + 1);
+		sep[1] = '/';
+	}
+
+	genLimObjName(alt_path, 0);
+	return fileXioOpen(alt_path, mode, fileMode);
 }
 //------------------------------
 //endfunc genOpen

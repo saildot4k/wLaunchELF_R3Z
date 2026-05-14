@@ -2334,44 +2334,52 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		goto ELFchecked;
 #endif
 #ifdef MMCE
-	} else if (!strncmp(path, "mmce", 4)) {
-		loadMmceModules();
-		if ((t = checkELFheader(path)) <= 0)
-			goto ELFnotFound;
-		strcpy(fullpath, path);
-		goto ELFchecked;
-#endif
-	} else if (!strncmp(path, "usb", 3)) {
-		if ((t = checkELFheader(path)) <= 0)
-			goto ELFnotFound;
-		party[0] = 0;
-		if (genFixPath(path, fullpath) < 0)
-			goto ELFnotFound;
-		if (!strncmp(fullpath, "mass", 4)) {
-			char *usb_sep = strchr(fullpath, ':');
-
-			if (usb_sep != NULL && usb_sep[1] != 0 && usb_sep[1] != '/') {
-				memmove(usb_sep + 2, usb_sep + 1, strlen(usb_sep + 1) + 1);
-				usb_sep[1] = '/';
-			}
+		} else if (!strncmp(path, "mmce", 4)) {
+			loadMmceModules();
+			if ((t = checkELFheader(path)) <= 0)
+				goto ELFnotFound;
+			strcpy(fullpath, path);
+			goto ELFchecked;
 		}
-		goto ELFchecked;
-	} else if (!strncmp(path, "ata", 3)) {
-#ifdef EXFAT
-		loadAtaModules();
 #endif
-		if ((t = checkELFheader(path)) <= 0)
-			goto ELFnotFound;
-		party[0] = 0;
-		strcpy(fullpath, path);
-		goto ELFchecked;
-	} else if (!strncmp(path, "mass", 4)) {
-		if ((t = checkELFheader(path)) <= 0)
-			goto ELFnotFound;
-		party[0] = 0;
+		} else if (!strncmp(path, "usb", 3)) {
+			char *pathSep;
 
-		strcpy(fullpath, path);
-		goto ELFchecked;
+			if ((t = checkELFheader(path)) <= 0)
+				goto ELFnotFound;
+			party[0] = 0;
+			if (genFixPath(path, fullpath) < 0)
+				goto ELFnotFound;
+			pathSep = strchr(fullpath, '/');
+			if (pathSep && (pathSep - fullpath < 7) && pathSep[-1] == ':')
+				strcpy(fullpath + (pathSep - fullpath), pathSep + 1);
+			goto ELFchecked;
+		} else if (!strncmp(path, "ata", 3)) {
+			char *pathSep;
+
+#ifdef EXFAT
+			loadAtaModules();
+#endif
+			if ((t = checkELFheader(path)) <= 0)
+				goto ELFnotFound;
+			party[0] = 0;
+			strcpy(fullpath, path);
+			pathSep = strchr(path, '/');
+			if (pathSep && (pathSep - path < 7) && pathSep[-1] == ':')
+				strcpy(fullpath + (pathSep - path), pathSep + 1);
+			goto ELFchecked;
+		} else if (!strncmp(path, "mass", 4)) {
+			char *pathSep;
+
+			if ((t = checkELFheader(path)) <= 0)
+				goto ELFnotFound;
+			party[0] = 0;
+
+			strcpy(fullpath, path);
+			pathSep = strchr(path, '/');
+			if (pathSep && (pathSep - path < 7) && pathSep[-1] == ':')
+				strcpy(fullpath + (pathSep - path), pathSep + 1);
+			goto ELFchecked;
 #ifdef ETH
 	} else if (!strncmp(path, "host:", 5)) {
 		initHOST();
