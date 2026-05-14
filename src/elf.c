@@ -305,6 +305,8 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 	eh = (elf_header_t *)boot_elf;
 	if (_lw((u32)&eh->ident) != ELF_MAGIC)
 		asm volatile("break\n");
+	DPRINTF("RunLoaderElf: loader embedded entry=0x%08x phoff=0x%08x phnum=%u\n",
+	        eh->entry, eh->phoff, eh->phnum);
 
 	eph = (elf_pheader_t *)(boot_elf + eh->phoff);
 
@@ -313,6 +315,8 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 	for (i = 0; i < eh->phnum; i++) {
 		if (eph[i].type != ELF_PT_LOAD)
 			continue;
+		DPRINTF("RunLoaderElf: loader phdr[%d] vaddr=%p offset=0x%08x filesz=0x%08x memsz=0x%08x\n",
+		        i, eph[i].vaddr, eph[i].offset, eph[i].filesz, eph[i].memsz);
 
 		pdata = (void *)(boot_elf + eph[i].offset);
 		memcpy(eph[i].vaddr, pdata, eph[i].filesz);
@@ -326,6 +330,10 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 	else
 		argv[2] = (reboot_iop_elf_load) ? "-r" : "-nr";
 	DPRINTF("RunLoaderElf: loader mode arg='%s'\n", argv[2]);
+	if (eh->entry == 0 || (eh->entry & 0x3) != 0) {
+		DPRINTF("RunLoaderElf: invalid embedded loader entry=0x%08x\n", eh->entry);
+		return;
+	}
 	/* Let's go.  */
 	SifExitRpc();
 	FlushCache(0);
