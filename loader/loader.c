@@ -33,8 +33,6 @@
 #include "loadfile.h"
 #include "sio.h"
 #include "string.h"
-#include "stdio.h"
-#include "stdarg.h"
 #include "iopheap.h"
 #include "errno.h"
 //--------------------------------------------------------------
@@ -60,18 +58,9 @@ static void wipeUserMem(void)
 	}
 }
 
-static void wle_log(const char *fmt, ...)
+static void wle_log(const char *msg)
 {
-	char msg[192];
-	va_list args;
-
-	va_start(args, fmt);
-	vsnprintf(msg, sizeof(msg), fmt, args);
-	va_end(args);
-
 	sio_putsn(msg);
-	printf("%s", msg);
-	fflush(stdout);
 }
 
 //--------------------------------------------------------------
@@ -86,11 +75,10 @@ int main(int argc, char *argv[])
 	char *args[1];
 	int ret, rebootiop = 0, prefer_encrypted = 0;
 	u32 loader_epc;
-	char dbg[192];
 
 	// Initialize
 	SifInitRpc(0);
-	wle_log("# wle: loader start argc=%d\n", argc);
+	wle_log("# wle: loader start\n");
 	/*
 	 * In DEBUG builds this loader can be linked above 0x100000.
 	 * Avoid wiping memory in that case, or we may erase the currently
@@ -127,24 +115,19 @@ int main(int argc, char *argv[])
 	SifLoadFileInit();
 
 	memset(&elfdata, 0, sizeof(elfdata));
-	snprintf(dbg, sizeof(dbg), "# wle: try target %s mode=%s\n", target, prefer_encrypted ? "enc-first" : "plain");
-	wle_log("%s", dbg);
+	wle_log("# wle: try target\n");
 	if (prefer_encrypted) {
 		ret = SifLoadElfEncrypted(target, &elfdata);
-		snprintf(dbg, sizeof(dbg), "# wle: SifLoadElfEncrypted ret=%d epc=0x%08lx gp=0x%08lx\n", ret, (unsigned long)elfdata.epc, (unsigned long)elfdata.gp);
-		wle_log("%s", dbg);
+		wle_log("# wle: tried SifLoadElfEncrypted\n");
 		if (ret != 0 || elfdata.epc == 0)
 			ret = SifLoadElf(target, &elfdata);
-		snprintf(dbg, sizeof(dbg), "# wle: SifLoadElf ret=%d epc=0x%08lx gp=0x%08lx\n", ret, (unsigned long)elfdata.epc, (unsigned long)elfdata.gp);
-		wle_log("%s", dbg);
+		wle_log("# wle: tried SifLoadElf\n");
 	} else {
 		ret = SifLoadElf(target, &elfdata);
-		snprintf(dbg, sizeof(dbg), "# wle: SifLoadElf ret=%d epc=0x%08lx gp=0x%08lx\n", ret, (unsigned long)elfdata.epc, (unsigned long)elfdata.gp);
-		wle_log("%s", dbg);
+		wle_log("# wle: tried SifLoadElf\n");
 		if (ret != 0 || elfdata.epc == 0) {
 			ret = SifLoadElfEncrypted(target, &elfdata);
-			snprintf(dbg, sizeof(dbg), "# wle: SifLoadElfEncrypted ret=%d epc=0x%08lx gp=0x%08lx\n", ret, (unsigned long)elfdata.epc, (unsigned long)elfdata.gp);
-			wle_log("%s", dbg);
+			wle_log("# wle: tried SifLoadElfEncrypted\n");
 		}
 	}
 
