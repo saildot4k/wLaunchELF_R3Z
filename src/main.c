@@ -1691,7 +1691,8 @@ int loadMx4sioModules(void)
 	if (!have_mx4sio) {
 		id = SifExecModuleBuffer(mx4sio_bd_irx, size_mx4sio_bd_irx, 0, NULL, &ret);
 		DPRINTF(" [MX4SIO_BD]: id=%d ret=%d\n", id, ret);
-		mx4sio_driver_running = (id > 0 && ret != 1);
+		/* Newer stacks can return non-negative resident statuses; treat those as success. */
+		mx4sio_driver_running = (id >= 0 && ret >= 0);
 		have_mx4sio = mx4sio_driver_running;
 		if (have_mx4sio) {
 			USB_mass_scanned = 0;
@@ -2398,7 +2399,7 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 #else
 			goto ELFnotFound;
 #endif
-		} else if (!strncmp(path, "mx4sio:", 7)) {
+		} else if (!strncmp(path, "mx4sio", 6)) {
 #ifdef MX4SIO
 			if (!mx4sio_driver_running && !loadMx4sioModules())
 				goto ELFnotFound;

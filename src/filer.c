@@ -1720,9 +1720,24 @@ int getDir(const char *path, FILEINFO *info)
 #endif
 #ifdef MX4SIO
 	else if (!strncmp(path, "mx4sio", 6)) {
-		if (!mx4sio_driver_running && !loadMx4sioModules())
-			return 0;
+		char indexed_path[MAX_PATH];
+		char mass_path[MAX_PATH];
+
+		if (!mx4sio_driver_running)
+			loadMx4sioModules();
 		n = readGENERIC(path, info, max);
+		if ((n == 0) && (path[6] == ':')) {
+			/* Try indexed typed-device form for stacks that require explicit unit number. */
+			snprintf(indexed_path, sizeof(indexed_path), "mx4sio0:%s", path + 7);
+			n = readGENERIC(indexed_path, info, max);
+			if (n == 0) {
+				/* Compatibility fallback: some mixed stacks may still expose MX4SIO as mass0:. */
+				if (!USB_mass_scanned)
+					scan_USB_mass();
+				snprintf(mass_path, sizeof(mass_path), "mass0:%s", path + 7);
+				n = readGENERIC(mass_path, info, max);
+			}
+		}
 	}
 #endif
 #ifdef XFROM
@@ -1919,7 +1934,7 @@ int menu(const char *path, FILEINFO *file)
 	else if (psu_action == PSU_ACTION_CREATE)
 		psu_action_label = "Create PSU";
 	else
-		psu_action_label = LNG(psuPaste);
+		psu_action_label = LNG(psuAction);
 
 	int menu_len = strlen(LNG(Copy)) > strlen(LNG(Cut)) ?
 	                   strlen(LNG(Copy)) :
@@ -4808,6 +4823,8 @@ int getFilePath(char *out, int cnfmode)
 
 					if (!size_valid || !(top + i))
 						strcpy(tmp, "----- B");
+					else if ((files[top + i].stats.AttrFile & sceMcFileAttrSubdir) && size == 0)
+						strcpy(tmp, "    - B");
 					else {
 						while (size > 99999) {
 							scale++;
@@ -4987,6 +5004,7 @@ int getFilePath(char *out, int cnfmode)
 void submenu_func_GetSize(char *mess, char *path, FILEINFO *files)
 {
 	u64 size;
+	u64 entry_size;
 	int ret, i, text_pos, text_inc, sel = -1;
 	char filepath[MAX_PATH];
 
@@ -5000,18 +5018,29 @@ void submenu_func_GetSize(char *mess, char *path, FILEINFO *files)
 	if (nmarks == 0) {
 		size = getFileSize(path, &files[browser_sel]);
 		sel = browser_sel;  //for stat checking
+		if ((size != (u64)-1) && (files[browser_sel].stats.AttrFile & sceMcFileAttrSubdir)) {
+			files[browser_sel].stats.FileSizeByte = (u32)size;
+			files[browser_sel].stats.Reserve2 = (u32)(size >> 32);
+		}
 	} else {
 		for (i = size = 0; i < browser_nfiles; i++) {
 			if (marks[i]) {
-				size += getFileSize(path, &files[i]);
+				entry_size = getFileSize(path, &files[i]);
+				if (entry_size == (u64)-1) {
+					size = (u64)-1;
+					break;
+				}
+				size += entry_size;
+				if (files[i].stats.AttrFile & sceMcFileAttrSubdir) {
+					files[i].stats.FileSizeByte = (u32)entry_size;
+					files[i].stats.Reserve2 = (u32)(entry_size >> 32);
+				}
 				sel = i;  //for stat checking
 			}
-			if (size < 0)
-				size = -1;
 		}
 	}
 	DPRINTF("size result = %llu\r\n", (unsigned long long)size);
-	if (size < 0) {
+	if (size == (u64)-1) {
 		strcpy(mess, LNG(Size_test_Failed));
 		text_pos = strlen(mess);
 	} else {
