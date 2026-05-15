@@ -102,13 +102,12 @@ jobs:
 
     - name: Rename output ELF for variant
       run: |
-        shopt -s nullglob
-        elfs=(BOOT*.ELF)
-        if [ "${#elfs[@]}" -lt 1 ]; then
+        set -- BOOT*.ELF
+        if [ "$1" = 'BOOT*.ELF' ]; then
           echo "No BOOT*.ELF produced by build." >&2
           exit 1
         fi
-        cp "${elfs[0]}" "wLE-${{ matrix.variant_name }}.ELF"
+        cp "$1" "wLE-${{ matrix.variant_name }}.ELF"
 
     - name: Upload variants artifact ELF
       uses: actions/upload-artifact@v7
