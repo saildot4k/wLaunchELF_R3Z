@@ -1688,6 +1688,8 @@ int loadMx4sioModules(void)
 
 	ensureCoreIoStackReady();
 	switchStorageDriverStack(STORAGE_STACK_MX4SIO);
+	if (!have_usb_mass)
+		loadUsbModules();
 	if (!have_mx4sio) {
 		id = SifExecModuleBuffer(mx4sio_bd_irx, size_mx4sio_bd_irx, 0, NULL, &ret);
 		DPRINTF(" [MX4SIO_BD]: id=%d ret=%d\n", id, ret);
