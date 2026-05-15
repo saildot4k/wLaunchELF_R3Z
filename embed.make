@@ -58,8 +58,61 @@ $(EE_ASM_DIR)mcserv_irx.s: $(MCSERV_SOURCE) | $(EE_ASM_DIR)
 
 $(EE_ASM_DIR)sio2man.s: $(SIO2MAN_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ sio2man_irx
-	
-$(EE_ASM_DIR)mx4sio_bd.s: iop/__precompiled/mx4sio_bd.irx | $(EE_ASM_DIR)
+
+# MX4SIO_BD module selection:
+# 1) installed PS2SDK IRX (preferred)
+# 2) auto-build from PS2SDK sources (when available)
+# 3) bundled fallback IRX
+MX4SIO_BD_SOURCE :=
+MX4SIO_BD_AUTOGEN := iop/__generated/mx4sio_bd.irx
+MX4SIO_BD_SDK_ROOT :=
+MX4SIO_BD_SDK_MODULE_DIR :=
+
+ifneq ($(wildcard $(PS2SDK)/iop/irx/mx4sio_bd.irx),)
+MX4SIO_BD_SOURCE := $(PS2SDK)/iop/irx/mx4sio_bd.irx
+endif
+
+ifeq ($(strip $(MX4SIO_BD_SOURCE)),)
+ifneq ($(PS2SDKSRC),)
+ifneq ($(wildcard $(PS2SDKSRC)/iop/sio/mx4sio_bd/Makefile),)
+MX4SIO_BD_SDK_ROOT := $(PS2SDKSRC)
+MX4SIO_BD_SDK_MODULE_DIR := $(PS2SDKSRC)/iop/sio/mx4sio_bd
+endif
+endif
+endif
+
+ifeq ($(strip $(MX4SIO_BD_SOURCE)),)
+ifneq ($(wildcard $(PS2SDK)/iop/sio/mx4sio_bd/Makefile),)
+MX4SIO_BD_SDK_ROOT := $(PS2SDK)
+MX4SIO_BD_SDK_MODULE_DIR := $(PS2SDK)/iop/sio/mx4sio_bd
+endif
+endif
+
+ifeq ($(strip $(MX4SIO_BD_SOURCE)),)
+ifneq ($(strip $(MX4SIO_BD_SDK_MODULE_DIR)),)
+MX4SIO_BD_SOURCE := $(MX4SIO_BD_AUTOGEN)
+endif
+endif
+
+ifeq ($(strip $(MX4SIO_BD_SOURCE)),)
+ifneq ($(wildcard iop/__precompiled/mx4sio_bd.irx),)
+MX4SIO_BD_SOURCE := iop/__precompiled/mx4sio_bd.irx
+endif
+endif
+
+ifeq ($(strip $(MX4SIO_BD_SOURCE)),)
+$(error Missing mx4sio_bd.irx. Update PS2SDK, add iop/__precompiled/mx4sio_bd.irx, or provide PS2SDKSRC with iop/sio/mx4sio_bd sources)
+endif
+
+$(MX4SIO_BD_AUTOGEN): | iop/__generated
+	$(MAKE) -C $(MX4SIO_BD_SDK_MODULE_DIR) \
+		PS2SDKSRC=$(MX4SIO_BD_SDK_ROOT) \
+		PS2SDK=$(MX4SIO_BD_SDK_ROOT) \
+		IOP_BIN_DIR=$(abspath iop/__generated)/ \
+		IOP_OBJS_DIR=$(abspath iop/__generated/mx4sio_bd_obj)/ \
+		IOP_BIN=mx4sio_bd.irx
+
+$(EE_ASM_DIR)mx4sio_bd.s: $(MX4SIO_BD_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ mx4sio_bd_irx
 	
 $(EE_ASM_DIR)mmceman_irx.s: iop/__precompiled/mmceman.irx | $(EE_ASM_DIR)
