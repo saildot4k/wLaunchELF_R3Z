@@ -306,9 +306,6 @@ static int canOpenInTextEditor(const char *path, const FILEINFO *file)
 #ifndef MMCE_CMD_SET_CHANNEL
 #define MMCE_CMD_SET_CHANNEL 0x06
 #endif
-#ifndef MMCE_CMD_SET_GAMEID
-#define MMCE_CMD_SET_GAMEID 0x08
-#endif
 
 #define MMCE_SET_CARD_TYPE_REGULAR 0x00
 #define MMCE_SET_CARD_TYPE_BOOT 0x01
@@ -331,33 +328,6 @@ static int isMmceCardImageFile(const FILEINFO *file)
 		return FALSE;
 
 	return genCmpFileExt(file->name, "MC2") || genCmpFileExt(file->name, "MCD");
-}
-
-static void getLastPathSegment(const char *path, char *segment, size_t segment_size)
-{
-	const char *start, *end;
-	size_t len;
-
-	if ((segment == NULL) || (segment_size == 0))
-		return;
-
-	segment[0] = '\0';
-	if ((path == NULL) || (path[0] == '\0'))
-		return;
-
-	end = path + strlen(path);
-	while ((end > path) && (*(end - 1) == '/'))
-		end--;
-	start = end;
-	while ((start > path) && (*(start - 1) != '/'))
-		start--;
-
-	len = (size_t)(end - start);
-	if (len >= segment_size)
-		len = segment_size - 1;
-
-	memcpy(segment, start, len);
-	segment[len] = '\0';
 }
 
 static int parseMmceCardNumber(const char *name, u16 *card_num)
@@ -385,24 +355,25 @@ static int parseMmceCardNumber(const char *name, u16 *card_num)
 	return 0;
 }
 
-static int parseMmceChannelNumber(const char *channel, u16 *channel_num)
+static int parseMmceChannelFromFilename(const char *name, u16 *channel_num)
 {
-	const char *p;
-	char prefix[5];
+	const char *dot, *dash, *p;
 	unsigned int value = 0;
 
-	if (strlen(channel) < 5)
+	dot = strrchr(name, '.');
+	if (dot == NULL)
 		return -1;
-	strncpy(prefix, channel, 4);
-	prefix[4] = '\0';
-	if (stricmp(prefix, "Card"))
+	dash = dot;
+	while ((dash > name) && (*(dash - 1) != '-'))
+		dash--;
+	if ((dash <= name) || (*(dash - 1) != '-'))
 		return -1;
 
-	p = &channel[4];
+	p = dash;
 	if ((*p < '0') || (*p > '9'))
 		return -1;
 
-	while (*p != '\0') {
+	while (p < dot) {
 		if ((*p < '0') || (*p > '9'))
 			return -1;
 		value = value * 10 + (*p - '0');
@@ -415,20 +386,12 @@ static int parseMmceChannelNumber(const char *channel, u16 *channel_num)
 	return 0;
 }
 
-static int selectMmceChannel(const char *devname, const char *channel)
+static int selectMmceChannel(const char *devname, u16 channel_num)
 {
-	u16 channel_num;
 	u32 arg;
 
-	if ((channel == NULL) || (channel[0] == '\0') || !stricmp(channel, "BOOT"))
-		return 0;
-
-	if (parseMmceChannelNumber(channel, &channel_num) == 0) {
-		arg = (MMCE_SET_MODE_NUM << 16) | channel_num;
-		return fileXioDevctl(devname, MMCE_CMD_SET_CHANNEL, &arg, sizeof(arg), NULL, 0);
-	}
-
-	return fileXioDevctl(devname, MMCE_CMD_SET_GAMEID, (void *)channel, strlen(channel) + 1, NULL, 0);
+	arg = (MMCE_SET_MODE_NUM << 16) | channel_num;
+	return fileXioDevctl(devname, MMCE_CMD_SET_CHANNEL, &arg, sizeof(arg), NULL, 0);
 }
 
 static int waitMmceReady(const char *devname)
@@ -446,12 +409,9 @@ static int waitMmceReady(const char *devname)
 	return -1;
 }
 
-static int getMmceCardType(const char *channel, const char *name)
+static int getMmceCardType(const char *name)
 {
 	char prefix[9];
-
-	if ((channel != NULL) && !stricmp(channel, "BOOT"))
-		return MMCE_SET_CARD_TYPE_BOOT;
 
 	if (name != NULL) {
 		strncpy(prefix, name, 8);
@@ -466,10 +426,9 @@ static int getMmceCardType(const char *channel, const char *name)
 static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mounted_slot)
 {
 	int unit, ret, dummy, card_type;
-	u16 card;
+	u16 card, channel_num;
 	u32 arg;
 	char devname[8];
-	char channel[64];
 
 	unit = getMmceUnitFromPath(path);
 	if (unit < 0 || unit > 1)
@@ -480,25 +439,24 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 
 	if (parseMmceCardNumber(file->name, &card) < 0)
 		return -3;
+	if (parseMmceChannelFromFilename(file->name, &channel_num) < 0)
+		return -4;
 
-	getLastPathSegment(path, channel, sizeof(channel));
 	snprintf(devname, sizeof(devname), "mmce%d:", unit);
 
-	/* Card selection is applied first, then channel selection to match card+channel behavior. */
-	card_type = getMmceCardType(channel, file->name);
+	/* Card selection is applied first, then channel selection (from last dash number in filename). */
+	card_type = getMmceCardType(file->name);
 	arg = (card_type << 24) | (MMCE_SET_MODE_NUM << 16) | card;
 	ret = fileXioDevctl(devname, MMCE_CMD_SET_CARD, &arg, sizeof(arg), NULL, 0);
 	if (ret < 0)
 		return ret;
 
-	ret = selectMmceChannel(devname, channel);
+	ret = selectMmceChannel(devname, channel_num);
 	if (ret < 0)
 		return ret;
-	if ((channel[0] != '\0') && stricmp(channel, "BOOT")) {
-		ret = waitMmceReady(devname);
-		if (ret < 0)
-			return ret;
-	}
+	ret = waitMmceReady(devname);
+	if (ret < 0)
+		return ret;
 
 	/* Ask MCMAN to refresh the selected hardware slot after MMCE card switch. */
 	mcGetInfo(unit, 0, &dummy, &dummy, &dummy);
@@ -4902,18 +4860,21 @@ int getFilePath(char *out, int cnfmode)
 							int mounted_slot = -1;
 
 							x = mountMmceCardImage(path, &files[browser_sel], &mounted_slot);
-							if (x >= 0) {
-								snprintf(path, sizeof(path), "mc%d:/", mounted_slot);
-								browser_cd = TRUE;
-								cnfmode = NON_CNF;
-								strcpy(ext, cnfmode_extL[cnfmode]);
-							} else if (x == -3) {
-								sprintf(msg1, "\nMMCE card filename must end with digits before extension.\nExample: 0012.mc2");
-								(void)ynDialog(msg1);
-							} else {
-								sprintf(msg1, "\nMMCE card mount failed for \"%s\"\nResult=%d", files[browser_sel].name, x);
-								(void)ynDialog(msg1);
-							}
+								if (x >= 0) {
+									snprintf(path, sizeof(path), "mc%d:/", mounted_slot);
+									browser_cd = TRUE;
+									cnfmode = NON_CNF;
+									strcpy(ext, cnfmode_extL[cnfmode]);
+								} else if (x == -3) {
+									sprintf(msg1, "\nMMCE card filename must end with digits before extension.\nExample: 0012.mc2");
+									(void)ynDialog(msg1);
+								} else if (x == -4) {
+									sprintf(msg1, "\nMMCE channel must be the last dash number.\nExample: SLUS-21338-1.mc2");
+									(void)ynDialog(msg1);
+								} else {
+									sprintf(msg1, "\nMMCE card mount failed for \"%s\"\nResult=%d", files[browser_sel].name, x);
+									(void)ynDialog(msg1);
+								}
 							browser_pushed = FALSE;
 							continue;
 						}
