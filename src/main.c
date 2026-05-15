@@ -548,13 +548,20 @@ static void getIpConfig(void)
 	char buf[IPCONF_MAX_LEN];
 	char path[MAX_PATH];
 	char candidate[MAX_PATH];
+	size_t dir_len;
+	static const char ipconfig_name[] = "IPCONFIG.DAT";
 
 	fd = -1;
+	len = 0;
 
 	// Prefer IPCONFIG in the same directory as the launched ELF.
-	snprintf(candidate, sizeof(candidate), "%sIPCONFIG.DAT", LaunchElfDir);
-	if (genFixPath(candidate, path) >= 0)
-		fd = genOpen(path, FIO_O_RDONLY);
+	dir_len = strnlen(LaunchElfDir, sizeof(candidate));
+	if (dir_len < sizeof(candidate) && (dir_len + sizeof(ipconfig_name)) <= sizeof(candidate)) {
+		memcpy(candidate, LaunchElfDir, dir_len);
+		memcpy(candidate + dir_len, ipconfig_name, sizeof(ipconfig_name));
+		if (genFixPath(candidate, path) >= 0)
+			fd = genOpen(path, FIO_O_RDONLY);
+	}
 
 	// Fallback to SYS-CONF on memory cards, preferring current MC slot.
 	if (fd < 0) {
@@ -2857,9 +2864,10 @@ int uLE_InitializeRegion(void)
 			continue;
 		read_len = genRead(ROMVER_fd, ROMVER_data, sizeof(ROMVER_data) - 1);
 		genClose(ROMVER_fd);
-		if (read_len > 0)
+		if (read_len > 0) {
 			break;
-			memset(ROMVER_data, 0, sizeof(ROMVER_data));
+		}
+		memset(ROMVER_data, 0, sizeof(ROMVER_data));
 	}
 
 	if (read_len <= 0 || ROMVER_data[0] == '\0') {

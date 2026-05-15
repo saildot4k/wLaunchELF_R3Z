@@ -23,18 +23,51 @@ find_sym_hex() {
 	"$nm_tool" -n "$elf_path" | awk -v s="$sym_name" '$3 == s { print $1; found=1; exit } END { if (!found) exit 1 }'
 }
 
-image_lo_hex="$(find_sym_hex _ftext)" || {
-	echo "layout-check: missing _ftext in $elf_path" >&2
-	exit 1
+find_tool_from_nm() {
+	target_name="$1"
+	case "$nm_tool" in
+		*nm)
+			printf '%s\n' "${nm_tool%nm}${target_name}"
+			;;
+		*)
+			printf '%s\n' "$target_name"
+			;;
+	esac
 }
 
-image_hi_hex="$(find_sym_hex _end)" || {
-	echo "layout-check: missing _end in $elf_path" >&2
-	exit 1
-}
+image_lo=
+image_hi=
 
-image_lo=$((0x$image_lo_hex))
-image_hi=$((0x$image_hi_hex))
+if image_lo_hex="$(find_sym_hex _ftext 2>/dev/null)" && image_hi_hex="$(find_sym_hex _end 2>/dev/null)"; then
+	image_lo=$((0x$image_lo_hex))
+	image_hi=$((0x$image_hi_hex))
+else
+	readelf_tool="$(find_tool_from_nm readelf)"
+	if ! command -v "$readelf_tool" >/dev/null 2>&1; then
+		echo "layout-check: missing symbols and no readelf tool available for fallback" >&2
+		exit 1
+	fi
+
+	while read -r seg_vaddr seg_memsz; do
+		[ -n "$seg_vaddr" ] || continue
+		seg_lo=$((seg_vaddr))
+		seg_hi=$((seg_vaddr + seg_memsz))
+		if [ -z "${image_lo}" ] || [ "$seg_lo" -lt "$image_lo" ]; then
+			image_lo="$seg_lo"
+		fi
+		if [ -z "${image_hi}" ] || [ "$seg_hi" -gt "$image_hi" ]; then
+			image_hi="$seg_hi"
+		fi
+	done <<EOF_SEGMENTS
+$("$readelf_tool" -l "$elf_path" | awk '/^[[:space:]]*LOAD[[:space:]]/ { print $3, $6 }')
+EOF_SEGMENTS
+
+	if [ -z "${image_lo}" ] || [ -z "${image_hi}" ]; then
+		echo "layout-check: could not determine loader image range from symbols or LOAD segments" >&2
+		exit 1
+	fi
+fi
+
 load_addr=$((load_addr_expr))
 stack_addr=$((stack_addr_expr))
 stack_size=$((stack_size_expr))
