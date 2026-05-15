@@ -1643,6 +1643,7 @@ int getDir(const char *path, FILEINFO *info)
 	else if (!strncmp(path, "ata", 3)) {
 #ifdef EXFAT
 		u64 wait_start;
+		u64 backoff_start;
 		int dd;
 		int is_ata_root;
 		int wait_budget_ms;
@@ -1695,7 +1696,9 @@ int getDir(const char *path, FILEINFO *info)
 					}
 
 					// Avoid tight spinning while IOP-side BDM mount events settle.
-					DelayThread(100 * 1000);
+					backoff_start = Timer();
+					while (Timer() < backoff_start + 100) {
+					}
 				}
 			}
 		}
