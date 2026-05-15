@@ -271,6 +271,9 @@ static int isTitleCfgPathEligible(const char *path, int menu_disabled)
 {
 	return ((!strncmp(path, "mass", 4)) ||
 	        (!strncmp(path, "usb", 3)) ||
+#ifdef MMCE
+	        (!strncmp(path, "mmce", 4)) ||
+#endif
 #ifdef MX4SIO
 	        (!strncmp(path, "mx4sio", 6)) ||
 #endif
