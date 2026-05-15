@@ -1658,37 +1658,45 @@ int getDir(const char *path, FILEINFO *info)
 		// First browse after loading ATA_BD can race module/device readiness.
 		// Retry briefly so ata:/ populates on first open instead of requiring re-entry.
 		if (n == 0 && wait_budget_ms > 0) {
-			wait_start = Timer();
-			while (Timer() < wait_start + wait_budget_ms) {
-				path_ready = 0;
-				ata0_ready = 0;
+			if (is_ata_root)
+				n = readGENERIC("ata0:/", info, max);
+			if (n == 0) {
+				wait_start = Timer();
+				while (Timer() < wait_start + wait_budget_ms) {
+					path_ready = 0;
+					ata0_ready = 0;
 
-				dd = fileXioDopen(path);
-				if (dd >= 0) {
-					fileXioDclose(dd);
-					path_ready = 1;
-				}
-
-				// bdmfs exposes typed volumes as ata0:, ata1:, etc.
-				// Probe ata0:/ too, to wait for first mount to settle.
-				if (is_ata_root) {
-					dd = fileXioDopen("ata0:/");
+					dd = fileXioDopen(path);
 					if (dd >= 0) {
 						fileXioDclose(dd);
-						ata0_ready = 1;
+						path_ready = 1;
 					}
-				}
 
-				if (path_ready || ata0_ready) {
-					n = readGENERIC(path, info, max);
-					if (n > 0)
-						break;
-					if (!is_ata_root)
-						break;
-				}
+					// bdmfs exposes typed volumes as ata0:, ata1:, etc.
+					// Probe ata0:/ too, to wait for first mount to settle.
+					if (is_ata_root) {
+						dd = fileXioDopen("ata0:/");
+						if (dd >= 0) {
+							fileXioDclose(dd);
+							ata0_ready = 1;
+						}
+					}
 
-				// Avoid tight spinning while IOP-side BDM mount events settle.
-				DelayThread(100 * 1000);
+					if (path_ready || ata0_ready) {
+						n = 0;
+						if (path_ready)
+							n = readGENERIC(path, info, max);
+						if ((n == 0) && is_ata_root && ata0_ready)
+							n = readGENERIC("ata0:/", info, max);
+						if (n > 0)
+							break;
+						if (!is_ata_root)
+							break;
+					}
+
+					// Avoid tight spinning while IOP-side BDM mount events settle.
+					DelayThread(100 * 1000);
+				}
 			}
 		}
 #endif

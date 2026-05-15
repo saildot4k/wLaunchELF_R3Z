@@ -17,6 +17,7 @@
 #include <tamtypes.h>
 #include <sifcmd.h>
 #include <kernel.h>
+#include <delaythread.h>
 #include <sifrpc.h>
 #include <loadfile.h>
 #include <string.h>
