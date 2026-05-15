@@ -1860,14 +1860,66 @@ finish:
 	return ret;
 }
 //--------------------------------------------------------------
+enum {
+	PSU_ACTION_NONE = 0,
+	PSU_ACTION_CREATE,
+	PSU_ACTION_EXTRACT
+};
+
+static int isMcLikePath(const char *path)
+{
+	return (!strncmp(path, "mc", 2) || !strncmp(path, "vmc", 3));
+}
+
+static int classifyPsuAction(const char *destPath)
+{
+	int i;
+	int all_psu = 1;
+	int all_dirs = 1;
+	int src_is_mc_like;
+
+	if (nclipFiles <= 0)
+		return PSU_ACTION_NONE;
+
+	src_is_mc_like = isMcLikePath(clipPath);
+	for (i = 0; i < nclipFiles; i++) {
+		if (clipFiles[i].stats.AttrFile & sceMcFileAttrSubdir) {
+			all_psu = 0;
+			continue;
+		}
+
+		all_dirs = 0;
+		if (!genCmpFileExt(clipFiles[i].name, "PSU"))
+			all_psu = 0;
+	}
+
+	if (all_psu)
+		return PSU_ACTION_EXTRACT;
+
+	if (all_dirs && src_is_mc_like && destPath && destPath[0] != '\0')
+		return PSU_ACTION_CREATE;
+
+	return PSU_ACTION_NONE;
+}
+//--------------------------------------------------------------
 int menu(const char *path, FILEINFO *file)
 {
 	u64 color;
 	char enable[NUM_MENU], tmp[80];
+	const char *psu_action_label;
 	int x, y, i, sel;
 	int event, post_event = 0;
 	int menu_disabled = 0;
 	int write_disabled = 0;
+	int psu_action;
+
+	psu_action = classifyPsuAction(path);
+	if (psu_action == PSU_ACTION_EXTRACT)
+		psu_action_label = "Extract PSU";
+	else if (psu_action == PSU_ACTION_CREATE)
+		psu_action_label = "Create PSU";
+	else
+		psu_action_label = LNG(psuPaste);
 
 	int menu_len = strlen(LNG(Copy)) > strlen(LNG(Cut)) ?
 	                   strlen(LNG(Copy)) :
@@ -1879,7 +1931,7 @@ int menu(const char *path, FILEINFO *file)
 	menu_len = strlen(LNG(Get_Size)) > menu_len ? strlen(LNG(Get_Size)) : menu_len;
 	menu_len = strlen(LNG(TextEditor)) > menu_len ? strlen(LNG(TextEditor)) : menu_len;
 	menu_len = strlen(LNG(mcPaste)) > menu_len ? strlen(LNG(mcPaste)) : menu_len;
-	menu_len = strlen(LNG(psuPaste)) > menu_len ? strlen(LNG(psuPaste)) : menu_len;
+	menu_len = strlen(psu_action_label) > menu_len ? strlen(psu_action_label) : menu_len;
     menu_len = strlen(LNG(time_manip)) > menu_len ? strlen(LNG(time_manip)) : menu_len;
     menu_len = strlen(LNG(title_cfg)) > menu_len ? strlen(LNG(title_cfg)) : menu_len;
 	menu_len = (strlen(LNG(Mount)) + 6) > menu_len ? (strlen(LNG(Mount)) + 6) : menu_len;
@@ -1989,12 +2041,11 @@ int menu(const char *path, FILEINFO *file)
 		if (!strncmp(path, "mc", 2) || !strncmp(path, "vmc", 3)) {
 			if (!strncmp(clipPath, "mc", 2) || !strncmp(clipPath, "vmc", 3)) {
 				enable[MCPASTE] = FALSE;  //No mcPaste if both src and dest are MC
-				enable[PSUPASTE] = FALSE;
 			}
 		} else if (strncmp(clipPath, "mc", 2) && strncmp(clipPath, "vmc", 3)) {
 			enable[MCPASTE] = FALSE;  //No mcPaste if both src and dest non-MC
-			enable[PSUPASTE] = FALSE;
 		}
+		enable[PSUPASTE] = (enable[PSUPASTE] && (psu_action != PSU_ACTION_NONE));
 	}
 
 	for (sel = 0; sel < NUM_MENU; sel++)  //loop to preselect the first enabled menu entry
@@ -2049,7 +2100,7 @@ int menu(const char *path, FILEINFO *file)
 				else if (i == MCPASTE)
 					strcpy(tmp, LNG(mcPaste));
 				else if (i == PSUPASTE)
-					strcpy(tmp, LNG(psuPaste));
+					strcpy(tmp, psu_action_label);
 				else if (i == DELETE)
 					strcpy(tmp, LNG(Delete));
 				else if (i == RENAME)
@@ -2904,12 +2955,14 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 					genLseek(PM_file[recurses + 1], psu_pad_size, SEEK_CUR);
 				//finally, we must adjust attributes of the new file copy, to ensure
 				//correct timestamps and attributes (requires MC-specific functions)
-				strcpy(tmp, out);
-				strncat(tmp, (const char *)files[0].stats.EntryName, 32);
-				mcGetInfo(tmp[2] - '0', 0, &dummy, &dummy, &dummy);  //Wakeup call
-				mcSync(0, NULL, &dummy);
-				mcSetFileInfo(tmp[2] - '0', 0, &tmp[4], &files[0].stats, MC_SFI);  //Fix file stats
-				mcSync(0, NULL, &dummy);
+				if (!strncmp(out, "mc", 2)) {
+					strcpy(tmp, out);
+					strncat(tmp, (const char *)files[0].stats.EntryName, 32);
+					mcGetInfo(tmp[2] - '0', 0, &dummy, &dummy, &dummy);  //Wakeup call
+					mcSync(0, NULL, &dummy);
+					mcSetFileInfo(tmp[2] - '0', 0, &tmp[4], &files[0].stats, MC_SFI);  //Fix file stats
+					mcSync(0, NULL, &dummy);
+				}
 			}                                 //ends main for loop of valid PM_PSU_RESTORE mode
 			genClose(PM_file[recurses + 1]);  //Close the PSU file
 			                                  //Finally fix the stats of the containing folder
@@ -3002,7 +3055,8 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 				}
 			}
 		}
-		if ((PM_flag[recurses + 1] == PM_MC_RESTORE) || (PM_flag[recurses + 1] == PM_PSU_RESTORE)) {
+		if (((PM_flag[recurses + 1] == PM_MC_RESTORE) || (PM_flag[recurses + 1] == PM_PSU_RESTORE)) &&
+		    !strncmp(out, "mc", 2)) {
 			//Finally fix the stats of the containing folder
 			//It has to be done last, as timestamps would change when fixing files
 			mcGetInfo(out[2] - '0', 0, &dummy, &dummy, &dummy);  //Wakeup call
@@ -5102,10 +5156,16 @@ void submenu_func_mcPaste(char *mess, char *path)
 //--------------------------------------------------------------
 void submenu_func_psuPaste(char *mess, char *path)
 {
-	if (!strncmp(path, "mc", 2) || !strncmp(path, "vmc", 3)) {
+	int psu_action = classifyPsuAction(path);
+
+	if (psu_action == PSU_ACTION_EXTRACT) {
 		PasteMode = PM_PSU_RESTORE;
-	} else {
+	} else if (psu_action == PSU_ACTION_CREATE) {
 		PasteMode = PM_PSU_BACKUP;
+	} else {
+		strcpy(mess, LNG(Paste_Failed));
+		browser_pushed = FALSE;
+		return;
 	}
 	subfunc_Paste(mess, path);
 }
