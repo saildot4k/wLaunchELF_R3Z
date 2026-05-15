@@ -1645,27 +1645,50 @@ int getDir(const char *path, FILEINFO *info)
 		u64 wait_start;
 		int dd;
 		int is_ata_root;
+		int wait_budget_ms;
+		int ata0_ready;
+		int path_ready;
 
 		loadAtaModules();
 		is_ata_root = (!strcmp(path, "ata:/") || !strcmp(path, "ata:"));
+		wait_budget_ms = is_ata_root ? 2000 : 750;
 #endif
 		n = readGENERIC(path, info, max);
 #ifdef EXFAT
 		// First browse after loading ATA_BD can race module/device readiness.
 		// Retry briefly so ata:/ populates on first open instead of requiring re-entry.
-		if (n == 0) {
+		if (n == 0 && wait_budget_ms > 0) {
 			wait_start = Timer();
-			while (Timer() < wait_start + 500) {
-				dd = fileXioDopen(path);
-				if (dd < 0)
-					continue;
+			while (Timer() < wait_start + wait_budget_ms) {
+				path_ready = 0;
+				ata0_ready = 0;
 
-				fileXioDclose(dd);
-				n = readGENERIC(path, info, max);
-				if (n > 0)
-					break;
-				if (!is_ata_root)
-					break;
+				dd = fileXioDopen(path);
+				if (dd >= 0) {
+					fileXioDclose(dd);
+					path_ready = 1;
+				}
+
+				// bdmfs exposes typed volumes as ata0:, ata1:, etc.
+				// Probe ata0:/ too, to wait for first mount to settle.
+				if (is_ata_root) {
+					dd = fileXioDopen("ata0:/");
+					if (dd >= 0) {
+						fileXioDclose(dd);
+						ata0_ready = 1;
+					}
+				}
+
+				if (path_ready || ata0_ready) {
+					n = readGENERIC(path, info, max);
+					if (n > 0)
+						break;
+					if (!is_ata_root)
+						break;
+				}
+
+				// Avoid tight spinning while IOP-side BDM mount events settle.
+				DelayThread(100 * 1000);
 			}
 		}
 #endif
