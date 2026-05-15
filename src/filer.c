@@ -300,9 +300,16 @@ static int canOpenInTextEditor(const char *path, const FILEINFO *file)
 #ifndef MMCE_CMD_SET_CARD
 #define MMCE_CMD_SET_CARD 0x04
 #endif
+#ifndef MMCE_CMD_SET_CHANNEL
+#define MMCE_CMD_SET_CHANNEL 0x06
+#endif
+#ifndef MMCE_CMD_SET_GAMEID
+#define MMCE_CMD_SET_GAMEID 0x08
+#endif
 
 #define MMCE_SET_CARD_TYPE_REGULAR 0x00
-#define MMCE_SET_CARD_MODE_NUM 0x00
+#define MMCE_SET_CARD_TYPE_BOOT 0x01
+#define MMCE_SET_MODE_NUM 0x00
 
 static int getMmceUnitFromPath(const char *path)
 {
@@ -320,6 +327,33 @@ static int isMmceCardImageFile(const FILEINFO *file)
 		return FALSE;
 
 	return genCmpFileExt(file->name, "MC2") || genCmpFileExt(file->name, "MCD");
+}
+
+static void getLastPathSegment(const char *path, char *segment, size_t segment_size)
+{
+	const char *start, *end;
+	size_t len;
+
+	if ((segment == NULL) || (segment_size == 0))
+		return;
+
+	segment[0] = '\0';
+	if ((path == NULL) || (path[0] == '\0'))
+		return;
+
+	end = path + strlen(path);
+	while ((end > path) && (*(end - 1) == '/'))
+		end--;
+	start = end;
+	while ((start > path) && (*(start - 1) != '/'))
+		start--;
+
+	len = (size_t)(end - start);
+	if (len >= segment_size)
+		len = segment_size - 1;
+
+	memcpy(segment, start, len);
+	segment[len] = '\0';
 }
 
 static int parseMmceCardNumber(const char *name, u16 *card_num)
@@ -347,12 +381,76 @@ static int parseMmceCardNumber(const char *name, u16 *card_num)
 	return 0;
 }
 
+static int parseMmceChannelNumber(const char *channel, u16 *channel_num)
+{
+	const char *p;
+	char prefix[5];
+	unsigned int value = 0;
+
+	if (strlen(channel) < 5)
+		return -1;
+	strncpy(prefix, channel, 4);
+	prefix[4] = '\0';
+	if (stricmp(prefix, "Card"))
+		return -1;
+
+	p = &channel[4];
+	if ((*p < '0') || (*p > '9'))
+		return -1;
+
+	while (*p != '\0') {
+		if ((*p < '0') || (*p > '9'))
+			return -1;
+		value = value * 10 + (*p - '0');
+		if (value > 0xFFFF)
+			return -1;
+		p++;
+	}
+
+	*channel_num = (u16)value;
+	return 0;
+}
+
+static int selectMmceChannel(const char *devname, const char *channel)
+{
+	u16 channel_num;
+	u32 arg;
+
+	if ((channel == NULL) || (channel[0] == '\0') || !stricmp(channel, "BOOT"))
+		return 0;
+
+	if (parseMmceChannelNumber(channel, &channel_num) == 0) {
+		arg = (MMCE_SET_MODE_NUM << 16) | channel_num;
+		return fileXioDevctl(devname, MMCE_CMD_SET_CHANNEL, &arg, sizeof(arg), NULL, 0);
+	}
+
+	return fileXioDevctl(devname, MMCE_CMD_SET_GAMEID, (void *)channel, strlen(channel) + 1, NULL, 0);
+}
+
+static int getMmceCardType(const char *channel, const char *name)
+{
+	char prefix[9];
+
+	if ((channel != NULL) && !stricmp(channel, "BOOT"))
+		return MMCE_SET_CARD_TYPE_BOOT;
+
+	if (name != NULL) {
+		strncpy(prefix, name, 8);
+		prefix[8] = '\0';
+		if (!stricmp(prefix, "BootCard"))
+			return MMCE_SET_CARD_TYPE_BOOT;
+	}
+
+	return MMCE_SET_CARD_TYPE_REGULAR;
+}
+
 static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mounted_slot)
 {
-	int unit, ret, dummy;
+	int unit, ret, dummy, card_type;
 	u16 card;
 	u32 arg;
 	char devname[8];
+	char channel[64];
 
 	unit = getMmceUnitFromPath(path);
 	if (unit < 0 || unit > 1)
@@ -364,8 +462,14 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 	if (parseMmceCardNumber(file->name, &card) < 0)
 		return -3;
 
+	getLastPathSegment(path, channel, sizeof(channel));
 	snprintf(devname, sizeof(devname), "mmce%d:", unit);
-	arg = (MMCE_SET_CARD_TYPE_REGULAR << 24) | (MMCE_SET_CARD_MODE_NUM << 16) | card;
+	ret = selectMmceChannel(devname, channel);
+	if (ret < 0)
+		return ret;
+
+	card_type = getMmceCardType(channel, file->name);
+	arg = (card_type << 24) | (MMCE_SET_MODE_NUM << 16) | card;
 	ret = fileXioDevctl(devname, MMCE_CMD_SET_CARD, &arg, sizeof(arg), NULL, 0);
 	if (ret < 0)
 		return ret;
