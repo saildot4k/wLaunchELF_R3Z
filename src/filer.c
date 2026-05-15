@@ -300,6 +300,9 @@ static int canOpenInTextEditor(const char *path, const FILEINFO *file)
 #ifndef MMCE_CMD_SET_CARD
 #define MMCE_CMD_SET_CARD 0x04
 #endif
+#ifndef MMCE_CMD_GET_STATUS
+#define MMCE_CMD_GET_STATUS 0x02
+#endif
 #ifndef MMCE_CMD_SET_CHANNEL
 #define MMCE_CMD_SET_CHANNEL 0x06
 #endif
@@ -310,6 +313,7 @@ static int canOpenInTextEditor(const char *path, const FILEINFO *file)
 #define MMCE_SET_CARD_TYPE_REGULAR 0x00
 #define MMCE_SET_CARD_TYPE_BOOT 0x01
 #define MMCE_SET_MODE_NUM 0x00
+#define MMCE_STATUS_BUSY 0x0001
 
 static int getMmceUnitFromPath(const char *path)
 {
@@ -427,6 +431,21 @@ static int selectMmceChannel(const char *devname, const char *channel)
 	return fileXioDevctl(devname, MMCE_CMD_SET_GAMEID, (void *)channel, strlen(channel) + 1, NULL, 0);
 }
 
+static int waitMmceReady(const char *devname)
+{
+	int i, status;
+
+	for (i = 0; i < 200; i++) {
+		status = fileXioDevctl(devname, MMCE_CMD_GET_STATUS, NULL, 0, NULL, 0);
+		if (status < 0)
+			return status;
+		if ((status & MMCE_STATUS_BUSY) == 0)
+			return 0;
+	}
+
+	return -1;
+}
+
 static int getMmceCardType(const char *channel, const char *name)
 {
 	char prefix[9];
@@ -464,15 +483,22 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 
 	getLastPathSegment(path, channel, sizeof(channel));
 	snprintf(devname, sizeof(devname), "mmce%d:", unit);
-	ret = selectMmceChannel(devname, channel);
-	if (ret < 0)
-		return ret;
 
+	/* Card selection is applied first, then channel selection to match card+channel behavior. */
 	card_type = getMmceCardType(channel, file->name);
 	arg = (card_type << 24) | (MMCE_SET_MODE_NUM << 16) | card;
 	ret = fileXioDevctl(devname, MMCE_CMD_SET_CARD, &arg, sizeof(arg), NULL, 0);
 	if (ret < 0)
 		return ret;
+
+	ret = selectMmceChannel(devname, channel);
+	if (ret < 0)
+		return ret;
+	if ((channel[0] != '\0') && stricmp(channel, "BOOT")) {
+		ret = waitMmceReady(devname);
+		if (ret < 0)
+			return ret;
+	}
 
 	/* Ask MCMAN to refresh the selected hardware slot after MMCE card switch. */
 	mcGetInfo(unit, 0, &dummy, &dummy, &dummy);
