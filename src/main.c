@@ -1710,6 +1710,14 @@ int loadMx4sioModules(void)
 void loadAtaModules(void)
 {
 	int ret, id __attribute__((unused));
+	int needs_feedback;
+
+	needs_feedback = (!have_ata_bd ||
+	                  !ps2dev9_loaded ||
+	                  !have_usb_mass ||
+	                  (storage_driver_stack_mode != STORAGE_STACK_DEFAULT));
+	if (needs_feedback && !is_early_init)  //Do not draw any text before the UI is initialized.
+		drawMsg(LNG(Loading_HDD_Modules));
 
 	ensureCoreIoStackReady();
 	switchStorageDriverStack(STORAGE_STACK_DEFAULT);
@@ -1717,8 +1725,6 @@ void loadAtaModules(void)
 	if (!have_usb_mass)
 		loadUsbModules();
 	if (!have_ata_bd) {
-		if (!is_early_init)  //Do not draw any text before the UI is initialized.
-			drawMsg(LNG(Loading_HDD_Modules));
 		id = SifExecModuleBuffer(ata_bd_irx, size_ata_bd_irx, 0, NULL, &ret);
 		DPRINTF(" [ATA_BD]: id=%d ret=%d\n", id, ret);
 		have_ata_bd = (id >= 0 && ret >= 0);
