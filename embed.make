@@ -24,10 +24,25 @@ ifneq ($(wildcard iop/__precompiled/padman.irx),)
 PADMAN_SOURCE = iop/__precompiled/padman.irx
 endif
 
-# Prefer PS2SDK IRX modules when available, then fall back to bundled copies.
-BDM_SOURCE := iop/__precompiled/bdm.irx
-BDMFS_FATFS_SOURCE := iop/__precompiled/bdmfs_fatfs.irx
-USBMASS_BD_SOURCE := iop/__precompiled/usbmass_bd.irx
+# Prefer newer storage stack modules:
+# 1) installed PS2SDK IRX
+# 2) auto-build from PS2SDK sources
+# 3) bundled fallback IRX
+BDM_SOURCE :=
+BDM_AUTOGEN := iop/__generated/bdm.irx
+BDM_SDK_ROOT :=
+BDM_SDK_MODULE_DIR :=
+
+BDMFS_FATFS_SOURCE :=
+BDMFS_FATFS_AUTOGEN := iop/__generated/bdmfs_fatfs.irx
+BDMFS_FATFS_SDK_ROOT :=
+BDMFS_FATFS_SDK_MODULE_DIR :=
+
+USBMASS_BD_SOURCE :=
+USBMASS_BD_AUTOGEN := iop/__generated/usbmass_bd.irx
+USBMASS_BD_SDK_ROOT :=
+USBMASS_BD_SDK_MODULE_DIR :=
+
 IOMANX_SOURCE := iop/__precompiled/iomanX.irx
 FILEXIO_SOURCE := iop/__precompiled/fileXio.irx
 
@@ -40,6 +55,103 @@ endif
 ifneq ($(wildcard $(PS2SDK)/iop/irx/usbmass_bd.irx),)
 USBMASS_BD_SOURCE := $(PS2SDK)/iop/irx/usbmass_bd.irx
 endif
+
+ifeq ($(strip $(BDM_SOURCE)),)
+ifneq ($(PS2SDKSRC),)
+ifneq ($(wildcard $(PS2SDKSRC)/iop/fs/bdm/Makefile),)
+BDM_SDK_ROOT := $(PS2SDKSRC)
+BDM_SDK_MODULE_DIR := $(PS2SDKSRC)/iop/fs/bdm
+endif
+endif
+endif
+
+ifeq ($(strip $(BDM_SOURCE)),)
+ifneq ($(wildcard $(PS2SDK)/iop/fs/bdm/Makefile),)
+BDM_SDK_ROOT := $(PS2SDK)
+BDM_SDK_MODULE_DIR := $(PS2SDK)/iop/fs/bdm
+endif
+endif
+
+ifeq ($(strip $(BDM_SOURCE)),)
+ifneq ($(strip $(BDM_SDK_MODULE_DIR)),)
+BDM_SOURCE := $(BDM_AUTOGEN)
+endif
+endif
+
+ifeq ($(strip $(BDM_SOURCE)),)
+ifneq ($(wildcard iop/__precompiled/bdm.irx),)
+BDM_SOURCE := iop/__precompiled/bdm.irx
+endif
+endif
+
+ifeq ($(strip $(BDM_SOURCE)),)
+$(error Missing bdm.irx. Update PS2SDK, add iop/__precompiled/bdm.irx, or provide PS2SDKSRC with iop/fs/bdm sources)
+endif
+
+ifeq ($(strip $(BDMFS_FATFS_SOURCE)),)
+ifneq ($(PS2SDKSRC),)
+ifneq ($(wildcard $(PS2SDKSRC)/iop/fs/bdmfs_fatfs/Makefile),)
+BDMFS_FATFS_SDK_ROOT := $(PS2SDKSRC)
+BDMFS_FATFS_SDK_MODULE_DIR := $(PS2SDKSRC)/iop/fs/bdmfs_fatfs
+endif
+endif
+endif
+
+ifeq ($(strip $(BDMFS_FATFS_SOURCE)),)
+ifneq ($(wildcard $(PS2SDK)/iop/fs/bdmfs_fatfs/Makefile),)
+BDMFS_FATFS_SDK_ROOT := $(PS2SDK)
+BDMFS_FATFS_SDK_MODULE_DIR := $(PS2SDK)/iop/fs/bdmfs_fatfs
+endif
+endif
+
+ifeq ($(strip $(BDMFS_FATFS_SOURCE)),)
+ifneq ($(strip $(BDMFS_FATFS_SDK_MODULE_DIR)),)
+BDMFS_FATFS_SOURCE := $(BDMFS_FATFS_AUTOGEN)
+endif
+endif
+
+ifeq ($(strip $(BDMFS_FATFS_SOURCE)),)
+ifneq ($(wildcard iop/__precompiled/bdmfs_fatfs.irx),)
+BDMFS_FATFS_SOURCE := iop/__precompiled/bdmfs_fatfs.irx
+endif
+endif
+
+ifeq ($(strip $(BDMFS_FATFS_SOURCE)),)
+$(error Missing bdmfs_fatfs.irx. Update PS2SDK, add iop/__precompiled/bdmfs_fatfs.irx, or provide PS2SDKSRC with iop/fs/bdmfs_fatfs sources)
+endif
+
+ifeq ($(strip $(USBMASS_BD_SOURCE)),)
+ifneq ($(PS2SDKSRC),)
+ifneq ($(wildcard $(PS2SDKSRC)/iop/usb/usbmass_bd/Makefile),)
+USBMASS_BD_SDK_ROOT := $(PS2SDKSRC)
+USBMASS_BD_SDK_MODULE_DIR := $(PS2SDKSRC)/iop/usb/usbmass_bd
+endif
+endif
+endif
+
+ifeq ($(strip $(USBMASS_BD_SOURCE)),)
+ifneq ($(wildcard $(PS2SDK)/iop/usb/usbmass_bd/Makefile),)
+USBMASS_BD_SDK_ROOT := $(PS2SDK)
+USBMASS_BD_SDK_MODULE_DIR := $(PS2SDK)/iop/usb/usbmass_bd
+endif
+endif
+
+ifeq ($(strip $(USBMASS_BD_SOURCE)),)
+ifneq ($(strip $(USBMASS_BD_SDK_MODULE_DIR)),)
+USBMASS_BD_SOURCE := $(USBMASS_BD_AUTOGEN)
+endif
+endif
+
+ifeq ($(strip $(USBMASS_BD_SOURCE)),)
+ifneq ($(wildcard iop/__precompiled/usbmass_bd.irx),)
+USBMASS_BD_SOURCE := iop/__precompiled/usbmass_bd.irx
+endif
+endif
+
+ifeq ($(strip $(USBMASS_BD_SOURCE)),)
+$(error Missing usbmass_bd.irx. Update PS2SDK, add iop/__precompiled/usbmass_bd.irx, or provide PS2SDKSRC with iop/usb/usbmass_bd sources)
+endif
+
 ifneq ($(wildcard $(PS2SDK)/iop/irx/iomanX.irx),)
 IOMANX_SOURCE := $(PS2SDK)/iop/irx/iomanX.irx
 endif
@@ -129,6 +241,30 @@ $(EE_ASM_DIR)xfromman_irx.s: iop/__precompiled/xfromman.irx | $(EE_ASM_DIR)
 $(EE_ASM_DIR)usbd_irx.s: $(PS2SDK)/iop/irx/usbd.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ usbd_irx
 ifeq ($(EXFAT),1)
+$(BDM_AUTOGEN): | iop/__generated
+	$(MAKE) -C $(BDM_SDK_MODULE_DIR) \
+		PS2SDKSRC=$(BDM_SDK_ROOT) \
+		PS2SDK=$(BDM_SDK_ROOT) \
+		IOP_BIN_DIR=$(abspath iop/__generated)/ \
+		IOP_OBJS_DIR=$(abspath iop/__generated/bdm_obj)/ \
+		IOP_BIN=bdm.irx
+
+$(BDMFS_FATFS_AUTOGEN): | iop/__generated
+	$(MAKE) -C $(BDMFS_FATFS_SDK_MODULE_DIR) \
+		PS2SDKSRC=$(BDMFS_FATFS_SDK_ROOT) \
+		PS2SDK=$(BDMFS_FATFS_SDK_ROOT) \
+		IOP_BIN_DIR=$(abspath iop/__generated)/ \
+		IOP_OBJS_DIR=$(abspath iop/__generated/bdmfs_fatfs_obj)/ \
+		IOP_BIN=bdmfs_fatfs.irx
+
+$(USBMASS_BD_AUTOGEN): | iop/__generated
+	$(MAKE) -C $(USBMASS_BD_SDK_MODULE_DIR) \
+		PS2SDKSRC=$(USBMASS_BD_SDK_ROOT) \
+		PS2SDK=$(USBMASS_BD_SDK_ROOT) \
+		IOP_BIN_DIR=$(abspath iop/__generated)/ \
+		IOP_OBJS_DIR=$(abspath iop/__generated/usbmass_bd_obj)/ \
+		IOP_BIN=usbmass_bd.irx
+
 $(EE_ASM_DIR)bdm_irx.s:$(BDM_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ bdm_irx
 

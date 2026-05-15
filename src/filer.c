@@ -257,6 +257,42 @@ static void formatBrowserPathForDisplay(const char *path, char *display_path)
 	snprintf(display_path, MAX_PATH, "%s", path);
 }
 
+static int isDirectoryEntry(const FILEINFO *file)
+{
+	return (file->stats.AttrFile & sceMcFileAttrSubdir) != 0;
+}
+
+static int isParentEntry(const FILEINFO *file)
+{
+	return !strcmp(file->name, "..");
+}
+
+static int isTitleCfgPathEligible(const char *path, int menu_disabled)
+{
+	return ((!strncmp(path, "mass", 4)) ||
+	        (!strncmp(path, "usb", 3)) ||
+#ifdef MX4SIO
+	        (!strncmp(path, "mx4sio", 6)) ||
+#endif
+	        (!strncmp(path, "ata", 3)) ||
+	        (!strncmp(path, "hdd0:/", 6) && !menu_disabled));
+}
+
+static int canOpenInTextEditor(const char *path, const FILEINFO *file)
+{
+	if (isDirectoryEntry(file) || isParentEntry(file))
+		return FALSE;
+
+	/* Do not offer text editing for synthetic browser roots or executable/system assets. */
+	if (!strcmp(path, setting->Misc) ||
+	    genCmpFileExt(file->name, "ELF") ||
+	    genCmpFileExt(file->name, "ICN") ||
+	    genCmpFileExt(file->name, "SYS"))
+		return FALSE;
+
+	return TRUE;
+}
+
 //char debugs[4096]; //For debug display strings. Comment it out when unused
 //--------------------------------------------------------------
 //executable code
@@ -2087,29 +2123,12 @@ int menu(const char *path, FILEINFO *file)
 		enable[TIMEMANIP] = FALSE;
 	} 
 //#endif //TMANIP
-	if ((genCmpFileExt(file->name, "ELF")) &&
-	    ((!strncmp(path, "mass", 4)) ||
-	     (!strncmp(path, "usb", 3)) ||
-#ifdef MX4SIO
-	     (!strncmp(path, "mx4sio", 6)) ||
-#endif
-	     (!strncmp(path, "ata", 3)) ||
-	     (!strncmp(path, "hdd0:/", 6) && !menu_disabled)))
-	{
+	if (genCmpFileExt(file->name, "ELF") && isTitleCfgPathEligible(path, menu_disabled))
 		enable[TITLE_CFG] = TRUE;
-	} else {enable[TITLE_CFG] = FALSE;}
+	else
+		enable[TITLE_CFG] = FALSE;
 
-	if ((file->stats.AttrFile & sceMcFileAttrSubdir) ||
-	    (!strcmp(file->name, "..")) ||
-	    (!strcmp(path, setting->Misc)) ||
-	    genCmpFileExt(file->name, "ELF") ||
-	    genCmpFileExt(file->name, "ICN") ||
-	    genCmpFileExt(file->name, "SYS"))
-	{
-		enable[OPEN_TEXTEDITOR] = FALSE;
-	} else {
-		enable[OPEN_TEXTEDITOR] = TRUE;
-	}
+	enable[OPEN_TEXTEDITOR] = canOpenInTextEditor(path, file);
 
 
 	if (write_disabled || menu_disabled) {

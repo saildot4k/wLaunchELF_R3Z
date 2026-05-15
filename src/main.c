@@ -124,7 +124,6 @@ u64 CurrTime;
 u64 init_delay_start;
 u64 timeout_start;
 
-#define IPCONF_MAX_LEN (3 * 16)
 char if_conf[IPCONF_MAX_LEN];
 int if_conf_len;
 
@@ -266,7 +265,6 @@ DiscType DiscTypes[] = {
 static int PrintRow(int row_f, char *text_p);
 static int PrintPos(int row_f, int column, char *text_p, int COLORID);
 static void Show_About_uLE(void);
-static void getIpConfig(void);
 static void setLaunchKeys(void);
 static int drawMainScreen(void);
 static int drawMainScreen2(int TV_mode);
@@ -289,6 +287,8 @@ static void loadUsbDModule(void);
 static void loadUsbModules(void);
 static void loadKbdModules(void);
 static void resetRuntimeDeviceState(void);
+static void resetUsbMassScanState(void);
+static void resetUsbMassRuntimeState(void);
 static void switchStorageDriverStack(int target_mode);
 #ifdef DVRP
 static void switchPsxHddDriverStack(int use_dvr_stack);
@@ -301,15 +301,12 @@ static void poweroffHandler(int i);
 static void setupPowerOff(void);
 static void loadNetModules(void);
 static void startKbd(void);
-static int scanSystemCnf(char *name, char *value);
-static int readSystemCnf(void);
 static void ShowFont(void);
 static void Validate_CNF_Path(void);
 static void Set_CNF_Path(void);
 static int reloadConfig(void);
 static void decConfig(void);
 static void incConfig(void);
-static int exists(const char *path);
 static void CleanUp(void);
 static void Execute(char *pathin);
 static void Reset(void);
@@ -531,84 +528,6 @@ static void Show_build_info(void)
 }
 //------------------------------
 //endfunc Show_About_uLE
-//---------------------------------------------------------------------------
-//---------------------------------------------------------------------------
-// Parse network configuration from IPCONFIG.DAT
-// Now completely rewritten to fix some problems
-//------------------------------
-static void getIpConfig(void)
-{
-	int fd;
-	int i;
-	int len;
-	int preferred_port;
-	int ports_to_try[2];
-	int port_ix;
-	char c;
-	char buf[IPCONF_MAX_LEN];
-	char path[MAX_PATH];
-	char candidate[MAX_PATH];
-	size_t dir_len;
-	static const char ipconfig_name[] = "IPCONFIG.DAT";
-
-	fd = -1;
-	len = 0;
-
-	// Prefer IPCONFIG in the same directory as the launched ELF.
-	dir_len = strnlen(LaunchElfDir, sizeof(candidate));
-	if (dir_len < sizeof(candidate) && (dir_len + sizeof(ipconfig_name)) <= sizeof(candidate)) {
-		memcpy(candidate, LaunchElfDir, dir_len);
-		memcpy(candidate + dir_len, ipconfig_name, sizeof(ipconfig_name));
-		if (genFixPath(candidate, path) >= 0)
-			fd = genOpen(path, FIO_O_RDONLY);
-	}
-
-	// Fallback to SYS-CONF on memory cards, preferring current MC slot.
-	if (fd < 0) {
-		preferred_port = 0;
-		if (!strncmp(LaunchElfDir, "mc1", 3))
-			preferred_port = 1;
-		ports_to_try[0] = preferred_port;
-		ports_to_try[1] = preferred_port ^ 1;
-
-		for (port_ix = 0; port_ix < 2 && fd < 0; port_ix++) {
-			snprintf(candidate, sizeof(candidate), "mc%d:/SYS-CONF/IPCONFIG.DAT", ports_to_try[port_ix]);
-			if (genFixPath(candidate, path) >= 0)
-				fd = genOpen(path, FIO_O_RDONLY);
-		}
-	}
-
-	if (fd >= 0) {
-		bzero(buf, IPCONF_MAX_LEN);
-		len = genRead(fd, buf, IPCONF_MAX_LEN - 1);  //Save a byte for termination
-		genClose(fd);
-	}
-
-	if ((fd >= 0) && (len > 0)) {
-		buf[len] = '\0';                          //Ensure string termination, regardless of file content
-		for (i = 0; ((c = buf[i]) != '\0'); i++)  //Clear out spaces and any CR/LF
-			if ((c == ' ') || (c == '\r') || (c == '\n'))
-				buf[i] = '\0';
-		snprintf(ip, sizeof(ip), "%.15s", buf);
-		i = strlen(ip) + 1;
-		snprintf(netmask, sizeof(netmask), "%.15s", buf + i);
-		i += strlen(netmask) + 1;
-		snprintf(gw, sizeof(gw), "%.15s", buf + i);
-	}
-
-	bzero(if_conf, IPCONF_MAX_LEN);
-	i = 0;
-	memcpy(if_conf + i, ip, strlen(ip) + 1);
-	i += strlen(ip) + 1;
-	memcpy(if_conf + i, netmask, strlen(netmask) + 1);
-	i += strlen(netmask) + 1;
-	memcpy(if_conf + i, gw, strlen(gw) + 1);
-	i += strlen(gw) + 1;
-	if_conf_len = i;
-	snprintf(netConfig, sizeof(netConfig), "%s:  %-15s %-15s %-15s", LNG(Net_Config), ip, netmask, gw);
-}
-//------------------------------
-//endfunc getIpConfig
 //---------------------------------------------------------------------------
 static void setLaunchKeys(void)
 {
@@ -1601,6 +1520,20 @@ static void loadKbdModules(void)
 //------------------------------
 //endfunc loadKbdModules
 //---------------------------------------------------------------------------
+static void resetUsbMassScanState(void)
+{
+	USB_mass_scanned = 0;
+	USB_mass_scan_time = 0;
+	memset(USB_mass_ix, 0, sizeof(USB_mass_ix));
+	USB_mass_ix[0] = '0';
+}
+
+static void resetUsbMassRuntimeState(void)
+{
+	USB_mass_loaded = 0;
+	resetUsbMassScanState();
+}
+
 #ifdef DS34
 static void stopDs34Input(void)
 {
@@ -1696,11 +1629,8 @@ int loadMx4sioModules(void)
 		/* Newer stacks can return non-negative resident statuses; treat those as success. */
 		mx4sio_driver_running = (id >= 0 && ret >= 0);
 		have_mx4sio = mx4sio_driver_running;
-		if (have_mx4sio) {
-			USB_mass_scanned = 0;
-			memset(USB_mass_ix, 0, sizeof(USB_mass_ix));
-			USB_mass_ix[0] = '0';
-		}
+		if (have_mx4sio)
+			resetUsbMassScanState();
 	}
 	if (have_mx4sio)
 		storage_driver_stack_mode = STORAGE_STACK_MX4SIO;
@@ -1916,72 +1846,6 @@ static void startKbd(void)
 }
 //------------------------------
 //endfunc startKbd
-//---------------------------------------------------------------------------
-//scanSystemCnf will check for a standard variable of a SYSTEM.CNF file
-//------------------------------
-static int scanSystemCnf(char *name, char *value)
-{
-	if (!strcmp(name, "BOOT"))
-		strncat(SystemCnf_BOOT, value, MAX_PATH - 1);
-	else if (!strcmp(name, "BOOT2"))
-		strncat(SystemCnf_BOOT2, value, MAX_PATH - 1);
-	else if (!strcmp(name, "VER"))
-		strncat(SystemCnf_VER, value, 9);
-	else if (!strcmp(name, "VMODE"))
-		strncat(SystemCnf_VMODE, value, 9);
-	else
-		return 0;  //when no matching variable
-	return 1;      //when matching variable found
-}
-//------------------------------
-//endfunc scanSystemCnf
-//---------------------------------------------------------------------------
-//readSystemCnf will read standard settings from a SYSTEM.CNF file
-//------------------------------
-static int readSystemCnf(void)
-{
-	int var_cnt;
-	char *RAM_p, *CNF_p, *name, *value;
-
-	BootDiscType = 0;
-	SystemCnf_BOOT[0] = '\0';
-	SystemCnf_BOOT2[0] = '\0';
-	SystemCnf_VER[0] = '\0';
-	SystemCnf_VMODE[0] = '\0';
-
-	if ((RAM_p = preloadCNF("cdrom0:\\SYSTEM.CNF;1")) != NULL) {
-		CNF_p = RAM_p;
-		for (var_cnt = 0; get_CNF_string(&CNF_p, &name, &value); var_cnt++)
-			scanSystemCnf(name, value);
-		free(RAM_p);
-	}
-
-	if (SystemCnf_BOOT2[0])
-		BootDiscType = 2;
-	else if (SystemCnf_BOOT[0])
-		BootDiscType = 1;
-
-	if (!SystemCnf_BOOT[0])
-		strcpy(SystemCnf_BOOT, "???");
-	if (!SystemCnf_VER[0])
-		strcpy(SystemCnf_VER, "???");
-
-	if (RAM_p == NULL) {  //if SYSTEM.CNF was not found test for PS1 special cases
-		if (exists("cdrom0:\\PSXMYST\\MYST.CCS;1")) {
-			strcpy(SystemCnf_BOOT, "SLPS_000.24");
-			BootDiscType = 1;
-		} else if (exists("cdrom0:\\CDROM\\LASTPHOT\\ALL_C.NBN;1")) {
-			strcpy(SystemCnf_BOOT, "SLPS_000.65");
-			BootDiscType = 1;
-		} else if (exists("cdrom0:\\PSX.EXE;1")) {
-			BootDiscType = 1;
-		}
-	}
-
-	return BootDiscType;  //0==none, 1==PS1, 2==PS2
-}
-//------------------------------
-//endfunc readSystemCnf
 //---------------------------------------------------------------------------
 static void ShowFont(void)
 {
@@ -2203,67 +2067,6 @@ static void incConfig(void)
 //------------------------------
 //endfunc incConfig
 //---------------------------------------------------------------------------
-//exists.  Tests if a file exists or not
-//------------------------------
-static int exists(const char *path)
-{
-	int fd;
-
-	fd = genOpen(path, FIO_O_RDONLY);
-	if (fd < 0)
-		return 0;
-	genClose(fd);
-	return 1;
-}
-//------------------------------
-//endfunc exists
-//---------------------------------------------------------------------------
-//uLE_related.  Tests if an uLE_related file exists or not.
-//
-// Note: please use genFixPath() for config files instead because this will not
-//       load other device modules, even if LaunchELF actually supports the device.
-//
-// Steps:
-// 1. Check if the path begins with "uLE:/". If not, return -1 and copy pathin as pathout.
-// 2. Check if the file exists in LaunchElfDir
-// 3. If not, check if the file exists in the same memory card as LaunchElfDir.
-//    If LaunchElfDir does not point to a memory card, start with mc0:
-// 4. If not, check if the file exists in the other memory card.
-// 5. If the file cannot be found, return 0 (file missing) and default to a path under LaunchElfDir. Otherwise, generate a path to the file.
-//
-// Returns:
-//  1 == uLE related path with file present
-//  0 == uLE related path with file missing
-// -1 == Not uLE related path
-//------------------------------
-int uLE_related(char *pathout, const char *pathin)
-{
-	int ret;
-
-	if (!strncmp(pathin, "uLE:/", 5)) {
-		sprintf(pathout, "%s%s", LaunchElfDir, pathin + 5);
-		if (exists(pathout))
-			return 1;
-		sprintf(pathout, "%s%s", "mc0:/SYS-CONF/", pathin + 5);
-		if (!strncmp(LaunchElfDir, "mc1", 3))
-			pathout[2] = '1';
-		if (exists(pathout))
-			return 1;
-		pathout[2] ^= 1;  //switch between mc0 and mc1
-		if (exists(pathout))
-			return 1;
-
-		//Default to LaunchELFDir
-		sprintf(pathout, "%s%s", LaunchElfDir, pathin + 5);
-		return 0;
-	} else
-		ret = -1;
-	strcpy(pathout, pathin);
-	return ret;
-}
-//------------------------------
-//endfunc uLE_related
-//---------------------------------------------------------------------------
 //CleanUp releases uLE stuff preparatory to launching some other application
 //------------------------------
 static void CleanUp(void)
@@ -2291,39 +2094,6 @@ static void CleanUp(void)
 }
 //------------------------------
 //endfunc CleanUp
-//---------------------------------------------------------------------------
-//Indicates whether the file type is supported by LaunchELF (for any action)
-//------------------------------
-static int isTextEditorFileType(const char *path)
-{
-	return (genCmpFileExt(path, "TXT") ||
-	        genCmpFileExt(path, "CHT") ||
-	        genCmpFileExt(path, "CFG") ||
-	        genCmpFileExt(path, "INI") ||
-	        genCmpFileExt(path, "CNF") ||
-	        genCmpFileExt(path, "PBT") ||
-	        genCmpFileExt(path, "JS") ||
-	        genCmpFileExt(path, "LUA") ||
-	        genCmpFileExt(path, "XML") ||
-	        genCmpFileExt(path, "TOML") ||
-	        genCmpFileExt(path, "YAML") ||
-	        genCmpFileExt(path, "YML"));
-}
-
-int IsSupportedFileType(char *path)
-{
-	if (strchr(path, ':') != NULL) {
-		if (genCmpFileExt(path, "ELF") || genCmpFileExt(path, "XLF") || genCmpFileExt(path, "KELF")) {
-			return (checkELFheader(path) >= 0);
-		} else if (isTextEditorFileType(path) || (genCmpFileExt(path, "JPG") || genCmpFileExt(path, "JPEG"))) {
-			return 1;
-		} else
-			return 0;
-	} else  //No ':', hence no device name in path, which means it is a special action (e.g. MISC/*).
-		return 1;
-}
-//------------------------------
-//endfunc IsSupportedFileType
 //---------------------------------------------------------------------------
 // Execute. Execute an action. May be called recursively.
 // For any path specified, its device must be accessible.
@@ -2579,7 +2349,7 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 				dvdpl_update = 0;
 				for (i = 0; i < 2; i++) {
 					dvdpl_path[2] = '0' + i;
-					if (exists(dvdpl_path)) {
+					if (wleExists(dvdpl_path)) {
 						dvdpl_update = 1;
 						break;
 					}
@@ -2624,7 +2394,7 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		LastDir[0] = 0;
 		getFilePath(tmp, FALSE);
 		if (tmp[0]) {
-			if (isTextEditorFileType(tmp)) {
+				if (IsTextEditorFileType(tmp)) {
 				if (setting->GUI_skin[0]) {
 					GUI_active = 0;
 					loadSkin(BACKGROUND_PIC, 0, 0);
@@ -2820,11 +2590,7 @@ static void Reset()
 	have_dvrdrv = 0;
 	have_dvrfile = 0;
 #endif
-	USB_mass_loaded = 0;
-	USB_mass_scanned = 0;
-	USB_mass_scan_time = 0;
-	memset(USB_mass_ix, 0, sizeof(USB_mass_ix));
-	USB_mass_ix[0] = '0';
+	resetUsbMassRuntimeState();
 	invalidatePartitionCaches();
 
 #ifdef POWERPC_UART
@@ -3014,7 +2780,7 @@ int main(int argc, char *argv[])
 
 	Reset();
 	Init_Default_Language();
-	if (exists("rom0:PSXVER")) {
+	if (wleExists("rom0:PSXVER")) {
 		console_is_PSX = 1;
 		DPRINTF("# Console is PSX-DESR\n");
 	}
@@ -3110,7 +2876,7 @@ int main(int argc, char *argv[])
 	}
 #endif
 #ifdef MX4SIO
-	if ((boot == BOOT_DEVICE_MASS) && LaunchElfDir[0] && !exists(LaunchElfDir)) {
+	if ((boot == BOOT_DEVICE_MASS) && LaunchElfDir[0] && !wleExists(LaunchElfDir)) {
 		if (loadMx4sioModules()) {
 			DPRINTF("Boot path '%s' became accessible after loading MX4SIO.\n", LaunchElfDir);
 		}

@@ -28,7 +28,7 @@ else
   EE_BIN = UNC-BOOT.ELF
   EE_BIN_PKD = BOOT.ELF
 endif
-EE_OBJS = main.o config.o elf.o draw.o loader_elf.o filer.o \
+EE_OBJS = main.o main_startup.o main_fileops.o config.o elf.o draw.o loader_elf.o filer.o \
 	poweroff_irx.o iomanx_irx.o filexio_irx.o ps2atad_irx.o ps2dev9_irx.o \
 	ps2hdd_irx.o ps2fs_irx.o usbd_irx.o mcman_irx.o mcserv_irx.o \
 	cdvd_irx.o vmc_fs_irx.o ps2kbd_irx.o \
@@ -241,6 +241,27 @@ all-psx-ds34:
 
 all-ci-variants: all-no-psx-no-ds34 all-no-psx-ds34 all-psx-no-ds34 all-psx-ds34
 
+# CI profile helpers (kept aligned with .github/workflows/compile.yml).
+CI_RESOLVE_SCRIPT := scripts/ci/resolve_make_args.sh
+CI_STALE_AUDIT_SCRIPT := scripts/stale_code_audit.sh
+CI_PSX_PROFILE ?= no-psx
+CI_PAD_PROFILE ?= no-ds34
+CI_STORAGE_PROFILE ?= all
+
+ci-build-profile:
+	@FLAGS=`$(CI_RESOLVE_SCRIPT) "$(CI_PSX_PROFILE)" "$(CI_PAD_PROFILE)" "$(CI_STORAGE_PROFILE)" "$(DEBUG)" "$(PPC_UART)"`; \
+	echo "Resolved build profile flags: $$FLAGS"; \
+	$(MAKE) rebuild $$FLAGS
+
+ci-build-storage-matrix:
+	$(MAKE) ci-build-profile CI_PSX_PROFILE=no-psx CI_PAD_PROFILE=no-ds34 CI_STORAGE_PROFILE=usb
+	$(MAKE) ci-build-profile CI_PSX_PROFILE=no-psx CI_PAD_PROFILE=no-ds34 CI_STORAGE_PROFILE=mmce
+	$(MAKE) ci-build-profile CI_PSX_PROFILE=no-psx CI_PAD_PROFILE=no-ds34 CI_STORAGE_PROFILE=mx4sio
+	$(MAKE) ci-build-profile CI_PSX_PROFILE=no-psx CI_PAD_PROFILE=no-ds34 CI_STORAGE_PROFILE=minimal
+
+stale-audit:
+	$(CI_STALE_AUDIT_SCRIPT) build
+
 info:
 	$(info available build options:)
 	$(info   EXFAT		enable BDM and EXFAT support for it)
@@ -259,8 +280,11 @@ info:
 	$(info   all-ds34-on		builds with DS34 in isolated obj dirs)
 	$(info   all-ds34-variants	builds both DS34 variants)
 	$(info   all-ci-variants	builds 4 artifacts (PSX stuff off/on x DS34 off/on))
+	$(info   ci-build-profile	uses scripts/ci/resolve_make_args.sh profiles)
+	$(info   ci-build-storage-matrix	quick storage-stack coverage build set)
+	$(info   stale-audit		generates build/stale-code-report.txt)
 
-.PHONY: all all-ds34-off all-ds34-on all-ds34-variants all-no-psx-no-ds34 all-no-psx-ds34 all-psx-no-ds34 all-psx-ds34 all-ci-variants clean-ds34-variants clean-ci-variants run reset clean rebuild isoclean iso
+.PHONY: all all-ds34-off all-ds34-on all-ds34-variants all-no-psx-no-ds34 all-no-psx-ds34 all-psx-no-ds34 all-psx-ds34 all-ci-variants ci-build-profile ci-build-storage-matrix stale-audit clean-ds34-variants clean-ci-variants run reset clean rebuild isoclean iso
 
 $(EE_BIN_PKD): $(EE_BIN)
 	ps2-packer $< $@

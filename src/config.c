@@ -1987,9 +1987,6 @@ static void Config_Startup(void)
 static void saveNetworkSettings(char *Message)
 {
 	char firstline[50];
-	extern char ip[16];
-	extern char netmask[16];
-	extern char gw[16];
 	int out_fd, in_fd;
 	int ret = 0, i = 0, port;
 	int size, sizeleft = 0;
@@ -2130,9 +2127,6 @@ static void Config_Network(void)
 	int event, post_event = 0;
 	int len;
 	char c[MAX_PATH];
-	extern char ip[16];
-	extern char netmask[16];
-	extern char gw[16];
 	data_ip_struct ipdata;
 	char NetMsg[MAX_PATH] = "";
 	char path[MAX_PATH];

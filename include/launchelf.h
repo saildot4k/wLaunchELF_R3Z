@@ -267,12 +267,27 @@ typedef struct
 
 extern char LaunchElfDir[MAX_PATH], LastDir[MAX_NAME];
 
+#ifndef IPCONF_MAX_LEN
+#define IPCONF_MAX_LEN (3 * 16)
+#endif
+
 /* main.c */
 extern int TV_mode;
 extern int swapKeys;
 extern int GUI_active;  // Skin and Main Skin switch
 extern int cdmode;      //Last detected disc type
 extern u8 console_is_PSX;
+extern char if_conf[IPCONF_MAX_LEN];
+extern int if_conf_len;
+extern char ip[16];
+extern char netmask[16];
+extern char gw[16];
+extern char netConfig[IPCONF_MAX_LEN + 64];
+extern int BootDiscType;
+extern char SystemCnf_BOOT[MAX_PATH];
+extern char SystemCnf_BOOT2[MAX_PATH];
+extern char SystemCnf_VER[10];
+extern char SystemCnf_VMODE[10];
 
 #ifdef MX4SIO
 extern u8 mx4sio_driver_running;
@@ -289,6 +304,10 @@ void loadDVRPHddModules(void);
 void loadHdlInfoModule(void);
 void loadCdModules(void);
 int uLE_related(char *pathout, const char *pathin);
+int wleExists(const char *path);
+int IsTextEditorFileType(const char *path);
+void getIpConfig(void);
+int readSystemCnf(void);
 int uLE_InitializeRegion(void);
 int uLE_cdDiscValid(void);
 int uLE_cdStop(void);

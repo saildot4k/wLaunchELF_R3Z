@@ -16,23 +16,41 @@ permissions:
   contents: read
 
 jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - name: Run stale code audit
+      run: |
+        scripts/stale_code_audit.sh build
+    - name: Upload stale code report
+      uses: actions/upload-artifact@v7
+      with:
+        name: stale-code-report
+        path: build/stale-code-report.txt
+
   build:
+    needs: [audit]
     strategy:
       fail-fast: false
       matrix:
         include:
           - variant_name: "ALL-NO-PSX-NO-DS34"
-            ds34: "DS34=0"
-            psx_stuff: "DVRP=0 XFROM=0"
+            psx_profile: "no-psx"
+            pad_profile: "no-ds34"
+            storage_profile: "all"
           - variant_name: "ALL-NO-PSX-DS34"
-            ds34: "DS34=1"
-            psx_stuff: "DVRP=0 XFROM=0"
+            psx_profile: "no-psx"
+            pad_profile: "ds34"
+            storage_profile: "all"
           - variant_name: "ALL-PSX-NO-DS34"
-            ds34: "DS34=0"
-            psx_stuff: "DVRP=1 XFROM=1"
+            psx_profile: "psx"
+            pad_profile: "no-ds34"
+            storage_profile: "all"
           - variant_name: "ALL-PSX-DS34"
-            ds34: "DS34=1"
-            psx_stuff: "DVRP=1 XFROM=1"
+            psx_profile: "psx"
+            pad_profile: "ds34"
+            storage_profile: "all"
     runs-on: ubuntu-latest
     container: ps2dev/ps2dev:latest
     steps:
@@ -64,18 +82,34 @@ jobs:
 
     - name: Compile wLaunchELF
       run: |
-        make rebuild ${{ github.event.inputs.make_args }} ETH=1 MMCE=1 EXFAT=1 MX4SIO=1 LCDVD=LATEST PPC_UART=0 ${{ matrix.psx_stuff }} ${{ matrix.ds34 }} DEBUG=0
+        FLAGS="$(scripts/ci/resolve_make_args.sh \
+          "${{ matrix.psx_profile }}" \
+          "${{ matrix.pad_profile }}" \
+          "${{ matrix.storage_profile }}" \
+          0 0)"
+        echo "Resolved make flags: $FLAGS"
+        make rebuild ${{ github.event.inputs.make_args }} $FLAGS
 
     - name: Verify loader low-memory layout guard
       run: |
         make -C loader check-layout DEBUG=0
+
+    - name: Rename output ELF for variant
+      run: |
+        shopt -s nullglob
+        elfs=(BOOT*.ELF)
+        if [ "${#elfs[@]}" -lt 1 ]; then
+          echo "No BOOT*.ELF produced by build." >&2
+          exit 1
+        fi
+        cp "${elfs[0]}" "wLE-${{ matrix.variant_name }}.ELF"
 
     - name: Upload variants artifact ELF
       uses: actions/upload-artifact@v7
       with:
         name: "WLE-${{ matrix.variant_name }}"
         path: |
-            BOOT*.ELF
+            wLE-${{ matrix.variant_name }}.ELF
 
 ####################################################### 
   release:
@@ -95,7 +129,7 @@ jobs:
       uses: actions/download-artifact@v7
       with:
         path: WLE/
-        pattern: "WLE-*"
+        pattern: "WLE-ALL-*"
 
     - name: list
       run: |

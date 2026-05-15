@@ -1,0 +1,49 @@
+Stale Code Audit
+================
+
+1) Legacy marker scan
+Makefile:80:  $(info -- Building with legacy libcdvd)
+include/libjpg.h:17: * Compatibility wrapper for legacy uLaunchELF JPEG API names.
+include/libjpg.h:60:#error "Neither libjpg_ps2_addons.h nor legacy libjpg.h is available."
+src/config.c:1023:		DPRINTF("loadConfig: CNF_version missing, treating \"%s\" as legacy config.\n", cnf_path);
+include/snippets/readCD.h:2:#error LIBCDVD_LEGACY not defined, but legacy readCD() included
+iop/hdl_info/apa.c:175:				/* TODO: check whether next partition is not loaded already --
+iop/ds34usb/iop/smsutils.S:15:.nan legacy
+iop/ds34bt/iop/smsutils.S:15:.nan legacy
+iop/oldlibs/ps2ftpd/src/main.c:82:	// TODO: fix CD/DVD support
+iop/oldlibs/ps2ftpd/src/FtpCommands.c:181:		// TODO: validate IP?
+iop/oldlibs/ps2ftpd/src/FtpCommands.c:199:	// TODO: is this proper?
+iop/oldlibs/ps2ftpd/src/FtpClient.c:155:	// TODO: use a sendqueue here & handle in select-phase
+iop/oldlibs/ps2ftpd/src/FtpClient.c:429:	FIXME: non-blocking mode - if this is not enabled, the entire server will
+iop/oldlibs/ps2ftpd/src/FtpClient.h:124:	int m_iRestartMarker;  // TODO: 64-bit support?
+iop/oldlibs/ps2ftpd/src/FtpServer.c:227:		// TODO: handle OOB data for transfer breaks
+iop/oldlibs/ps2ftpd/src/FtpServer.c:264:				FtpServer_OnClientDisconnect(pServer, pClient);  // :FIXME: use a preallocated ringbuffer in the server shared between clients?
+iop/oldlibs/ps2ftpd/src/FileSystem.c:311:				// legacy device
+iop/oldlibs/ps2ftpd/src/FileSystem.c:802:				// legacy device
+
+2) Disabled code blocks (#if 0)
+iop/ps2host/ps2host.c:14:#if 0 /* EEUG: WHY ? */
+iop/ps2host/ps2host.c:27:#if 0 /* EEUG: what the hell these two are doing here ? */
+iop/ps2host/imports.lst:52:#if 0  /* EEUG: WHY ? */
+iop/ps2host/irx_imports.h:16:#if 0 /* EEUG: WHY ? */
+
+3) Suspicious duplicate config probes
+src/main.c:2010:		strcpy(CNF, "LAUNCHELF.CNF");
+src/main.c:2899:	CNF_error = loadConfig(mainMsg, strcpy(CNF, "LAUNCHELF.CNF"));
+src/config.c:540:// Save LAUNCHELF.CNF (or LAUNCHELFx.CNF with multiple pages)
+src/config.c:828:// Load LAUNCHELF.CNF (or LAUNCHELFx.CNF with multiple pages)
+src/config.c:2007:	if (genFixPath("uLE:/IPCONFIG.DAT", path) >= 0)
+src/config.c:2040:		sprintf(path, "mc%d:/SYS-CONF/IPCONFIG.DAT", port);
+src/config.c:2254:			uLE_related(path, "uLE:/IPCONFIG.DAT");  //Get save target.
+
+4) Large files (refactor candidates)
+ 21525 total
+  5319 src/filer.c
+  3119 src/main.c
+  2604 src/config.c
+  2055 src/icon.c
+  1803 src/editor.c
+  1300 src/draw.c
+  1154 src/hdd.c
+  1030 src/jpgviewer.c
+   652 src/font_uLE.c
