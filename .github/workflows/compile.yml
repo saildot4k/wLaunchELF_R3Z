@@ -20,6 +20,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
+    - name: Ensure scripts are executable
+      run: |
+        chmod +x scripts/stale_code_audit.sh scripts/ci/resolve_make_args.sh
     - name: Run stale code audit
       run: |
         scripts/stale_code_audit.sh build
@@ -79,6 +82,9 @@ jobs:
     - run: |
         git config --global --add safe.directory "$GITHUB_WORKSPACE"
         git fetch --prune --unshallow
+    - name: Ensure scripts are executable
+      run: |
+        chmod +x scripts/stale_code_audit.sh scripts/ci/resolve_make_args.sh
 
     - name: Compile wLaunchELF
       run: |
