@@ -4796,6 +4796,9 @@ int getFilePath(char *out, int cnfmode)
 									genCmpFileExt(files[top + i].name, "INI") || 
 									genCmpFileExt(files[top + i].name, "CHT") || 
 									genCmpFileExt(files[top + i].name, "PBT") ||
+									genCmpFileExt(files[top + i].name, "JS") ||
+									genCmpFileExt(files[top + i].name, "LUA") ||
+									genCmpFileExt(files[top + i].name, "XML") ||
 									genCmpFileExt(files[top + i].name, "TOML") ||
 									genCmpFileExt(files[top + i].name, "YAML") ||
 									genCmpFileExt(files[top + i].name, "YML") ||

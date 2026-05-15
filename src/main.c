@@ -2299,6 +2299,9 @@ static int isTextEditorFileType(const char *path)
 	        genCmpFileExt(path, "INI") ||
 	        genCmpFileExt(path, "CNF") ||
 	        genCmpFileExt(path, "PBT") ||
+	        genCmpFileExt(path, "JS") ||
+	        genCmpFileExt(path, "LUA") ||
+	        genCmpFileExt(path, "XML") ||
 	        genCmpFileExt(path, "TOML") ||
 	        genCmpFileExt(path, "YAML") ||
 	        genCmpFileExt(path, "YML"));
