@@ -176,13 +176,6 @@ u64 USB_mass_scan_time = 0;
 int USB_mass_scanned = 0;  //0==Not_found_OR_No_Multi 1==found_Multi_mass_once
 int USB_mass_loaded = 0;   //0==none, 1==internal, 2==external
 
-#ifdef MX4SIO
-#ifndef USBMASS_IOCTL_GET_DRIVERNAME
-#define USBMASS_IOCTL_GET_DRIVERNAME 0x0003
-#endif
-static int mx4sio_idx = -1;  //mass unit index that maps to MX4SIO ("sdc"), if any.
-#endif
-
 static int mapUsbPathToMassPath(const char *usb_path, char *mass_path)
 {
 	const char *suffix;
@@ -1434,39 +1427,6 @@ void scan_USB_mass(void)
 //------------------------------
 //endfunc scan_USB_mass
 //--------------------------------------------------------------
-#ifdef MX4SIO
-static int find_mx4sio_mass_index(void)
-{
-	int i, dd, sig;
-	char mass_path[8] = "mass0:/";
-	char devsig[5];
-	iox_stat_t chk_stat;
-
-	mx4sio_idx = -1;
-	for (i = 0; i < 10; i++) {
-		mass_path[4] = '0' + i;
-		if (fileXioGetStat(mass_path, &chk_stat) < 0)
-			continue;
-
-		dd = fileXioDopen(mass_path);
-		if (dd < 0)
-			continue;
-
-		memset(devsig, 0, sizeof(devsig));
-		sig = fileXioIoctl(dd, USBMASS_IOCTL_GET_DRIVERNAME, "");
-		fileXioDclose(dd);
-
-		memcpy(devsig, &sig, sizeof(sig));
-		if (!strncmp(devsig, "sdc", 3)) {
-			mx4sio_idx = i;
-			break;
-		}
-	}
-
-	return mx4sio_idx;
-}
-#endif
-//--------------------------------------------------------------
 int readGENERIC(const char *path, FILEINFO *info, int max)
 {
 	iox_dirent_t record;
@@ -1761,7 +1721,8 @@ int getDir(const char *path, FILEINFO *info)
 #ifdef MX4SIO
 	else if (!strncmp(path, "mx4sio", 6)) {
 		char indexed_path[MAX_PATH];
-		char mapped_path[MAX_PATH];
+		char indexed_path_alt[MAX_PATH];
+		char path_alt[MAX_PATH];
 		const char *suffix;
 		u64 wait_start;
 		u64 backoff_start;
@@ -1769,9 +1730,10 @@ int getDir(const char *path, FILEINFO *info)
 		int wait_budget_ms;
 		int path_ready;
 		int indexed_ready;
-		int mapped_ready;
 		int dd;
-		int has_mapped_path = 0;
+		int has_indexed_path = 0;
+		int has_indexed_path_alt = 0;
+		int has_path_alt = 0;
 
 		if (!mx4sio_driver_running)
 			if (!loadMx4sioModules())
@@ -1780,33 +1742,48 @@ int getDir(const char *path, FILEINFO *info)
 		is_root = (!strcmp(path, "mx4sio:/") || !strcmp(path, "mx4sio:"));
 		wait_budget_ms = is_root ? 2000 : 750;
 
+		indexed_path[0] = '\0';
+		indexed_path_alt[0] = '\0';
+		path_alt[0] = '\0';
+
+		if (is_root) {
+			if (!strcmp(path, "mx4sio:"))
+				strcpy(path_alt, "mx4sio:/");
+			else
+				strcpy(path_alt, "mx4sio:");
+			has_path_alt = 1;
+		}
+
 		n = readGENERIC(path, info, max);
+		if ((n == 0) && has_path_alt)
+			n = readGENERIC(path_alt, info, max);
 
 		if (path[6] == ':') {
 			suffix = path + 7;
-			if (*suffix == '\0')
-				suffix = "/";
-			/* Try indexed typed-device form for stacks that require explicit unit number. */
-			snprintf(indexed_path, sizeof(indexed_path), "mx4sio0:%s", suffix);
-		} else {
-			indexed_path[0] = '\0';
-		}
-
-		if ((n == 0) && indexed_path[0] != '\0')
-			n = readGENERIC(indexed_path, info, max);
-
-		if (n == 0) {
-			int mapped_idx = find_mx4sio_mass_index();
-			if (mapped_idx >= 0) {
-				suffix = strchr(path, ':');
-				suffix = (suffix != NULL) ? (suffix + 1) : "/";
-				if (*suffix == '\0')
-					suffix = "/";
-				snprintf(mapped_path, sizeof(mapped_path), "mass%d:%s", mapped_idx, suffix);
-				has_mapped_path = 1;
-				n = readGENERIC(mapped_path, info, max);
+			if (*suffix == '\0') {
+				/*
+				 * Some stacks accept "mx4sio0:", others need "mx4sio0:/".
+				 * Probe both forms for first-open compatibility.
+				 */
+				strcpy(indexed_path, "mx4sio0:");
+				strcpy(indexed_path_alt, "mx4sio0:/");
+				has_indexed_path = 1;
+				has_indexed_path_alt = 1;
+			} else {
+				/* Try indexed typed-device form for stacks that require explicit unit number. */
+				snprintf(indexed_path, sizeof(indexed_path), "mx4sio0:%s", suffix);
+				has_indexed_path = 1;
+				if (!strcmp(suffix, "/")) {
+					strcpy(indexed_path_alt, "mx4sio0:");
+					has_indexed_path_alt = 1;
+				}
 			}
 		}
+
+		if ((n == 0) && has_indexed_path)
+			n = readGENERIC(indexed_path, info, max);
+		if ((n == 0) && has_indexed_path_alt)
+			n = readGENERIC(indexed_path_alt, info, max);
 
 		/* First browse after loading MX4SIO can race mount readiness; retry briefly. */
 		if (n == 0 && wait_budget_ms > 0) {
@@ -1814,7 +1791,6 @@ int getDir(const char *path, FILEINFO *info)
 			while (Timer() < wait_start + wait_budget_ms) {
 				path_ready = 0;
 				indexed_ready = 0;
-				mapped_ready = 0;
 
 				dd = fileXioDopen(path);
 				if (dd >= 0) {
@@ -1829,23 +1805,25 @@ int getDir(const char *path, FILEINFO *info)
 						indexed_ready = 1;
 					}
 				}
-
-				if (has_mapped_path) {
-					dd = fileXioDopen(mapped_path);
+				if (!indexed_ready && indexed_path_alt[0] != '\0') {
+					dd = fileXioDopen(indexed_path_alt);
 					if (dd >= 0) {
 						fileXioDclose(dd);
-						mapped_ready = 1;
+						indexed_ready = 1;
 					}
 				}
 
-				if (path_ready || indexed_ready || mapped_ready) {
+				if (path_ready || indexed_ready) {
 					n = 0;
 					if (path_ready)
 						n = readGENERIC(path, info, max);
-					if (n == 0 && indexed_ready)
+					if (n == 0 && has_path_alt)
+						n = readGENERIC(path_alt, info, max);
+					if (n == 0 && indexed_ready) {
 						n = readGENERIC(indexed_path, info, max);
-					if (n == 0 && mapped_ready)
-						n = readGENERIC(mapped_path, info, max);
+						if (n == 0 && indexed_path_alt[0] != '\0')
+							n = readGENERIC(indexed_path_alt, info, max);
+					}
 					if (n > 0 || !is_root)
 						break;
 				}
