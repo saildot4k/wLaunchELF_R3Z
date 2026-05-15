@@ -296,6 +296,91 @@ static int canOpenInTextEditor(const char *path, const FILEINFO *file)
 	return TRUE;
 }
 
+#ifdef MMCE
+#ifndef MMCE_CMD_SET_CARD
+#define MMCE_CMD_SET_CARD 0x04
+#endif
+
+#define MMCE_SET_CARD_TYPE_REGULAR 0x00
+#define MMCE_SET_CARD_MODE_NUM 0x00
+
+static int getMmceUnitFromPath(const char *path)
+{
+	if (!strncmp(path, "mmce0:", 6))
+		return 0;
+	if (!strncmp(path, "mmce1:", 6))
+		return 1;
+
+	return -1;
+}
+
+static int isMmceCardImageFile(const FILEINFO *file)
+{
+	if (isDirectoryEntry(file) || isParentEntry(file))
+		return FALSE;
+
+	return genCmpFileExt(file->name, "MC2") || genCmpFileExt(file->name, "MCD");
+}
+
+static int parseMmceCardNumber(const char *name, u16 *card_num)
+{
+	const char *dot, *start, *p;
+	unsigned int value = 0;
+
+	dot = strrchr(name, '.');
+	if (dot == NULL)
+		return -1;
+
+	start = dot;
+	while ((start > name) && (*(start - 1) >= '0') && (*(start - 1) <= '9'))
+		start--;
+	if (start == dot)
+		return -1;
+
+	for (p = start; p < dot; p++) {
+		value = value * 10 + (*p - '0');
+		if (value > 0xFFFF)
+			return -1;
+	}
+
+	*card_num = (u16)value;
+	return 0;
+}
+
+static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mounted_slot)
+{
+	int unit, ret, dummy;
+	u16 card;
+	u32 arg;
+	char devname[8];
+
+	unit = getMmceUnitFromPath(path);
+	if (unit < 0 || unit > 1)
+		return -1;
+
+	if (!isMmceCardImageFile(file))
+		return -2;
+
+	if (parseMmceCardNumber(file->name, &card) < 0)
+		return -3;
+
+	snprintf(devname, sizeof(devname), "mmce%d:", unit);
+	arg = (MMCE_SET_CARD_TYPE_REGULAR << 24) | (MMCE_SET_CARD_MODE_NUM << 16) | card;
+	ret = fileXioDevctl(devname, MMCE_CMD_SET_CARD, &arg, sizeof(arg), NULL, 0);
+	if (ret < 0)
+		return ret;
+
+	/* Ask MCMAN to refresh the selected hardware slot after MMCE card switch. */
+	mcGetInfo(unit, 0, &dummy, &dummy, &dummy);
+	mcSync(0, NULL, &dummy);
+
+	if (mounted_slot != NULL)
+		*mounted_slot = unit;
+
+	return 0;
+}
+#endif
+
 //char debugs[4096]; //For debug display strings. Comment it out when unused
 //--------------------------------------------------------------
 //executable code
@@ -2161,6 +2246,20 @@ int menu(const char *path, FILEINFO *file)
 	if ((file->stats.AttrFile & sceMcFileAttrSubdir) || !strncmp(path, "vmc", 3) || !strncmp(path, "mc", 2)) {
 		enable[MOUNTVMC0] = FALSE;  //forbid insane VMC mounting
 		enable[MOUNTVMC1] = FALSE;  //forbid insane VMC mounting
+#ifdef MMCE
+	} else {
+		int mmce_unit = getMmceUnitFromPath(path);
+		if (mmce_unit >= 0) {
+			if (!isMmceCardImageFile(file)) {
+				enable[MOUNTVMC0] = FALSE;
+				enable[MOUNTVMC1] = FALSE;
+			} else if (mmce_unit == 0) {
+				enable[MOUNTVMC1] = FALSE;
+			} else {
+				enable[MOUNTVMC0] = FALSE;
+			}
+		}
+#endif
 	}
 
 	if (nclipFiles == 0) {
@@ -4668,6 +4767,27 @@ int getFilePath(char *out, int cnfmode)
 					}                       //ends NEWICON
 					else if ((ret == MOUNTVMC0) || (ret == MOUNTVMC1)) {
 						i = ret - MOUNTVMC0;
+#ifdef MMCE
+						if ((getMmceUnitFromPath(path) >= 0) && isMmceCardImageFile(&files[browser_sel])) {
+							int mounted_slot = -1;
+
+							x = mountMmceCardImage(path, &files[browser_sel], &mounted_slot);
+							if (x >= 0) {
+								snprintf(path, sizeof(path), "mc%d:/", mounted_slot);
+								browser_cd = TRUE;
+								cnfmode = NON_CNF;
+								strcpy(ext, cnfmode_extL[cnfmode]);
+							} else if (x == -3) {
+								sprintf(msg1, "\nMMCE card filename must end with digits before extension.\nExample: 0012.mc2");
+								(void)ynDialog(msg1);
+							} else {
+								sprintf(msg1, "\nMMCE card mount failed for \"%s\"\nResult=%d", files[browser_sel].name, x);
+								(void)ynDialog(msg1);
+							}
+							browser_pushed = FALSE;
+							continue;
+						}
+#endif
 						load_vmc_fs();
 						sprintf(tmp, "vmc%d:", i);
 							if (vmcMounted[i]) {
