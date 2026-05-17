@@ -18,5 +18,6 @@ int mmceCmdWaitGameIdStable(const char *devname, char *game_id, size_t game_id_s
 int mmceCmdSetChannel(const char *devname, u16 channel_num);
 int mmceCmdGetChannel(const char *devname, u16 *channel_num);
 int mmceCmdWaitChannelStable(const char *devname, u16 *channel_num);
+int mmceCmdWaitChannelValue(const char *devname, u16 expected_channel, u16 *channel_num);
 
 #endif

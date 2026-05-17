@@ -42,6 +42,11 @@ enum {
 	NEWICON,
 	MOUNTVMC0,
 	MOUNTVMC1,
+#ifdef MMCE
+	MMCE_CH_DEC,
+	MMCE_CH_INC,
+	MMCE_CH_SET,
+#endif
 	GETSIZE,
 	OPEN_TEXTEDITOR,
 	TIMEMANIP,
@@ -643,13 +648,14 @@ static int deriveMmceCardId(const char *path, const FILEINFO *file, char *card_i
 static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mounted_slot, u16 *active_card_out, u16 *active_channel_out)
 {
 	int unit, ret, dummy;
-	u16 channel_num, channel_dev_num, active_channel = 0xFFFF;
+	u16 channel_num, channel_wire_num, active_channel = 0xFFFF;
 	u16 active_channel_ui = 0xFFFF;
 	u16 card_num, active_card_num = 0xFFFF;
 	char devname[8];
 	char card_id[64];
 	char active_card_id[64];
 	int use_numbered_card = FALSE;
+	int channel_verified = FALSE;
 	u8 card_type = MMCE_CARD_TYPE_REGULAR;
 
 	if (active_card_out != NULL)
@@ -667,12 +673,13 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 	if (parseMmceChannelFromFilename(file->name, &channel_num) < 0)
 		return -4;
 	/*
-	 * UI/filename channels are 1-based (<name>-1, <name>-2, ...),
-	 * while MMCE channel command uses zero-based channel indices.
+	 * UI/filename channels are 1-based (<name>-1, <name>-2, ...).
+	 * Send 1-based first; some MMCE stacks report or consume channel base
+	 * differently, so verification accepts either convention.
 	 */
-	channel_dev_num = (u16)(channel_num - 1);
-	DPRINTF("MMCE mount request path='%s' file='%s' unit=%d req_channel_ui=%u req_channel_dev=%u\n",
-	        path, file->name, unit, (unsigned int)channel_num, (unsigned int)channel_dev_num);
+	channel_wire_num = channel_num;
+	DPRINTF("MMCE mount request path='%s' file='%s' unit=%d req_channel_ui=%u req_channel_wire=%u\n",
+	        path, file->name, unit, (unsigned int)channel_num, (unsigned int)channel_wire_num);
 	if (parseMmceCardNumberFromPath(path, &card_num) == 0) {
 		use_numbered_card = TRUE;
 		card_type = isMmceBootCardFileName(file->name) ? MMCE_CARD_TYPE_BOOT : MMCE_CARD_TYPE_REGULAR;
@@ -754,9 +761,8 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 	/*
 	 * Apply channel only after card/gameid switch completed and no longer busy.
 	 * Requested channel is parsed from <card>-<channel>.mc2/.mcd.
-	 * MMCE command channel index is zero-based.
 	 */
-	ret = mmceCmdSetChannel(devname, channel_dev_num);
+	ret = mmceCmdSetChannel(devname, channel_wire_num);
 	if (ret < 0)
 		return ret;
 	ret = mmceCmdWaitReady(devname);
@@ -766,15 +772,26 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 	ret = mmceCmdWaitChannelStable(devname, &active_channel);
 	if (ret < 0)
 		return ret;
-	DPRINTF("MMCE verify channel requested_dev=%u active_dev=%u requested_ui=%u active_ui=%u\n",
-	        (unsigned int)channel_dev_num, (unsigned int)active_channel,
-	        (unsigned int)channel_num, (unsigned int)(active_channel + 1));
-	if (active_channel != channel_dev_num) {
-		if (active_channel_out != NULL)
+	/*
+	 * Accept either readback base:
+	 * - one-based: active == requested_ui
+	 * - zero-based: active + 1 == requested_ui
+	 */
+	if ((active_channel == channel_num) || ((u16)(active_channel + 1) == channel_num)) {
+		channel_verified = TRUE;
+		active_channel_ui = (active_channel == channel_num) ? active_channel : (u16)(active_channel + 1);
+	}
+	DPRINTF("MMCE verify channel primary req_ui=%u req_wire=%u active_raw=%u active_ui_guess=%u verified=%d\n",
+	        (unsigned int)channel_num, (unsigned int)channel_wire_num,
+	        (unsigned int)active_channel, (unsigned int)((u16)(active_channel + 1)), channel_verified);
+
+	if (!channel_verified) {
+		if (active_channel_out != NULL) {
+			/* Show best-effort UI mapping from zero-based fallback when unknown. */
 			*active_channel_out = (u16)(active_channel + 1);
+		}
 		return -6;
 	}
-	active_channel_ui = (u16)(active_channel + 1);
 
 	if (active_channel_out != NULL)
 		*active_channel_out = active_channel_ui;
@@ -799,6 +816,98 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 		*mounted_slot = unit;
 
 	return 0;
+}
+
+static int promptMmceChannel1to8(void)
+{
+	char input[4];
+
+	input[0] = '1';
+	input[1] = '\0';
+	if (keyboard(input, 2) <= 0)
+		return -1;
+	if ((input[0] < '1') || (input[0] > '8') || (input[1] != '\0')) {
+		(void)ynDialog("\nMMCE channel must be a single value from 1 to 8.");
+		return -1;
+	}
+
+	return input[0] - '0';
+}
+
+static int mmceSwitchChannelOnly(const char *path, int delta, int requested_ui, u16 *target_ui_out, u16 *active_ui_out)
+{
+	int ret, dummy;
+	int unit;
+	u16 current_raw = 0;
+	u16 current_ui = 1;
+	u16 target_ui;
+	u16 active_raw = 0;
+	char devname[8];
+
+	if (target_ui_out != NULL)
+		*target_ui_out = 0xFFFF;
+	if (active_ui_out != NULL)
+		*active_ui_out = 0xFFFF;
+
+	unit = getMmceUnitFromPath(path);
+	if (unit < 0 || unit > 1)
+		return -1;
+
+	if ((requested_ui < 0) || (requested_ui > 8))
+		return -2;
+
+	snprintf(devname, sizeof(devname), "mmce%d:", unit);
+
+	ret = mmceCmdPing(devname);
+	if (ret < 0)
+		return ret;
+	ret = mmceCmdWaitReady(devname);
+	if (ret < 0)
+		return ret;
+	ret = mmceCmdWaitChannelStable(devname, &current_raw);
+	if (ret < 0)
+		return ret;
+
+	current_ui = (u16)(current_raw + 1);
+	if ((current_ui < 1) || (current_ui > 8))
+		current_ui = 1;
+
+	if (requested_ui >= 1) {
+		target_ui = (u16)requested_ui;
+	} else if (delta > 0) {
+		target_ui = (u16)((current_ui % 8) + 1);
+	} else if (delta < 0) {
+		target_ui = (u16)((current_ui == 1) ? 8 : (current_ui - 1));
+	} else {
+		target_ui = current_ui;
+	}
+
+	DPRINTF("MMCE channel-only switch unit=%d current_raw=%u current_ui=%u target_ui=%u delta=%d\n",
+	        unit, (unsigned int)current_raw, (unsigned int)current_ui, (unsigned int)target_ui, delta);
+
+	ret = mmceCmdSetChannel(devname, target_ui);
+	if (ret < 0)
+		return ret;
+	ret = mmceCmdWaitReady(devname);
+	if (ret < 0)
+		return ret;
+	ret = mmceCmdWaitChannelStable(devname, &active_raw);
+	if (ret < 0)
+		return ret;
+
+	if (target_ui_out != NULL)
+		*target_ui_out = target_ui;
+	if (active_ui_out != NULL)
+		*active_ui_out = (u16)(active_raw + 1);
+
+	DPRINTF("MMCE channel-only verify target_ui=%u active_raw=%u active_ui=%u\n",
+	        (unsigned int)target_ui, (unsigned int)active_raw, (unsigned int)(active_raw + 1));
+
+	/* Refresh MCMAN state after channel switch. */
+	mcGetInfo(unit, 0, &dummy, &dummy, &dummy);
+	mcSync(0, NULL, &dummy);
+
+	return ((u16)(active_raw + 1) == target_ui) ? 0 : -6;
 }
 #endif
 
@@ -2562,6 +2671,11 @@ int menu(const char *path, FILEINFO *file)
 	u64 color;
 	char enable[NUM_MENU], tmp[80];
 	const char *psu_action_label;
+#ifdef MMCE
+	const char *mmce_ch_dec_label = "MMCE Ch -1";
+	const char *mmce_ch_inc_label = "MMCE Ch +1";
+	const char *mmce_ch_set_label = "MMCE Set Ch (1-8)";
+#endif
 	int x, y, i, sel;
 	int event, post_event = 0;
 	int menu_disabled = 0;
@@ -2590,7 +2704,11 @@ int menu(const char *path, FILEINFO *file)
     menu_len = strlen(LNG(time_manip)) > menu_len ? strlen(LNG(time_manip)) : menu_len;
     menu_len = strlen(LNG(title_cfg)) > menu_len ? strlen(LNG(title_cfg)) : menu_len;
 	menu_len = (strlen(LNG(Mount)) + 6) > menu_len ? (strlen(LNG(Mount)) + 6) : menu_len;
-	
+#ifdef MMCE
+	menu_len = strlen(mmce_ch_dec_label) > menu_len ? strlen(mmce_ch_dec_label) : menu_len;
+	menu_len = strlen(mmce_ch_inc_label) > menu_len ? strlen(mmce_ch_inc_label) : menu_len;
+	menu_len = strlen(mmce_ch_set_label) > menu_len ? strlen(mmce_ch_set_label) : menu_len;
+#endif
 
 	int menu_ch_w = menu_len + 1;                                 //Total characters in longest menu string
 	int menu_ch_h = NUM_MENU;                                     //Total number of menu lines
@@ -2600,6 +2718,11 @@ int menu(const char *path, FILEINFO *file)
 	int mSprite_Y2 = mSprite_Y1 + (menu_ch_h + 1) * FONT_HEIGHT;  //Bottom edge of sprite
 
 	memset(enable, TRUE, NUM_MENU);  //Assume that all menu items are legal by default
+#ifdef MMCE
+	enable[MMCE_CH_DEC] = FALSE;
+	enable[MMCE_CH_INC] = FALSE;
+	enable[MMCE_CH_SET] = FALSE;
+#endif
 
 	//identify cases where write access is illegal, and disable menu items accordingly
 	if ((!strncmp(path, "cdfs", 4))                           //Writing is always illegal for CDVD drive
@@ -2621,6 +2744,13 @@ int menu(const char *path, FILEINFO *file)
 		enable[MOUNTVMC1] = FALSE;
 		enable[GETSIZE] = FALSE;
 	}
+#ifdef MMCE
+	if (!menu_disabled && (getMmceUnitFromPath(path) >= 0)) {
+		enable[MMCE_CH_DEC] = TRUE;
+		enable[MMCE_CH_INC] = TRUE;
+		enable[MMCE_CH_SET] = TRUE;
+	}
+#endif
 //#ifdef TMANIP
 	if (                                                        //if
 	    (file->stats.AttrFile & sceMcFileAttrSubdir) &&         //pointing to a folder
@@ -2765,6 +2895,14 @@ int menu(const char *path, FILEINFO *file)
 					sprintf(tmp, "%s vmc0:", LNG(Mount));
 				else if (i == MOUNTVMC1)
 					sprintf(tmp, "%s vmc1:", LNG(Mount));
+#ifdef MMCE
+				else if (i == MMCE_CH_DEC)
+					strcpy(tmp, mmce_ch_dec_label);
+				else if (i == MMCE_CH_INC)
+					strcpy(tmp, mmce_ch_inc_label);
+				else if (i == MMCE_CH_SET)
+					strcpy(tmp, mmce_ch_set_label);
+#endif
 				else if (i == GETSIZE)
 					strcpy(tmp, LNG(Get_Size));
 				else if (i == OPEN_TEXTEDITOR)
@@ -5186,6 +5324,42 @@ int getFilePath(char *out, int cnfmode)
 					DoneIcon:
 						strcpy(tmp, tmp1);  //Dummy code to make 'goto DoneIcon' legal for gcc
 					}                       //ends NEWICON
+#ifdef MMCE
+					else if ((ret == MMCE_CH_DEC) || (ret == MMCE_CH_INC) || (ret == MMCE_CH_SET)) {
+						u16 mmce_target_channel = 0xFFFF;
+						u16 mmce_active_channel = 0xFFFF;
+						int requested_channel = -1;
+						int delta = 0;
+
+						if (ret == MMCE_CH_DEC)
+							delta = -1;
+						else if (ret == MMCE_CH_INC)
+							delta = 1;
+						else {
+							requested_channel = promptMmceChannel1to8();
+							if (requested_channel < 1) {
+								browser_pushed = FALSE;
+								continue;
+							}
+						}
+
+						x = mmceSwitchChannelOnly(path, delta, requested_channel, &mmce_target_channel, &mmce_active_channel);
+						if (x >= 0) {
+							snprintf(msg0, sizeof(msg0), "MMCE channel switched! target=%u active=%u",
+							         (unsigned int)mmce_target_channel, (unsigned int)mmce_active_channel);
+							browser_pushed = FALSE;
+						} else if (x == -6) {
+							snprintf(msg1, sizeof(msg1),
+							         "\nMMCE channel switch failed.\nRequested channel=%u, active channel=%u",
+							         (unsigned int)mmce_target_channel, (unsigned int)mmce_active_channel);
+							(void)ynDialog(msg1);
+						} else {
+							snprintf(msg1, sizeof(msg1), "\nMMCE channel switch failed.\nResult=%d", x);
+							(void)ynDialog(msg1);
+						}
+						continue;
+					}
+#endif
 					else if ((ret == MOUNTVMC0) || (ret == MOUNTVMC1)) {
 						i = ret - MOUNTVMC0;
 #ifdef MMCE

@@ -29,7 +29,11 @@
 #define MMCE_SET_MODE_NUM 0x00
 #define MMCE_STATUS_BUSY 0x0001
 #define MMCE_READY_POLL_DELAY_US (200 * 1000)
-#define MMCE_READY_POLL_MAX 15
+/*
+ * Hardware card/gameid/channel operations can take several seconds.
+ * 30 * 200ms = 6s max polling window.
+ */
+#define MMCE_READY_POLL_MAX 30
 
 static int mmceCmdGetStatusInternal(const char *devname)
 {
@@ -265,6 +269,46 @@ int mmceCmdWaitChannelStable(const char *devname, u16 *channel_num)
 
 		prev_channel = cur_channel;
 		have_prev = 1;
+		DelayThread(MMCE_READY_POLL_DELAY_US);
+	}
+
+	return -1;
+}
+
+int mmceCmdWaitChannelValue(const char *devname, u16 expected_channel, u16 *channel_num)
+{
+	int i, status, ret;
+	int match_count = 0;
+	u16 cur_channel = 0xFFFF;
+
+	for (i = 0; i < MMCE_READY_POLL_MAX; i++) {
+		status = mmceCmdGetStatusInternal(devname);
+		if (status < 0)
+			return status;
+		if (status & MMCE_STATUS_BUSY) {
+			match_count = 0;
+			DPRINTF("MMCE[%s] wait-channel-value poll=%d busy=1 expected=%u\n",
+			        devname, i + 1, (unsigned int)expected_channel);
+			DelayThread(MMCE_READY_POLL_DELAY_US);
+			continue;
+		}
+		DPRINTF("MMCE[%s] wait-channel-value poll=%d busy=0 expected=%u\n",
+		        devname, i + 1, (unsigned int)expected_channel);
+
+		ret = mmceCmdGetChannel(devname, &cur_channel);
+		if (ret < 0)
+			return ret;
+		if (channel_num != NULL)
+			*channel_num = cur_channel;
+
+		if (cur_channel == expected_channel) {
+			match_count++;
+			if (match_count >= 2)
+				return 0;
+		} else {
+			match_count = 0;
+		}
+
 		DelayThread(MMCE_READY_POLL_DELAY_US);
 	}
 
