@@ -13,7 +13,10 @@ int mmceCmdSetCardByNumber(const char *devname, u8 card_type, u16 card_num);
 int mmceCmdSetGameId(const char *devname, const char *card_id);
 int mmceCmdGetCard(const char *devname, u16 *card_num);
 int mmceCmdGetGameId(const char *devname, char *game_id, size_t game_id_size);
+int mmceCmdWaitCardStable(const char *devname, u16 *card_num);
+int mmceCmdWaitGameIdStable(const char *devname, char *game_id, size_t game_id_size);
 int mmceCmdSetChannel(const char *devname, u16 channel_num);
 int mmceCmdGetChannel(const char *devname, u16 *channel_num);
+int mmceCmdWaitChannelStable(const char *devname, u16 *channel_num);
 
 #endif

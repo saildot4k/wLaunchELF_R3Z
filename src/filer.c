@@ -492,7 +492,7 @@ static int deriveMmceCardId(const char *path, const FILEINFO *file, char *card_i
 static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mounted_slot, u16 *active_card_out, u16 *active_channel_out)
 {
 	int unit, ret, dummy;
-	u16 channel_num, active_channel = 0xFFFF;
+	u16 channel_num, channel_dev_num, active_channel = 0xFFFF;
 	u16 active_channel_ui = 0xFFFF;
 	u16 card_num, active_card_num = 0xFFFF;
 	char devname[8];
@@ -515,6 +515,11 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 
 	if (parseMmceChannelFromFilename(file->name, &channel_num) < 0)
 		return -4;
+	/*
+	 * UI/filename channels are 1-based (<name>-1, <name>-2, ...),
+	 * while MMCE channel command uses zero-based channel indices.
+	 */
+	channel_dev_num = (u16)(channel_num - 1);
 	if (parseMmceCardNumberFromPath(path, &card_num) == 0) {
 		use_numbered_card = TRUE;
 		card_type = isMmceBootCardFileName(file->name) ? MMCE_CARD_TYPE_BOOT : MMCE_CARD_TYPE_REGULAR;
@@ -554,36 +559,49 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 	if (!use_numbered_card) {
 		/*
 		 * GameID-based switching can report ready a bit early on some devices.
-		 * Add one extra ready gate before applying channel.
+		 * Wait until gameid readback is stable and verify it matches requested id
+		 * before applying requested channel.
 		 */
-		ret = mmceCmdWaitReady(devname);
+		ret = mmceCmdWaitGameIdStable(devname, active_card_id, sizeof(active_card_id));
 		if (ret < 0)
 			return ret;
+		if (strcmp(active_card_id, card_id) != 0)
+			return -8;
+	} else {
+		/*
+		 * Numbered card switching should also be stabilized and verified before
+		 * channel switch.
+		 */
+		ret = mmceCmdWaitCardStable(devname, &active_card_num);
+		if (ret < 0)
+			return ret;
+		if (active_card_out != NULL)
+			*active_card_out = active_card_num;
+		if (active_card_num != card_num)
+			return -7;
 	}
 
 	/*
 	 * Apply channel only after card/gameid switch completed and no longer busy.
-	 * Requested channel is parsed from <card>-<channel>.mc2/.mcd and used directly.
+	 * Requested channel is parsed from <card>-<channel>.mc2/.mcd.
+	 * MMCE command channel index is zero-based.
 	 */
-	ret = mmceCmdSetChannel(devname, channel_num);
+	ret = mmceCmdSetChannel(devname, channel_dev_num);
 	if (ret < 0)
 		return ret;
 	ret = mmceCmdWaitReady(devname);
 	if (ret < 0)
 		return ret;
-	/* Additional settle wait for firmware that clears BUSY early. */
-	ret = mmceCmdWaitReady(devname);
+	/* Wait for post-switch channel readback to stabilize. */
+	ret = mmceCmdWaitChannelStable(devname, &active_channel);
 	if (ret < 0)
 		return ret;
-	ret = mmceCmdGetChannel(devname, &active_channel);
-	if (ret < 0)
-		return ret;
-	if (active_channel != channel_num) {
+	if (active_channel != channel_dev_num) {
 		if (active_channel_out != NULL)
-			*active_channel_out = active_channel;
+			*active_channel_out = (u16)(active_channel + 1);
 		return -6;
 	}
-	active_channel_ui = channel_num;
+	active_channel_ui = (u16)(active_channel + 1);
 
 	if (active_channel_out != NULL)
 		*active_channel_out = active_channel_ui;
@@ -5032,18 +5050,22 @@ int getFilePath(char *out, int cnfmode)
 										sprintf(msg1, "\nMMCE CARD-CHANNEL failed to switch for \"%s\".\nActive channel=%u",
 										        files[browser_sel].name, mmce_active_channel);
 									(void)ynDialog(msg1);
-								} else if (x == -7) {
-									if (mmce_active_card != 0xFFFF)
-										sprintf(msg1, "\nMMCE CARD-CHANNEL failed to switch.\nActive card=%u, active channel=%u",
-										        mmce_active_card, mmce_active_channel);
-									else
-										sprintf(msg1, "\nMMCE CARD-CHANNEL failed to switch.\nCard readback unavailable, active channel=%u",
-										        mmce_active_channel);
-									(void)ynDialog(msg1);
-								} else {
-									sprintf(msg1, "\nMMCE card mount failed for \"%s\"\nResult=%d", files[browser_sel].name, x);
-									(void)ynDialog(msg1);
-								}
+									} else if (x == -7) {
+										if (mmce_active_card != 0xFFFF)
+											sprintf(msg1, "\nMMCE CARD-CHANNEL failed to switch.\nActive card=%u, active channel=%u",
+											        mmce_active_card, mmce_active_channel);
+										else
+											sprintf(msg1, "\nMMCE CARD-CHANNEL failed to switch.\nCard readback unavailable, active channel=%u",
+											        mmce_active_channel);
+										(void)ynDialog(msg1);
+									} else if (x == -8) {
+										sprintf(msg1, "\nMMCE GAMEID verify failed before channel switch.\nRequested \"%s\" did not become active.",
+										        files[browser_sel].name);
+										(void)ynDialog(msg1);
+									} else {
+										sprintf(msg1, "\nMMCE card mount failed for \"%s\"\nResult=%d", files[browser_sel].name, x);
+										(void)ynDialog(msg1);
+									}
 							browser_pushed = FALSE;
 							continue;
 						}

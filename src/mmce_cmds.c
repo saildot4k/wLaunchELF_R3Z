@@ -104,6 +104,80 @@ int mmceCmdGetGameId(const char *devname, char *game_id, size_t game_id_size)
 	return 0;
 }
 
+int mmceCmdWaitCardStable(const char *devname, u16 *card_num)
+{
+	int i, status, ret;
+	u16 prev_card = 0xFFFF, cur_card = 0xFFFF;
+	int have_prev = 0;
+
+	for (i = 0; i < MMCE_READY_POLL_MAX; i++) {
+		status = fileXioDevctl(devname, MMCE_CMD_GET_STATUS, NULL, 0, NULL, 0);
+		if (status < 0)
+			return status;
+		if (status & MMCE_STATUS_BUSY) {
+			have_prev = 0;
+			DelayThread(MMCE_READY_POLL_DELAY_US);
+			continue;
+		}
+
+		ret = mmceCmdGetCard(devname, &cur_card);
+		if (ret < 0)
+			return ret;
+
+		if (have_prev && (cur_card == prev_card)) {
+			if (card_num != NULL)
+				*card_num = cur_card;
+			return 0;
+		}
+
+		prev_card = cur_card;
+		have_prev = 1;
+		DelayThread(MMCE_READY_POLL_DELAY_US);
+	}
+
+	return -1;
+}
+
+int mmceCmdWaitGameIdStable(const char *devname, char *game_id, size_t game_id_size)
+{
+	int i, status, ret;
+	char prev_game_id[256];
+	char cur_game_id[256];
+	int have_prev = 0;
+
+	if ((game_id == NULL) || (game_id_size == 0))
+		return -1;
+
+	prev_game_id[0] = '\0';
+	cur_game_id[0] = '\0';
+
+	for (i = 0; i < MMCE_READY_POLL_MAX; i++) {
+		status = fileXioDevctl(devname, MMCE_CMD_GET_STATUS, NULL, 0, NULL, 0);
+		if (status < 0)
+			return status;
+		if (status & MMCE_STATUS_BUSY) {
+			have_prev = 0;
+			DelayThread(MMCE_READY_POLL_DELAY_US);
+			continue;
+		}
+
+		ret = mmceCmdGetGameId(devname, cur_game_id, sizeof(cur_game_id));
+		if (ret < 0)
+			return ret;
+
+		if (have_prev && (strcmp(cur_game_id, prev_game_id) == 0)) {
+			snprintf(game_id, game_id_size, "%s", cur_game_id);
+			return 0;
+		}
+
+		snprintf(prev_game_id, sizeof(prev_game_id), "%s", cur_game_id);
+		have_prev = 1;
+		DelayThread(MMCE_READY_POLL_DELAY_US);
+	}
+
+	return -1;
+}
+
 int mmceCmdSetChannel(const char *devname, u16 channel_num)
 {
 	u32 arg = 0;
@@ -124,4 +198,38 @@ int mmceCmdGetChannel(const char *devname, u16 *channel_num)
 
 	*channel_num = (u16)ret;
 	return 0;
+}
+
+int mmceCmdWaitChannelStable(const char *devname, u16 *channel_num)
+{
+	int i, status, ret;
+	u16 prev_channel = 0xFFFF, cur_channel = 0xFFFF;
+	int have_prev = 0;
+
+	for (i = 0; i < MMCE_READY_POLL_MAX; i++) {
+		status = fileXioDevctl(devname, MMCE_CMD_GET_STATUS, NULL, 0, NULL, 0);
+		if (status < 0)
+			return status;
+		if (status & MMCE_STATUS_BUSY) {
+			have_prev = 0;
+			DelayThread(MMCE_READY_POLL_DELAY_US);
+			continue;
+		}
+
+		ret = mmceCmdGetChannel(devname, &cur_channel);
+		if (ret < 0)
+			return ret;
+
+		if (have_prev && (cur_channel == prev_channel)) {
+			if (channel_num != NULL)
+				*channel_num = cur_channel;
+			return 0;
+		}
+
+		prev_channel = cur_channel;
+		have_prev = 1;
+		DelayThread(MMCE_READY_POLL_DELAY_US);
+	}
+
+	return -1;
 }
