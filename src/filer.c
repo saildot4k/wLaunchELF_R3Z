@@ -303,6 +303,12 @@ static int canOpenInTextEditor(const char *path, const FILEINFO *file)
 #ifndef MMCE_CMD_GET_STATUS
 #define MMCE_CMD_GET_STATUS 0x02
 #endif
+#ifndef MMCE_CMD_GET_CARD
+#define MMCE_CMD_GET_CARD 0x03
+#endif
+#ifndef MMCE_CMD_SET_CARD
+#define MMCE_CMD_SET_CARD 0x04
+#endif
 #ifndef MMCE_CMD_SET_CHANNEL
 #define MMCE_CMD_SET_CHANNEL 0x06
 #endif
@@ -310,6 +316,8 @@ static int canOpenInTextEditor(const char *path, const FILEINFO *file)
 #define MMCE_CMD_SET_GAMEID 0x08
 #endif
 
+#define MMCE_SET_CARD_TYPE_REGULAR 0x00
+#define MMCE_SET_CARD_TYPE_BOOT 0x01
 #define MMCE_SET_MODE_NUM 0x00
 #define MMCE_STATUS_BUSY 0x0001
 
@@ -329,6 +337,29 @@ static int isMmceCardImageFile(const FILEINFO *file)
 		return FALSE;
 
 	return genCmpFileExt(file->name, "MC2") || genCmpFileExt(file->name, "MCD");
+}
+
+static int mmceStartsWithIgnoreCase(const char *value, const char *prefix)
+{
+	unsigned char a, b;
+
+	if ((value == NULL) || (prefix == NULL))
+		return FALSE;
+
+	while (*prefix != '\0') {
+		if (*value == '\0')
+			return FALSE;
+		a = (unsigned char)*value++;
+		b = (unsigned char)*prefix++;
+		if ((a >= 'A') && (a <= 'Z'))
+			a = (unsigned char)(a - 'A' + 'a');
+		if ((b >= 'A') && (b <= 'Z'))
+			b = (unsigned char)(b - 'A' + 'a');
+		if (a != b)
+			return FALSE;
+	}
+
+	return TRUE;
 }
 
 static int getMmceLastPathSegment(const char *path, char *segment, size_t segment_size)
@@ -420,6 +451,50 @@ static int parseMmceChannelFromFilename(const char *name, u16 *channel_num)
 	return 0;
 }
 
+static int parseMmceCardNumberFromPath(const char *path, u16 *card_num)
+{
+	char segment[64];
+	const char *p;
+	unsigned int value = 0;
+
+	if ((card_num == NULL) || (getMmceLastPathSegment(path, segment, sizeof(segment)) < 0))
+		return -1;
+
+	if (!mmceStartsWithIgnoreCase(segment, "Card"))
+		return -1;
+
+	p = segment + 4;
+	if ((*p < '0') || (*p > '9'))
+		return -1;
+
+	while (*p != '\0') {
+		if ((*p < '0') || (*p > '9'))
+			return -1;
+		value = value * 10 + (*p - '0');
+		if (value > 0xFFFF)
+			return -1;
+		p++;
+	}
+
+	*card_num = (u16)value;
+	return 0;
+}
+
+static int isMmceBootFolderPath(const char *path)
+{
+	char segment[64];
+
+	if (getMmceLastPathSegment(path, segment, sizeof(segment)) < 0)
+		return FALSE;
+
+	return mmceStartsWithIgnoreCase(segment, "BOOT");
+}
+
+static int isMmceBootCardFileName(const char *name)
+{
+	return mmceStartsWithIgnoreCase(name, "BootCard-");
+}
+
 static int deriveMmceCardId(const char *path, const FILEINFO *file, char *card_id, size_t card_id_size)
 {
 	if (parseMmceCardIdFromFilename(file->name, card_id, card_id_size) == 0)
@@ -441,6 +516,14 @@ static int selectMmceChannel(const char *devname, u16 channel_num)
 
 	arg = (MMCE_SET_MODE_NUM << 16) | channel_num;
 	return fileXioDevctl(devname, MMCE_CMD_SET_CHANNEL, &arg, sizeof(arg), NULL, 0);
+}
+
+static int selectMmceCardByNumber(const char *devname, u8 card_type, u16 card_num)
+{
+	u32 arg;
+
+	arg = ((u32)card_type << 24) | (MMCE_SET_MODE_NUM << 16) | card_num;
+	return fileXioDevctl(devname, MMCE_CMD_SET_CARD, &arg, sizeof(arg), NULL, 0);
 }
 
 static int pingMmceDevice(const char *devname)
@@ -472,8 +555,11 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 {
 	int unit, ret, dummy;
 	u16 channel_num;
+	u16 card_num;
 	char devname[8];
 	char card_id[64];
+	int use_numbered_card = FALSE;
+	u8 card_type = MMCE_SET_CARD_TYPE_REGULAR;
 
 	unit = getMmceUnitFromPath(path);
 	if (unit < 0 || unit > 1)
@@ -482,10 +568,23 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 	if (!isMmceCardImageFile(file))
 		return -2;
 
-	if (deriveMmceCardId(path, file, card_id, sizeof(card_id)) < 0)
-		return -3;
 	if (parseMmceChannelFromFilename(file->name, &channel_num) < 0)
 		return -4;
+	if (parseMmceCardNumberFromPath(path, &card_num) == 0) {
+		use_numbered_card = TRUE;
+		card_type = isMmceBootCardFileName(file->name) ? MMCE_SET_CARD_TYPE_BOOT : MMCE_SET_CARD_TYPE_REGULAR;
+	} else if (isMmceBootFolderPath(path)) {
+		/* BOOT folder layout (SD2PSX and MemCard Pro 2): boot card #0 with channel from filename suffix. */
+		use_numbered_card = TRUE;
+		card_type = MMCE_SET_CARD_TYPE_BOOT;
+		card_num = 0;
+	} else {
+		/* BootCard files should be chosen from /BOOT/ or /CardN/ to avoid accidental default-card creation. */
+		if (isMmceBootCardFileName(file->name))
+			return -5;
+		if (deriveMmceCardId(path, file, card_id, sizeof(card_id)) < 0)
+			return -3;
+	}
 
 	snprintf(devname, sizeof(devname), "mmce%d:", unit);
 
@@ -497,8 +596,11 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 	if (ret < 0)
 		return ret;
 
-	/* Card from filename/folder (GameID), channel from filename numeric suffix. */
-	ret = selectMmceCardByGameId(devname, card_id);
+	/* Card from /CardN/ folder (direct) or GameID mapping, channel from filename numeric suffix. */
+	if (use_numbered_card)
+		ret = selectMmceCardByNumber(devname, card_type, card_num);
+	else
+		ret = selectMmceCardByGameId(devname, card_id);
 	if (ret < 0)
 		return ret;
 	ret = waitMmceReady(devname);
@@ -4910,26 +5012,25 @@ int getFilePath(char *out, int cnfmode)
 					else if ((ret == MOUNTVMC0) || (ret == MOUNTVMC1)) {
 						i = ret - MOUNTVMC0;
 #ifdef MMCE
-						if ((getMmceUnitFromPath(path) >= 0) && isMmceCardImageFile(&files[browser_sel])) {
-							int mounted_slot = -1;
-
-							x = mountMmceCardImage(path, &files[browser_sel], &mounted_slot);
-							if (x >= 0) {
-								snprintf(path, sizeof(path), "mc%d:/", mounted_slot);
-								browser_cd = TRUE;
-								cnfmode = NON_CNF;
-								strcpy(ext, cnfmode_extL[cnfmode]);
-							} else if (x == -3) {
-								sprintf(msg1,
-								        "\nMMCE card id parse failed.\nUse <gameid>-<channel>.mc2/mcd\nor browse inside gameid folder.");
-								(void)ynDialog(msg1);
-							} else if (x == -4) {
-								sprintf(msg1, "\nMMCE channel must be last dash number.\nExample: SLUS-21338-1.mc2");
-								(void)ynDialog(msg1);
-							} else {
-								sprintf(msg1, "\nMMCE card mount failed for \"%s\"\nResult=%d", files[browser_sel].name, x);
-								(void)ynDialog(msg1);
-							}
+							if ((getMmceUnitFromPath(path) >= 0) && isMmceCardImageFile(&files[browser_sel])) {
+								x = mountMmceCardImage(path, &files[browser_sel], NULL);
+								if (x >= 0) {
+									browser_cd = TRUE;
+								} else if (x == -3) {
+									sprintf(msg1,
+									        "\nMMCE card id parse failed.\nUse <gameid>-<channel>.mc2/mcd\nor browse inside gameid folder.");
+									(void)ynDialog(msg1);
+								} else if (x == -4) {
+									sprintf(msg1, "\nMMCE channel must be last dash number.\nExample: SLUS-21338-1.mc2");
+									(void)ynDialog(msg1);
+								} else if (x == -5) {
+									sprintf(msg1,
+									        "\nBootCard files must be selected from /BOOT/ or /CardN/.\nExamples:\nmmce0:/MemoryCards/PS2/BOOT/BootCard-2.mcd\nmmce0:/MemoryCards/PS2/Card0/BootCard-2.mcd\n\nMemCard Pro 2 game cards can be mounted from:\nmmce0:/PS2/<folder>/<foldername-N>.mc2");
+									(void)ynDialog(msg1);
+								} else {
+									sprintf(msg1, "\nMMCE card mount failed for \"%s\"\nResult=%d", files[browser_sel].name, x);
+									(void)ynDialog(msg1);
+								}
 							browser_pushed = FALSE;
 							continue;
 						}
@@ -4961,16 +5062,13 @@ int getFilePath(char *out, int cnfmode)
 #endif
 						strcat(tmp2, files[browser_sel].name);
 							if ((x = fileXioMount(tmp, tmp2, FIO_MT_RDWR)) >= 0) {
-							if ((j >= 0) && (j < MOUNT_LIMIT)) {
-								vmc_PartyIndex[i] = j;
-								Party_vmcIndex[j] = i;
-							}
-								vmcMounted[i] = 1;
-								snprintf(path, sizeof(path), "%.*s/", (int)sizeof(path) - 2, tmp);
-								browser_cd = TRUE;
-								cnfmode = NON_CNF;
-								strcpy(ext, cnfmode_extL[cnfmode]);
-						} else {
+								if ((j >= 0) && (j < MOUNT_LIMIT)) {
+									vmc_PartyIndex[i] = j;
+									Party_vmcIndex[j] = i;
+								}
+									vmcMounted[i] = 1;
+									browser_cd = TRUE;
+							} else {
 							sprintf(msg1, "\n'%s vmc%d:' for \"%s\"\nResult=%d",
 							        LNG(Mount), i, tmp2, x);
 							(void)ynDialog(msg1);
