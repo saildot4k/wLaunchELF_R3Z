@@ -493,6 +493,7 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 {
 	int unit, ret, dummy;
 	u16 channel_num, active_channel = 0xFFFF;
+	u16 active_channel_ui = 0xFFFF;
 	u16 card_num, active_card_num = 0xFFFF;
 	char devname[8];
 	char card_id[64];
@@ -553,7 +554,7 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 
 	/*
 	 * Apply channel only after card/gameid switch completed and no longer busy.
-	 * Some devices need this explicit sequencing to avoid stale/default channel selection.
+	 * Requested channel is parsed directly from <card>-<channel>.mc2/.mcd and sent as 1-based.
 	 */
 	ret = mmceCmdSetChannel(devname, channel_num);
 	if (ret < 0)
@@ -561,6 +562,30 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 	ret = mmceCmdWaitReady(devname);
 	if (ret < 0)
 		return ret;
+	/* Additional settle wait for firmware that clears BUSY early. */
+	ret = mmceCmdWaitReady(devname);
+	if (ret < 0)
+		return ret;
+	ret = mmceCmdGetChannel(devname, &active_channel);
+	if (ret < 0)
+		return ret;
+
+	/*
+	 * Some firmware reports channels as 0-based while filenames/UI are 1-based.
+	 * Accept either direct match or +1 readback match, and always report UI value.
+	 */
+	if (active_channel == channel_num)
+		active_channel_ui = channel_num;
+	else if (((u32)active_channel + 1U) == (u32)channel_num)
+		active_channel_ui = channel_num;
+	else {
+		if (active_channel_out != NULL)
+			*active_channel_out = active_channel;
+		return -6;
+	}
+
+	if (active_channel_out != NULL)
+		*active_channel_out = active_channel_ui;
 
 	ret = mmceCmdGetCard(devname, &active_card_num);
 	if (ret >= 0 && active_card_out != NULL)
@@ -573,18 +598,6 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 		/* Optional telemetry readback for gameid-mapped workflows. */
 		(void)mmceCmdGetGameId(devname, active_card_id, sizeof(active_card_id));
 	}
-
-	/* Final ready gate before channel readback report/verify. */
-	ret = mmceCmdWaitReady(devname);
-	if (ret < 0)
-		return ret;
-	ret = mmceCmdGetChannel(devname, &active_channel);
-	if (ret < 0)
-		return ret;
-	if (active_channel_out != NULL)
-		*active_channel_out = active_channel;
-	if (active_channel != channel_num)
-		return -6;
 
 	/* Ask MCMAN to refresh the selected hardware slot after MMCE card/channel switch. */
 	mcGetInfo(unit, 0, &dummy, &dummy, &dummy);
@@ -5010,8 +5023,8 @@ int getFilePath(char *out, int cnfmode)
 									        "\nBootCard files must be selected from /BOOT/ or /CardN/.\nExamples:\nmmce0:/MemoryCards/PS2/BOOT/BootCard-2.mcd\nmmce0:/MemoryCards/PS2/Card0/BootCard-2.mcd\n\nMemCard Pro 2 game cards can be mounted from:\nmmce0:/PS2/<folder>/<foldername-N>.mc2");
 									(void)ynDialog(msg1);
 								} else if (x == -6) {
-									sprintf(msg1, "\nMMCE CARD-CHANNEL failed to switch.\nActive channel=%u",
-									        mmce_active_channel);
+									sprintf(msg1, "\nMMCE CARD-CHANNEL failed to switch for \"%s\".\nActive channel=%u",
+									        files[browser_sel].name, mmce_active_channel);
 									(void)ynDialog(msg1);
 								} else if (x == -7) {
 									if (mmce_active_card != 0xFFFF)
