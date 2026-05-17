@@ -433,14 +433,25 @@ static int mmceGameIdMatchesRequested(const char *requested_id, const char *acti
 {
 	char requested_norm[64];
 	char active_norm[64];
+	int match;
 
 	mmceNormalizeCardIdForCompare(requested_id, requested_norm, sizeof(requested_norm));
 	mmceNormalizeCardIdForCompare(active_id, active_norm, sizeof(active_norm));
 
-	if ((requested_norm[0] == '\0') || (active_norm[0] == '\0'))
+	if ((requested_norm[0] == '\0') || (active_norm[0] == '\0')) {
+		DPRINTF("MMCE gameid compare invalid req='%s' active='%s' req_norm='%s' active_norm='%s'\n",
+		        requested_id ? requested_id : "(null)",
+		        active_id ? active_id : "(null)",
+		        requested_norm, active_norm);
 		return FALSE;
+	}
 
-	return mmceEqualsIgnoreCase(requested_norm, active_norm);
+	match = mmceEqualsIgnoreCase(requested_norm, active_norm);
+	DPRINTF("MMCE gameid compare req='%s' active='%s' req_norm='%s' active_norm='%s' match=%d\n",
+	        requested_id ? requested_id : "(null)",
+	        active_id ? active_id : "(null)",
+	        requested_norm, active_norm, match);
+	return match;
 }
 
 static int getMmceLastPathSegment(const char *path, char *segment, size_t segment_size)
@@ -622,6 +633,8 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 	 * while MMCE channel command uses zero-based channel indices.
 	 */
 	channel_dev_num = (u16)(channel_num - 1);
+	DPRINTF("MMCE mount request path='%s' file='%s' unit=%d req_channel_ui=%u req_channel_dev=%u\n",
+	        path, file->name, unit, (unsigned int)channel_num, (unsigned int)channel_dev_num);
 	if (parseMmceCardNumberFromPath(path, &card_num) == 0) {
 		use_numbered_card = TRUE;
 		card_type = isMmceBootCardFileName(file->name) ? MMCE_CARD_TYPE_BOOT : MMCE_CARD_TYPE_REGULAR;
@@ -636,6 +649,12 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 			return -5;
 		if (deriveMmceCardId(path, file, card_id, sizeof(card_id)) < 0)
 			return -3;
+	}
+	if (use_numbered_card) {
+		DPRINTF("MMCE mount route=SET_CARD card_type=%u card_num=%u\n",
+		        (unsigned int)card_type, (unsigned int)card_num);
+	} else {
+		DPRINTF("MMCE mount route=SET_GAMEID card_id='%s'\n", card_id);
 	}
 
 	snprintf(devname, sizeof(devname), "mmce%d:", unit);
@@ -667,6 +686,7 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 		ret = mmceCmdWaitGameIdStable(devname, active_card_id, sizeof(active_card_id));
 		if (ret < 0)
 			return ret;
+		DPRINTF("MMCE verify gameid requested='%s' active='%s'\n", card_id, active_card_id);
 		if (!mmceGameIdMatchesRequested(card_id, active_card_id))
 			return -8;
 	} else {
@@ -677,6 +697,8 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 		ret = mmceCmdWaitCardStable(devname, &active_card_num);
 		if (ret < 0)
 			return ret;
+		DPRINTF("MMCE verify card requested=%u active=%u\n",
+		        (unsigned int)card_num, (unsigned int)active_card_num);
 		if (active_card_out != NULL)
 			*active_card_out = active_card_num;
 		if (active_card_num != card_num)
@@ -698,6 +720,9 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 	ret = mmceCmdWaitChannelStable(devname, &active_channel);
 	if (ret < 0)
 		return ret;
+	DPRINTF("MMCE verify channel requested_dev=%u active_dev=%u requested_ui=%u active_ui=%u\n",
+	        (unsigned int)channel_dev_num, (unsigned int)active_channel,
+	        (unsigned int)channel_num, (unsigned int)(active_channel + 1));
 	if (active_channel != channel_dev_num) {
 		if (active_channel_out != NULL)
 			*active_channel_out = (u16)(active_channel + 1);
