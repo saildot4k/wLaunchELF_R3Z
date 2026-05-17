@@ -392,7 +392,7 @@ static int mmceEqualsIgnoreCase(const char *a, const char *b)
 
 static void mmceNormalizeCardIdForCompare(const char *input, char *output, size_t output_size)
 {
-	char *dot, *dash, *p;
+	char *dot;
 	size_t len;
 
 	if ((output == NULL) || (output_size == 0))
@@ -412,28 +412,33 @@ static void mmceNormalizeCardIdForCompare(const char *input, char *output, size_
 		if (dot != NULL)
 			dot[0] = '\0';
 	}
-
-	dash = strrchr(output, '-');
-	if ((dash == NULL) || (dash == output))
-		return;
-
-	p = dash + 1;
-	if ((*p < '0') || (*p > '9'))
-		return;
-	while (*p != '\0') {
-		if ((*p < '0') || (*p > '9'))
-			return;
-		p++;
-	}
-
-	dash[0] = '\0';
 }
 
-static int mmceGameIdMatchesRequested(const char *requested_id, const char *active_id)
+static int mmceIsDashNumberSuffix(const char *suffix)
+{
+	if ((suffix == NULL) || (*suffix != '-'))
+		return FALSE;
+	suffix++;
+	if ((*suffix < '0') || (*suffix > '9'))
+		return FALSE;
+	while (*suffix != '\0') {
+		if ((*suffix < '0') || (*suffix > '9'))
+			return FALSE;
+		suffix++;
+	}
+
+	return TRUE;
+}
+
+static int mmceGameIdMatchesRequested(const char *requested_id, const char *active_id, u16 requested_channel_ui)
 {
 	char requested_norm[64];
 	char active_norm[64];
+	char active_with_channel[64];
+	char requested_with_channel[64];
 	int match;
+	size_t req_len;
+	size_t active_len;
 
 	mmceNormalizeCardIdForCompare(requested_id, requested_norm, sizeof(requested_norm));
 	mmceNormalizeCardIdForCompare(active_id, active_norm, sizeof(active_norm));
@@ -447,10 +452,43 @@ static int mmceGameIdMatchesRequested(const char *requested_id, const char *acti
 	}
 
 	match = mmceEqualsIgnoreCase(requested_norm, active_norm);
-	DPRINTF("MMCE gameid compare req='%s' active='%s' req_norm='%s' active_norm='%s' match=%d\n",
+	if (!match) {
+		/*
+		 * Some MMCE firmware/device combinations can read back card IDs including
+		 * channel suffixes (e.g. "<id>-3"), while SET_GAMEID receives base ID only.
+		 */
+		req_len = strlen(requested_norm);
+		active_len = strlen(active_norm);
+		if ((active_len > req_len) &&
+		    mmceStartsWithIgnoreCase(active_norm, requested_norm) &&
+		    mmceIsDashNumberSuffix(active_norm + req_len)) {
+			match = TRUE;
+		} else if ((req_len > active_len) &&
+		           mmceStartsWithIgnoreCase(requested_norm, active_norm) &&
+		           mmceIsDashNumberSuffix(requested_norm + active_len)) {
+			match = TRUE;
+		} else if (requested_channel_ui > 0) {
+			/*
+			 * If active readback omits channel suffix while requested path is
+			 * channel-qualified, also treat "<id>-N" as equivalent request form.
+			 */
+			snprintf(active_with_channel, sizeof(active_with_channel), "%s-%u",
+			         active_norm, (unsigned int)requested_channel_ui);
+			if (mmceEqualsIgnoreCase(requested_norm, active_with_channel)) {
+				match = TRUE;
+			} else {
+				snprintf(requested_with_channel, sizeof(requested_with_channel), "%s-%u",
+				         requested_norm, (unsigned int)requested_channel_ui);
+				if (mmceEqualsIgnoreCase(active_norm, requested_with_channel))
+					match = TRUE;
+			}
+		}
+	}
+
+	DPRINTF("MMCE gameid compare req='%s' active='%s' req_norm='%s' active_norm='%s' req_channel_ui=%u match=%d\n",
 	        requested_id ? requested_id : "(null)",
 	        active_id ? active_id : "(null)",
-	        requested_norm, active_norm, match);
+	        requested_norm, active_norm, (unsigned int)requested_channel_ui, match);
 	return match;
 }
 
@@ -687,8 +725,16 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 		if (ret < 0)
 			return ret;
 		DPRINTF("MMCE verify gameid requested='%s' active='%s'\n", card_id, active_card_id);
-		if (!mmceGameIdMatchesRequested(card_id, active_card_id))
+		/*
+		 * Some devices return empty GET_GAMEID strings even after successful
+		 * SET_GAMEID + status-ready transition. Do not block channel switching
+		 * on empty readback; channel verification after SET_CHANNEL is decisive.
+		 */
+		if (active_card_id[0] == '\0') {
+			DPRINTF("MMCE verify gameid readback empty; continuing to channel switch.\n");
+		} else if (!mmceGameIdMatchesRequested(card_id, active_card_id, channel_num)) {
 			return -8;
+		}
 	} else {
 		/*
 		 * Numbered card switching should also be stabilized and verified before
