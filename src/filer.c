@@ -492,7 +492,7 @@ static int deriveMmceCardId(const char *path, const FILEINFO *file, char *card_i
 static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mounted_slot, u16 *active_card_out, u16 *active_channel_out)
 {
 	int unit, ret, dummy;
-	u16 channel_num, protocol_channel, active_channel = 0xFFFF;
+	u16 channel_num, active_channel = 0xFFFF;
 	u16 card_num, active_card_num = 0xFFFF;
 	char devname[8];
 	char card_id[64];
@@ -514,8 +514,6 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 
 	if (parseMmceChannelFromFilename(file->name, &channel_num) < 0)
 		return -4;
-	/* MMCE protocol channel numbering is 0-based; filenames use 1-based suffixes. */
-	protocol_channel = (u16)(channel_num - 1);
 	if (parseMmceCardNumberFromPath(path, &card_num) == 0) {
 		use_numbered_card = TRUE;
 		card_type = isMmceBootCardFileName(file->name) ? MMCE_CARD_TYPE_BOOT : MMCE_CARD_TYPE_REGULAR;
@@ -557,7 +555,7 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 	 * Apply channel only after card/gameid switch completed and no longer busy.
 	 * Some devices need this explicit sequencing to avoid stale/default channel selection.
 	 */
-	ret = mmceCmdSetChannel(devname, protocol_channel);
+	ret = mmceCmdSetChannel(devname, channel_num);
 	if (ret < 0)
 		return ret;
 	ret = mmceCmdWaitReady(devname);
@@ -584,8 +582,8 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 	if (ret < 0)
 		return ret;
 	if (active_channel_out != NULL)
-		*active_channel_out = (u16)(active_channel + 1);
-	if (active_channel != protocol_channel)
+		*active_channel_out = active_channel;
+	if (active_channel != channel_num)
 		return -6;
 
 	/* Ask MCMAN to refresh the selected hardware slot after MMCE card/channel switch. */
