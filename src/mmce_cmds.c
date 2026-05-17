@@ -1,0 +1,115 @@
+#include "launchelf.h"
+#include "mmce_cmds.h"
+
+#ifndef MMCE_CMD_PING
+#define MMCE_CMD_PING 0x01
+#endif
+#ifndef MMCE_CMD_GET_STATUS
+#define MMCE_CMD_GET_STATUS 0x02
+#endif
+#ifndef MMCE_CMD_GET_CARD
+#define MMCE_CMD_GET_CARD 0x03
+#endif
+#ifndef MMCE_CMD_SET_CARD
+#define MMCE_CMD_SET_CARD 0x04
+#endif
+#ifndef MMCE_CMD_GET_CHANNEL
+#define MMCE_CMD_GET_CHANNEL 0x05
+#endif
+#ifndef MMCE_CMD_SET_CHANNEL
+#define MMCE_CMD_SET_CHANNEL 0x06
+#endif
+#ifndef MMCE_CMD_GET_GAMEID
+#define MMCE_CMD_GET_GAMEID 0x07
+#endif
+#ifndef MMCE_CMD_SET_GAMEID
+#define MMCE_CMD_SET_GAMEID 0x08
+#endif
+
+#define MMCE_SET_MODE_NUM 0x00
+#define MMCE_STATUS_BUSY 0x0001
+
+int mmceCmdPing(const char *devname)
+{
+	return fileXioDevctl(devname, MMCE_CMD_PING, NULL, 0, NULL, 0);
+}
+
+int mmceCmdWaitReady(const char *devname)
+{
+	int i, status;
+
+	for (i = 0; i < 200; i++) {
+		status = fileXioDevctl(devname, MMCE_CMD_GET_STATUS, NULL, 0, NULL, 0);
+		if (status < 0)
+			return status;
+		if ((status & MMCE_STATUS_BUSY) == 0)
+			return 0;
+		DelayThread(2 * 1000);
+	}
+
+	return -1;
+}
+
+int mmceCmdSetCardByNumber(const char *devname, u8 card_type, u16 card_num)
+{
+	u32 arg;
+
+	arg = ((u32)card_type << 24) | (MMCE_SET_MODE_NUM << 16) | card_num;
+	return fileXioDevctl(devname, MMCE_CMD_SET_CARD, &arg, sizeof(arg), NULL, 0);
+}
+
+int mmceCmdSetGameId(const char *devname, const char *card_id)
+{
+	return fileXioDevctl(devname, MMCE_CMD_SET_GAMEID, (void *)card_id, strlen(card_id) + 1, NULL, 0);
+}
+
+int mmceCmdGetCard(const char *devname, u16 *card_num)
+{
+	int ret;
+
+	ret = fileXioDevctl(devname, MMCE_CMD_GET_CARD, NULL, 0, NULL, 0);
+	if (ret < 0)
+		return ret;
+	if (ret > 0xFFFF)
+		return -1;
+
+	*card_num = (u16)ret;
+	return 0;
+}
+
+int mmceCmdGetGameId(const char *devname, char *game_id, size_t game_id_size)
+{
+	int ret;
+
+	if ((game_id == NULL) || (game_id_size == 0))
+		return -1;
+
+	game_id[0] = '\0';
+	ret = fileXioDevctl(devname, MMCE_CMD_GET_GAMEID, NULL, 0, game_id, game_id_size);
+	if (ret < 0)
+		return ret;
+	game_id[game_id_size - 1] = '\0';
+	return 0;
+}
+
+int mmceCmdSetChannel(const char *devname, u16 channel_num)
+{
+	u32 arg;
+
+	arg = (MMCE_SET_MODE_NUM << 16) | channel_num;
+	return fileXioDevctl(devname, MMCE_CMD_SET_CHANNEL, &arg, sizeof(arg), NULL, 0);
+}
+
+int mmceCmdGetChannel(const char *devname, u16 *channel_num)
+{
+	int ret;
+
+	ret = fileXioDevctl(devname, MMCE_CMD_GET_CHANNEL, NULL, 0, NULL, 0);
+	if (ret < 0)
+		return ret;
+	if (ret > 0xFFFF)
+		return -1;
+
+	*channel_num = (u16)ret;
+	return 0;
+}

@@ -28,7 +28,7 @@ else
   EE_BIN = UNC-BOOT.ELF
   EE_BIN_PKD = BOOT.ELF
 endif
-EE_OBJS = main.o main_startup.o main_fileops.o config.o elf.o draw.o loader_elf.o filer.o \
+EE_OBJS = main.o main_startup.o main_fileops.o config.o elf.o draw.o loader_elf.o filer.o mmce_cmds.o \
 	poweroff_irx.o iomanx_irx.o filexio_irx.o ps2atad_irx.o ps2dev9_irx.o \
 	ps2hdd_irx.o ps2fs_irx.o usbd_irx.o mcman_irx.o mcserv_irx.o \
 	cdvd_irx.o vmc_fs_irx.o ps2kbd_irx.o \
