@@ -341,6 +341,108 @@ static int mmceStartsWithIgnoreCase(const char *value, const char *prefix)
 	return TRUE;
 }
 
+static int mmceEndsWithIgnoreCase(const char *value, const char *suffix)
+{
+	size_t value_len, suffix_len;
+	unsigned char a, b;
+
+	if ((value == NULL) || (suffix == NULL))
+		return FALSE;
+
+	value_len = strlen(value);
+	suffix_len = strlen(suffix);
+	if (suffix_len > value_len)
+		return FALSE;
+
+	value += (value_len - suffix_len);
+	while (*suffix != '\0') {
+		a = (unsigned char)*value++;
+		b = (unsigned char)*suffix++;
+		if ((a >= 'A') && (a <= 'Z'))
+			a = (unsigned char)(a - 'A' + 'a');
+		if ((b >= 'A') && (b <= 'Z'))
+			b = (unsigned char)(b - 'A' + 'a');
+		if (a != b)
+			return FALSE;
+	}
+
+	return TRUE;
+}
+
+static int mmceEqualsIgnoreCase(const char *a, const char *b)
+{
+	unsigned char ca, cb;
+
+	if ((a == NULL) || (b == NULL))
+		return FALSE;
+
+	while ((*a != '\0') && (*b != '\0')) {
+		ca = (unsigned char)*a++;
+		cb = (unsigned char)*b++;
+		if ((ca >= 'A') && (ca <= 'Z'))
+			ca = (unsigned char)(ca - 'A' + 'a');
+		if ((cb >= 'A') && (cb <= 'Z'))
+			cb = (unsigned char)(cb - 'A' + 'a');
+		if (ca != cb)
+			return FALSE;
+	}
+
+	return (*a == '\0') && (*b == '\0');
+}
+
+static void mmceNormalizeCardIdForCompare(const char *input, char *output, size_t output_size)
+{
+	char *dot, *dash, *p;
+	size_t len;
+
+	if ((output == NULL) || (output_size == 0))
+		return;
+
+	output[0] = '\0';
+	if (input == NULL)
+		return;
+
+	snprintf(output, output_size, "%s", input);
+	len = strlen(output);
+	if (len == 0)
+		return;
+
+	if (mmceEndsWithIgnoreCase(output, ".mc2") || mmceEndsWithIgnoreCase(output, ".mcd")) {
+		dot = strrchr(output, '.');
+		if (dot != NULL)
+			dot[0] = '\0';
+	}
+
+	dash = strrchr(output, '-');
+	if ((dash == NULL) || (dash == output))
+		return;
+
+	p = dash + 1;
+	if ((*p < '0') || (*p > '9'))
+		return;
+	while (*p != '\0') {
+		if ((*p < '0') || (*p > '9'))
+			return;
+		p++;
+	}
+
+	dash[0] = '\0';
+}
+
+static int mmceGameIdMatchesRequested(const char *requested_id, const char *active_id)
+{
+	char requested_norm[64];
+	char active_norm[64];
+
+	mmceNormalizeCardIdForCompare(requested_id, requested_norm, sizeof(requested_norm));
+	mmceNormalizeCardIdForCompare(active_id, active_norm, sizeof(active_norm));
+
+	if ((requested_norm[0] == '\0') || (active_norm[0] == '\0'))
+		return FALSE;
+
+	return mmceEqualsIgnoreCase(requested_norm, active_norm);
+}
+
 static int getMmceLastPathSegment(const char *path, char *segment, size_t segment_size)
 {
 	const char *start, *end;
@@ -565,7 +667,7 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 		ret = mmceCmdWaitGameIdStable(devname, active_card_id, sizeof(active_card_id));
 		if (ret < 0)
 			return ret;
-		if (strcmp(active_card_id, card_id) != 0)
+		if (!mmceGameIdMatchesRequested(card_id, active_card_id))
 			return -8;
 	} else {
 		/*
