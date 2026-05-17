@@ -54,7 +54,7 @@ int mmceCmdWaitReady(const char *devname)
 
 int mmceCmdSetCardByNumber(const char *devname, u8 card_type, u16 card_num)
 {
-	u32 arg;
+	u32 arg = 0;
 
 	arg = ((u32)card_type << 24) | (MMCE_SET_MODE_NUM << 16) | card_num;
 	return fileXioDevctl(devname, MMCE_CMD_SET_CARD, &arg, sizeof(arg), NULL, 0);
@@ -96,7 +96,7 @@ int mmceCmdGetGameId(const char *devname, char *game_id, size_t game_id_size)
 
 int mmceCmdSetChannel(const char *devname, u16 channel_num)
 {
-	u32 arg;
+	u32 arg = 0;
 
 	arg = (MMCE_SET_MODE_NUM << 16) | channel_num;
 	return fileXioDevctl(devname, MMCE_CMD_SET_CHANNEL, &arg, sizeof(arg), NULL, 0);
