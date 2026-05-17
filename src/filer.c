@@ -492,10 +492,11 @@ static int deriveMmceCardId(const char *path, const FILEINFO *file, char *card_i
 static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mounted_slot, u16 *active_card_out, u16 *active_channel_out)
 {
 	int unit, ret, dummy;
-	u16 channel_num, active_channel = 0xFFFF;
+	u16 channel_num, protocol_channel, active_channel = 0xFFFF;
 	u16 card_num, active_card_num = 0xFFFF;
 	char devname[8];
 	char card_id[64];
+	char active_card_id[64];
 	int use_numbered_card = FALSE;
 	u8 card_type = MMCE_CARD_TYPE_REGULAR;
 
@@ -513,6 +514,8 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 
 	if (parseMmceChannelFromFilename(file->name, &channel_num) < 0)
 		return -4;
+	/* MMCE protocol channel numbering is 0-based; filenames use 1-based suffixes. */
+	protocol_channel = (u16)(channel_num - 1);
 	if (parseMmceCardNumberFromPath(path, &card_num) == 0) {
 		use_numbered_card = TRUE;
 		card_type = isMmceBootCardFileName(file->name) ? MMCE_CARD_TYPE_BOOT : MMCE_CARD_TYPE_REGULAR;
@@ -554,20 +557,12 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 	 * Apply channel only after card/gameid switch completed and no longer busy.
 	 * Some devices need this explicit sequencing to avoid stale/default channel selection.
 	 */
-	ret = mmceCmdSetChannel(devname, channel_num);
+	ret = mmceCmdSetChannel(devname, protocol_channel);
 	if (ret < 0)
 		return ret;
 	ret = mmceCmdWaitReady(devname);
 	if (ret < 0)
 		return ret;
-	ret = mmceCmdGetChannel(devname, &active_channel);
-	if (ret < 0)
-		return ret;
-	if (active_channel_out != NULL)
-		*active_channel_out = active_channel;
-	if (active_channel != channel_num) {
-		return -6;
-	}
 
 	ret = mmceCmdGetCard(devname, &active_card_num);
 	if (ret >= 0 && active_card_out != NULL)
@@ -576,7 +571,22 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 		/* For direct /CardN/ and /BOOT/ numbered workflows card readback must match requested card. */
 		if ((ret < 0) || (active_card_num != card_num))
 			return -7;
+	} else {
+		/* Optional telemetry readback for gameid-mapped workflows. */
+		(void)mmceCmdGetGameId(devname, active_card_id, sizeof(active_card_id));
 	}
+
+	/* Final ready gate before channel readback report/verify. */
+	ret = mmceCmdWaitReady(devname);
+	if (ret < 0)
+		return ret;
+	ret = mmceCmdGetChannel(devname, &active_channel);
+	if (ret < 0)
+		return ret;
+	if (active_channel_out != NULL)
+		*active_channel_out = (u16)(active_channel + 1);
+	if (active_channel != protocol_channel)
+		return -6;
 
 	/* Ask MCMAN to refresh the selected hardware slot after MMCE card/channel switch. */
 	mcGetInfo(unit, 0, &dummy, &dummy, &dummy);
