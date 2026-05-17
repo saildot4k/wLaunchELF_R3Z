@@ -28,6 +28,8 @@
 
 #define MMCE_SET_MODE_NUM 0x00
 #define MMCE_STATUS_BUSY 0x0001
+#define MMCE_READY_POLL_DELAY_US (200 * 1000)
+#define MMCE_READY_POLL_MAX 15
 
 int mmceCmdPing(const char *devname)
 {
@@ -38,13 +40,13 @@ int mmceCmdWaitReady(const char *devname)
 {
 	int i, status;
 
-	for (i = 0; i < 200; i++) {
+	for (i = 0; i < MMCE_READY_POLL_MAX; i++) {
 		status = fileXioDevctl(devname, MMCE_CMD_GET_STATUS, NULL, 0, NULL, 0);
 		if (status < 0)
 			return status;
 		if ((status & MMCE_STATUS_BUSY) == 0)
 			return 0;
-		DelayThread(2 * 1000);
+		DelayThread(MMCE_READY_POLL_DELAY_US);
 	}
 
 	return -1;
