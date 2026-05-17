@@ -39,13 +39,23 @@ int mmceCmdPing(const char *devname)
 int mmceCmdWaitReady(const char *devname)
 {
 	int i, status;
+	int ready_count = 0;
 
 	for (i = 0; i < MMCE_READY_POLL_MAX; i++) {
 		status = fileXioDevctl(devname, MMCE_CMD_GET_STATUS, NULL, 0, NULL, 0);
 		if (status < 0)
 			return status;
-		if ((status & MMCE_STATUS_BUSY) == 0)
-			return 0;
+		if ((status & MMCE_STATUS_BUSY) == 0) {
+			/*
+			 * Require consecutive READY observations to avoid false-ready races
+			 * where firmware reports ready briefly while still applying changes.
+			 */
+			ready_count++;
+			if (ready_count >= 2)
+				return 0;
+		} else {
+			ready_count = 0;
+		}
 		DelayThread(MMCE_READY_POLL_DELAY_US);
 	}
 
