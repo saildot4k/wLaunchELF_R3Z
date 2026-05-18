@@ -88,11 +88,16 @@ jobs:
 
     - name: Prepare fixed MMCEMan sources
       run: |
+        PATCH_FILE="$GITHUB_WORKSPACE/scripts/ci/mmceman_mmce_cmds_fix.patch"
+        if [ ! -f "$PATCH_FILE" ]; then
+          echo "Missing MMCEMan patch file: $PATCH_FILE" >&2
+          exit 1
+        fi
         if [ ! -d thirdparty/mmceman/mmceman ]; then
           git clone --depth 1 https://github.com/ps2-mmce/mmceman thirdparty/mmceman
         fi
-        if git -C thirdparty/mmceman apply --check ../scripts/ci/mmceman_mmce_cmds_fix.patch; then
-          git -C thirdparty/mmceman apply ../scripts/ci/mmceman_mmce_cmds_fix.patch
+        if git -C thirdparty/mmceman apply --check "$PATCH_FILE"; then
+          git -C thirdparty/mmceman apply "$PATCH_FILE"
         else
           if grep -q "wrbuf\\[len + 4\\] = 0xff;" thirdparty/mmceman/mmceman/src/mmce_cmds.c; then
             echo "MMCEMan fix already present."
