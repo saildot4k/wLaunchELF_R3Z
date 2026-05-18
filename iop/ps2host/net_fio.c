@@ -92,7 +92,7 @@ int pko_recv_bytes(int sock, char *buf, int bytes)
 
 	while (left > 0) {
 		len = recv(sock, &buf[bytes - left], left, 0);
-		if (len < 0) {
+		if (len <= 0) {
 			dbgprintf("pko_file: pko_recv_bytes error!!\n");
 			return -1;
 		}
@@ -699,6 +699,7 @@ int pko_file_serv(void *argv)
 	int client_sock;
 	int client_len;
 	int ret;
+	int attempts;
 
 	dbgprintf(" - PS2 Side application -\n");
 
@@ -708,9 +709,12 @@ int pko_file_serv(void *argv)
 	server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	server_addr.sin_port = htons(PKO_PORT);
 
+	attempts = 50;
 	while ((sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
 		dbgprintf("pko_file: socket creation error (%d)\n", sock);
-		return -1;
+		if (--attempts <= 0)
+			return -1;
+		DelayThread(100000);
 	}
 
 	ret = bind(sock, (struct sockaddr *)&server_addr,
