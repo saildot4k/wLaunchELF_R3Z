@@ -307,6 +307,9 @@ static void Set_CNF_Path(void);
 static int reloadConfig(void);
 static void decConfig(void);
 static void incConfig(void);
+static void displayRetroGemGameID(const char *gameID, int frames);
+static int buildLaunchGameID(const char *exec_path, char *gameID, size_t gameID_len);
+static int isLikelyDiscLaunch(const char *selected_path);
 static void CleanUp(void);
 static void Execute(char *pathin);
 static void Reset(void);
@@ -353,6 +356,161 @@ static int PrintPos(int row_f, int column, char *text_p, int COLORID)
 }
 //------------------------------
 //endfunc PrintPos
+//---------------------------------------------------------------------------
+static u8 calculateRetroGemCRC(const u8 *data, int len)
+{
+	int i;
+	u8 crc = 0x00;
+
+	for (i = 0; i < len; i++)
+		crc = (u8)(crc + data[i]);
+
+	return (u8)(0x100 - crc);
+}
+
+static void displayRetroGemGameID(const char *gameID, int frames)
+{
+	GSGLOBAL *gid_gs;
+	u8 data[64];
+	int gidlen, dpos, data_len, xstart, ystart, height;
+	int i, j, frame;
+
+	if (gameID == NULL || gameID[0] == '\0')
+		return;
+
+	gidlen = strnlen(gameID, 11);
+	if (gidlen <= 0)
+		return;
+
+	if (frames < 1)
+		frames = 1;
+	else if (frames > 3)
+		frames = 3;
+
+	gid_gs = gsKit_init_global();
+	if (gid_gs == NULL)
+		return;
+
+	gid_gs->DoubleBuffering = GS_SETTING_ON;
+	dmaKit_init(D_CTRL_RELE_OFF, D_CTRL_MFD_OFF, D_CTRL_STS_UNSPEC, D_CTRL_STD_OFF, D_CTRL_RCYC_8, 1 << DMA_CHANNEL_GIF);
+	if (dmaKit_chan_init(DMA_CHANNEL_GIF) != 0) {
+		gsKit_deinit_global(gid_gs);
+		return;
+	}
+
+	gsKit_init_screen(gid_gs);
+	gsKit_display_buffer(gid_gs);
+	gsKit_mode_switch(gid_gs, GS_ONESHOT);
+
+	memset(data, 0, sizeof(data));
+	dpos = 0;
+	data[dpos++] = 0xA5;
+	data[dpos++] = 0x00;
+	dpos++; // CRC placeholder
+	data[dpos++] = (u8)gidlen;
+	memcpy(&data[dpos], gameID, gidlen);
+	dpos += gidlen;
+	data[dpos++] = 0x00;
+	data[dpos++] = 0xD5;
+	data[dpos++] = 0x00;
+
+	data_len = dpos;
+	data[2] = calculateRetroGemCRC(&data[3], data_len - 3);
+
+	xstart = (gid_gs->Width / 2) - (data_len * 8);
+	ystart = gid_gs->Height - (((gid_gs->Height / 8) * 2) + 20);
+	height = 2;
+
+	for (frame = 0; frame < frames; frame++) {
+		gsKit_clear(gid_gs, GS_SETREG_RGBA(0x00, 0x00, 0x00, 0x00));
+
+		for (i = 0; i < data_len; i++) {
+			for (j = 7; j >= 0; j--) {
+				int x = xstart + (i * 16 + ((7 - j) * 2));
+				int x1 = x + 1;
+				u64 bit_color;
+
+				gsKit_prim_sprite(gid_gs, x, ystart, x1, ystart + height, 0, GS_SETREG_RGBA(0xFF, 0x00, 0xFF, 0x00));
+				bit_color = ((data[i] >> j) & 1) ? GS_SETREG_RGBA(0x00, 0xFF, 0xFF, 0x00) : GS_SETREG_RGBA(0xFF, 0xFF, 0x00, 0x00);
+				gsKit_prim_sprite(gid_gs, x1, ystart, x1 + 1, ystart + height, 0, bit_color);
+			}
+		}
+
+		gsKit_queue_exec(gid_gs);
+		gsKit_finish();
+		gsKit_sync_flip(gid_gs);
+	}
+
+	gsKit_deinit_global(gid_gs);
+}
+
+static int buildLaunchGameID(const char *exec_path, char *gameID, size_t gameID_len)
+{
+	const char *start;
+	const char *sep;
+	size_t i;
+
+	if (gameID == NULL || gameID_len < 12 || exec_path == NULL || exec_path[0] == '\0')
+		return 0;
+
+	gameID[0] = '\0';
+
+	/* Disc executables (e.g. cdrom0:\\SLUS_123.45;1) already carry a title ID. */
+	if (!strncmp(exec_path, "cdrom", 5)) {
+		start = strchr(exec_path, '\\');
+		if (start == NULL)
+			start = strchr(exec_path, ':');
+		if (start != NULL)
+			start++;
+	} else {
+		start = exec_path;
+		sep = strrchr(exec_path, '/');
+		if (sep != NULL)
+			start = sep + 1;
+		sep = strrchr(exec_path, '\\');
+		if (sep != NULL && (sep + 1) > start)
+			start = sep + 1;
+		sep = strrchr(exec_path, ':');
+		if (sep != NULL && (sep + 1) > start)
+			start = sep + 1;
+	}
+
+	if (start == NULL || *start == '\0')
+		return 0;
+
+	for (i = 0; i < 11 && start[i] != '\0'; i++) {
+		char c = start[i];
+		if (c == ';' || c == '/' || c == '\\')
+			break;
+		if (c == '.' && strncmp(exec_path, "cdrom", 5))
+			break;
+		gameID[i] = c;
+	}
+	gameID[i] = '\0';
+
+	while (i > 0) {
+		char c = gameID[i - 1];
+		if (c == ' ' || c == '\t' || c == '\r' || c == '\n')
+			gameID[--i] = '\0';
+		else
+			break;
+	}
+
+	if (!strcmp(gameID, "???"))
+		return 0;
+
+	return gameID[0] != '\0';
+}
+
+static int isLikelyDiscLaunch(const char *selected_path)
+{
+	if (selected_path == NULL || selected_path[0] == '\0')
+		return 0;
+	if (!stricmp(selected_path, setting->Misc_PS2Disc))
+		return 1;
+	return 0;
+}
+
 //---------------------------------------------------------------------------
 //Function to show a screen with program credits ("About uLE")
 //------------------------------
@@ -1215,8 +1373,8 @@ static void ensureCoreIoStackReady(void)
 
 	if (!have_filexio_ready) {
 		fileXioInit();
-		// Increase the FILEIO R/W buffer size to reduce overhead.
-		fileXioSetRWBufferSize(128 * 1024);
+		// Keep the FILEXIO default IOP-side RW buffer size (16KB).
+		// Larger allocations can reduce free IOP memory for network stacks.
 		have_filexio_ready = 1;
 	}
 
@@ -2306,8 +2464,17 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 			goto CheckELF_fullpath;
 		}
 		if (BootDiscType == 1) {  //Boot a PS1 disc
+			char disc_gameid[12];
+			int show_disc_gameid;
 			char *args[2] = {SystemCnf_BOOT, SystemCnf_VER};
+
+			show_disc_gameid = 0;
+			if (!setting->cdrom_disable_gameid)
+				show_disc_gameid = buildLaunchGameID(SystemCnf_BOOT, disc_gameid, sizeof(disc_gameid));
+
 			CleanUp();
+			if (show_disc_gameid)
+				displayRetroGemGameID(disc_gameid, 2);
 			LoadExecPS2("rom0:PS1DRV", 2, args);
 			sprintf(mainMsg, "PS1DRV %s", LNG(Failed));
 			goto Done_PS2Disc;
@@ -2525,9 +2692,24 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		if ((t = checkELFheader(fullpath)) <= 0)
 			goto ELFnotFound;
 	ELFchecked:
+		{
+			int show_launch_gameid = 0;
+			int disc_launch = isLikelyDiscLaunch(path);
+			char launch_gameid[12];
+
+			if (disc_launch) {
+				if (!setting->cdrom_disable_gameid)
+					show_launch_gameid = buildLaunchGameID(fullpath, launch_gameid, sizeof(launch_gameid));
+			} else if (setting->app_gameid) {
+				show_launch_gameid = buildLaunchGameID(fullpath, launch_gameid, sizeof(launch_gameid));
+			}
+
 			x = setting->reboot_iop_elf_load;
 			CleanUp();
+			if (show_launch_gameid)
+				displayRetroGemGameID(launch_gameid, 2);
 			RunLoaderElf(fullpath, party, path, t, x);
+		}
 	} else {  //Invalid path
 		t = 0;
 	ELFnotFound:

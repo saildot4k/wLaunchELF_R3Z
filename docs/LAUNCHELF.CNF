@@ -170,6 +170,17 @@ USBD_FILE =
 # ----------------------------------------------------------------------
 NET_HOSTwrite = 0
 # ----------------------------------------------------------------------
+# APP_GameID enables RetroGEM visual Game ID for ELF/app launches.
+# Set to non-zero to generate a short ID (up to 11 chars) from the
+# launched executable path and transmit it right before handoff.
+# ----------------------------------------------------------------------
+APP_GameID = 0
+# ----------------------------------------------------------------------
+# CDROM_Disable_GameID disables RetroGEM visual Game ID for PS1/PS2 disc
+# launches (MISC/PS2Disc path). Default is 0 (disc Game ID enabled).
+# ----------------------------------------------------------------------
+CDROM_Disable_GameID = 0
+# ----------------------------------------------------------------------
 #SKIN_FILE is used to select a JPG file that will be used as background
 #for the LaunchELF screen. Its value should be the full JPG pathname.
 #The default value is an empty string, meaning that the colour set by

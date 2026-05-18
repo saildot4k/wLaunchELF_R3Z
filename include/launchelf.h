@@ -241,6 +241,8 @@ typedef struct
 	int numCNF;
 	int swapKeys;
 	int HOSTwrite;
+	int app_gameid;
+	int cdrom_disable_gameid;
 	int Brightness;
 	int TV_mode;
 	int Popup_Opaque;
