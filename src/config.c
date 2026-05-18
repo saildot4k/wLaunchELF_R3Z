@@ -2448,7 +2448,7 @@ static void Config_Advanced(void)
 			x = Menu_start_x;
 			y = Menu_start_y;
 
-			printXY("CONFIGURE ADVANCED", x, y, setting->color[COLOR_TEXT], TRUE, 0);
+			printXY("ADVANCED SETTINGS", x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 			y += FONT_HEIGHT / 2;
 
@@ -2744,7 +2744,7 @@ void config(char *mainMsg, char *CNF)
 			sprintf(c, "  %s...", LNG(Network_Settings));
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
-			sprintf(c, "  Configure Advanced...");
+			sprintf(c, "  Advanced Settings...");
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 
