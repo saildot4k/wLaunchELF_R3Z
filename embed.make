@@ -370,11 +370,13 @@ $(EE_ASM_DIR)udptty.s: $(PS2SDK)/iop/irx/udptty.irx | $(EE_ASM_DIR)
 
 # ETH stack policy:
 # Prefer current PS2SDK network drivers and avoid legacy ps2eth/precompiled fallbacks.
+# For compatibility with the historical wLaunchELF stack, prefer ps2smap.irx first
+# (when available), then fallback to smap-ps2ip.irx.
 PS2SMAP_SOURCE :=
-ifneq ($(wildcard $(PS2SDK)/iop/irx/smap-ps2ip.irx),)
-PS2SMAP_SOURCE := $(PS2SDK)/iop/irx/smap-ps2ip.irx
-else ifneq ($(wildcard $(PS2SDK)/iop/irx/ps2smap.irx),)
+ifneq ($(wildcard $(PS2SDK)/iop/irx/ps2smap.irx),)
 PS2SMAP_SOURCE := $(PS2SDK)/iop/irx/ps2smap.irx
+else ifneq ($(wildcard $(PS2SDK)/iop/irx/smap-ps2ip.irx),)
+PS2SMAP_SOURCE := $(PS2SDK)/iop/irx/smap-ps2ip.irx
 endif
 
 ifeq ($(strip $(PS2SMAP_SOURCE)),)
