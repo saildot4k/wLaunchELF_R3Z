@@ -29,6 +29,7 @@
 #define MMCE_SET_MODE_NUM 0x00
 #define MMCE_STATUS_BUSY 0x0001
 #define MMCE_READY_POLL_DELAY_US (200 * 1000)
+#define MMCE_STATUS_ERROR_BUDGET 8
 /*
  * Hardware card/gameid/channel operations can take several seconds.
  * 40 * 200ms = 8s max polling window.
@@ -53,13 +54,21 @@ int mmceCmdWaitReady(const char *devname)
 {
 	int i, status;
 	int ready_count = 0;
+	int status_error_count = 0;
 
 	for (i = 0; i < MMCE_READY_POLL_MAX; i++) {
 		status = mmceCmdGetStatusInternal(devname);
 		if (status < 0) {
-			DPRINTF("MMCE[%s] GET_STATUS poll=%d ret=%d\n", devname, i + 1, status);
-			return status;
+			status_error_count++;
+			DPRINTF("MMCE[%s] GET_STATUS poll=%d ret=%d transient_err=%d/%d\n",
+			        devname, i + 1, status, status_error_count, MMCE_STATUS_ERROR_BUDGET);
+			if (status_error_count >= MMCE_STATUS_ERROR_BUDGET)
+				return status;
+			ready_count = 0;
+			DelayThread(MMCE_READY_POLL_DELAY_US);
+			continue;
 		}
+		status_error_count = 0;
 		DPRINTF("MMCE[%s] GET_STATUS poll=%d status=0x%04x busy=%d\n",
 		        devname, i + 1, status & 0xFFFF, (status & MMCE_STATUS_BUSY) ? 1 : 0);
 		if ((status & MMCE_STATUS_BUSY) == 0) {
@@ -139,11 +148,22 @@ int mmceCmdWaitCardStable(const char *devname, u16 *card_num)
 	int i, status, ret;
 	u16 prev_card = 0xFFFF, cur_card = 0xFFFF;
 	int have_prev = 0;
+	int status_error_count = 0;
 
 	for (i = 0; i < MMCE_READY_POLL_MAX; i++) {
 		status = mmceCmdGetStatusInternal(devname);
 		if (status < 0)
-			return status;
+		{
+			status_error_count++;
+			DPRINTF("MMCE[%s] wait-card poll=%d status_ret=%d transient_err=%d/%d\n",
+			        devname, i + 1, status, status_error_count, MMCE_STATUS_ERROR_BUDGET);
+			if (status_error_count >= MMCE_STATUS_ERROR_BUDGET)
+				return status;
+			have_prev = 0;
+			DelayThread(MMCE_READY_POLL_DELAY_US);
+			continue;
+		}
+		status_error_count = 0;
 		if (status & MMCE_STATUS_BUSY) {
 			have_prev = 0;
 			DPRINTF("MMCE[%s] wait-card poll=%d busy=1\n", devname, i + 1);
@@ -176,6 +196,7 @@ int mmceCmdWaitGameIdStable(const char *devname, char *game_id, size_t game_id_s
 	char prev_game_id[256];
 	char cur_game_id[256];
 	int have_prev = 0;
+	int status_error_count = 0;
 
 	if ((game_id == NULL) || (game_id_size == 0))
 		return -1;
@@ -186,7 +207,17 @@ int mmceCmdWaitGameIdStable(const char *devname, char *game_id, size_t game_id_s
 	for (i = 0; i < MMCE_READY_POLL_MAX; i++) {
 		status = mmceCmdGetStatusInternal(devname);
 		if (status < 0)
-			return status;
+		{
+			status_error_count++;
+			DPRINTF("MMCE[%s] wait-gameid poll=%d status_ret=%d transient_err=%d/%d\n",
+			        devname, i + 1, status, status_error_count, MMCE_STATUS_ERROR_BUDGET);
+			if (status_error_count >= MMCE_STATUS_ERROR_BUDGET)
+				return status;
+			have_prev = 0;
+			DelayThread(MMCE_READY_POLL_DELAY_US);
+			continue;
+		}
+		status_error_count = 0;
 		if (status & MMCE_STATUS_BUSY) {
 			have_prev = 0;
 			DPRINTF("MMCE[%s] wait-gameid poll=%d busy=1\n", devname, i + 1);
@@ -244,11 +275,22 @@ int mmceCmdWaitChannelStable(const char *devname, u16 *channel_num)
 	int i, status, ret;
 	u16 prev_channel = 0xFFFF, cur_channel = 0xFFFF;
 	int have_prev = 0;
+	int status_error_count = 0;
 
 	for (i = 0; i < MMCE_READY_POLL_MAX; i++) {
 		status = mmceCmdGetStatusInternal(devname);
 		if (status < 0)
-			return status;
+		{
+			status_error_count++;
+			DPRINTF("MMCE[%s] wait-channel poll=%d status_ret=%d transient_err=%d/%d\n",
+			        devname, i + 1, status, status_error_count, MMCE_STATUS_ERROR_BUDGET);
+			if (status_error_count >= MMCE_STATUS_ERROR_BUDGET)
+				return status;
+			have_prev = 0;
+			DelayThread(MMCE_READY_POLL_DELAY_US);
+			continue;
+		}
+		status_error_count = 0;
 		if (status & MMCE_STATUS_BUSY) {
 			have_prev = 0;
 			DPRINTF("MMCE[%s] wait-channel poll=%d busy=1\n", devname, i + 1);
@@ -280,11 +322,23 @@ int mmceCmdWaitChannelValue(const char *devname, u16 expected_channel, u16 *chan
 	int i, status, ret;
 	int match_count = 0;
 	u16 cur_channel = 0xFFFF;
+	int status_error_count = 0;
 
 	for (i = 0; i < MMCE_READY_POLL_MAX; i++) {
 		status = mmceCmdGetStatusInternal(devname);
 		if (status < 0)
-			return status;
+		{
+			status_error_count++;
+			DPRINTF("MMCE[%s] wait-channel-value poll=%d status_ret=%d transient_err=%d/%d expected=%u\n",
+			        devname, i + 1, status, status_error_count, MMCE_STATUS_ERROR_BUDGET,
+			        (unsigned int)expected_channel);
+			if (status_error_count >= MMCE_STATUS_ERROR_BUDGET)
+				return status;
+			match_count = 0;
+			DelayThread(MMCE_READY_POLL_DELAY_US);
+			continue;
+		}
+		status_error_count = 0;
 		if (status & MMCE_STATUS_BUSY) {
 			match_count = 0;
 			DPRINTF("MMCE[%s] wait-channel-value poll=%d busy=1 expected=%u\n",

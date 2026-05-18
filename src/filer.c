@@ -648,6 +648,7 @@ static int deriveMmceCardId(const char *path, const FILEINFO *file, char *card_i
 static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mounted_slot, u16 *active_card_out, u16 *active_channel_out)
 {
 	int unit, ret, dummy;
+	int ch_attempt;
 	u16 channel_num, channel_wire_num, active_channel = 0xFFFF;
 	u16 active_channel_ui = 0xFFFF;
 	u16 card_num, active_card_num = 0xFFFF;
@@ -735,6 +736,18 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 		 */
 		if (active_card_id[0] == '\0') {
 			DPRINTF("MMCE verify gameid readback empty; continuing to channel switch.\n");
+			/*
+			 * Some devices do not provide immediate/valid GET_GAMEID readback.
+			 * In that case, gate channel switching on card readback stabilization
+			 * to avoid racing a still-in-progress card remap.
+			 */
+			ret = mmceCmdWaitCardStable(devname, &active_card_num);
+			if (ret < 0)
+				return ret;
+			DPRINTF("MMCE verify gameid-empty fallback card stable active=%u\n",
+			        (unsigned int)active_card_num);
+			if (active_card_out != NULL)
+				*active_card_out = active_card_num;
 		} else if (!mmceGameIdMatchesRequested(card_id, active_card_id, channel_num)) {
 			return -8;
 		}
@@ -758,23 +771,34 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 	 * Apply channel only after card/gameid switch completed and no longer busy.
 	 * Requested channel is parsed from <card>-<channel>.mc2/.mcd.
 	 */
-	ret = mmceCmdSetChannel(devname, channel_wire_num);
-	if (ret < 0)
-		return ret;
-	ret = mmceCmdWaitReady(devname);
-	if (ret < 0)
-		return ret;
-	/*
-	 * Verify strict 1-based channel readback:
-	 * request N, expect GET_CHANNEL == N.
-	 */
-	ret = mmceCmdWaitChannelValue(devname, channel_wire_num, &active_channel);
-	if (ret >= 0) {
-		channel_verified = TRUE;
-		active_channel_ui = active_channel;
-	} else {
+	for (ch_attempt = 0; ch_attempt < 3; ch_attempt++) {
+		ret = mmceCmdSetChannel(devname, channel_wire_num);
+		if (ret < 0)
+			return ret;
+		ret = mmceCmdWaitReady(devname);
+		if (ret < 0)
+			return ret;
+		/*
+		 * Verify strict 1-based channel readback:
+		 * request N, expect GET_CHANNEL == N.
+		 */
+		ret = mmceCmdWaitChannelValue(devname, channel_wire_num, &active_channel);
+		if (ret >= 0) {
+			channel_verified = TRUE;
+			active_channel_ui = active_channel;
+			break;
+		}
 		/* Capture best-effort active readback for diagnostics. */
 		(void)mmceCmdWaitChannelStable(devname, &active_channel);
+		DPRINTF("MMCE verify channel retry attempt=%d req=%u active=%u\n",
+		        ch_attempt + 1, (unsigned int)channel_wire_num, (unsigned int)active_channel);
+		if (ch_attempt < 2) {
+			u64 backoff_start;
+			/* Slow devices may need a little settle time before re-issuing SET_CHANNEL. */
+			backoff_start = Timer();
+			while (Timer() < backoff_start + 500) {
+			}
+		}
 	}
 	DPRINTF("MMCE verify channel strict req_ui=%u req_wire=%u active=%u verified=%d\n",
 	        (unsigned int)channel_num, (unsigned int)channel_wire_num,
@@ -5423,15 +5447,16 @@ int getFilePath(char *out, int cnfmode)
 									sprintf(msg1,
 									        "\nBootCard files must be selected from /BOOT/ or /CardN/.\nExamples:\nmmce0:/MemoryCards/PS2/BOOT/BootCard-2.mcd\nmmce0:/MemoryCards/PS2/Card0/BootCard-2.mcd\n\nMemCard Pro 2 game cards can be mounted from:\nmmce0:/PS2/<folder>/<foldername-N>.mc2");
 									(void)ynDialog(msg1);
-								} else if (x == -6) {
-									u16 mmce_requested_channel = 0;
-									if (parseMmceChannelFromFilename(files[browser_sel].name, &mmce_requested_channel) == 0)
-										sprintf(msg1, "\nMMCE CARD-CHANNEL failed to switch for \"%s\".\nRequested channel=%u, active channel=%u",
-										        files[browser_sel].name, mmce_requested_channel, mmce_active_channel);
-									else
-										sprintf(msg1, "\nMMCE CARD-CHANNEL failed to switch for \"%s\".\nActive channel=%u",
-										        files[browser_sel].name, mmce_active_channel);
-									(void)ynDialog(msg1);
+									} else if (x == -6) {
+										u16 mmce_requested_channel = 0;
+										u16 mmce_active_ui_guess = (mmce_active_channel == 0xFFFF) ? 0xFFFF : (u16)(mmce_active_channel + 1);
+										if (parseMmceChannelFromFilename(files[browser_sel].name, &mmce_requested_channel) == 0)
+											sprintf(msg1, "\nMMCE CARD-CHANNEL failed to switch for \"%s\".\nRequested channel=%u, active channel(raw)=%u, active channel(ui guess)=%u",
+											        files[browser_sel].name, mmce_requested_channel, mmce_active_channel, mmce_active_ui_guess);
+										else
+											sprintf(msg1, "\nMMCE CARD-CHANNEL failed to switch for \"%s\".\nActive channel(raw)=%u, active channel(ui guess)=%u",
+											        files[browser_sel].name, mmce_active_channel, mmce_active_ui_guess);
+										(void)ynDialog(msg1);
 									} else if (x == -7) {
 										if (mmce_active_card != 0xFFFF)
 											sprintf(msg1, "\nMMCE CARD-CHANNEL failed to switch.\nActive card=%u, active channel=%u",
