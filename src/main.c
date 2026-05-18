@@ -831,16 +831,23 @@ static void load_ps2ip(void)
 	int ret, ID __attribute__((unused));
 
 	load_ps2dev9();
+	if (!ps2dev9_loaded) {
+		DPRINTF(" [NET]: skipping PS2IP/SMAP because DEV9 failed to initialize\n");
+		return;
+	}
+
 	if (!have_ps2ip) {
 		ID = SifExecModuleBuffer(ps2ip_irx, size_ps2ip_irx, 0, NULL, &ret);
 		DPRINTF(" [PS2IP]: ID=%d, ret=%d\n", ID, ret);
-		have_ps2ip = 1;
+		have_ps2ip = (ID >= 0 && ret >= 0);
+		if (!have_ps2ip)
+			return;
 	}
 	if (!have_ps2smap) {
 		ID = SifExecModuleBuffer(ps2smap_irx, size_ps2smap_irx,
 		                    if_conf_len, &if_conf[0], &ret);
 		DPRINTF(" [SMAP]: ID=%d, ret=%d\n", ID, ret);
-		have_ps2smap = 1;
+		have_ps2smap = (ID >= 0 && ret >= 0);
 	}
 }
 #endif
@@ -912,10 +919,12 @@ void load_ps2host(void)
 	ensureCoreIoStackReady();
 	setupPowerOff();  //resolves the stall out when opening host: from LaunchELF's FileBrowser
 	load_ps2ip();
+	if (!(have_ps2ip && have_ps2smap))
+		return;
 	if (!have_ps2host) {
 		ID = SifExecModuleBuffer(ps2host_irx, size_ps2host_irx, 0, NULL, &ret);
 		DPRINTF(" [PS2HOST]: ID=%d, ret=%d\n", ID, ret);
-		have_ps2host = 1;
+		have_ps2host = (ID >= 0 && ret >= 0);
 	}
 }
 #endif
@@ -1115,10 +1124,12 @@ static void load_ps2ftpd(void)
 	arglen = strlen(arg_p);
 
 	load_ps2ip();
+	if (!(have_ps2ip && have_ps2smap))
+		return;
 	if (!have_ps2ftpd) {
 		ID = SifExecModuleBuffer(ps2ftpd_irx, size_ps2ftpd_irx, arglen, arg_p, &ret);
 		DPRINTF(" [PS2FTPD]: ID=%d, ret=%d\n", ID, ret);
-		have_ps2ftpd = 1;
+		have_ps2ftpd = (ID >= 0 && ret >= 0);
 	}
 }
 #endif
@@ -1131,10 +1142,12 @@ static void load_ps2netfs(void)
 	int ret, ID __attribute__((unused));
 
 	load_ps2ip();
+	if (!(have_ps2ip && have_ps2smap))
+		return;
 	if (!have_ps2netfs) {
 		ID = SifExecModuleBuffer(ps2netfs_irx, size_ps2netfs_irx, 0, NULL, &ret);
 		DPRINTF(" [NETFS]: ID=%d, ret=%d\n", ID, ret);
-		have_ps2netfs = 1;
+		have_ps2netfs = (ID >= 0 && ret >= 0);
 	}
 }
 #endif
@@ -1803,7 +1816,7 @@ static void loadNetModules(void)
 		// Also, my module checking makes some other tests redundant
 		load_ps2netfs();  // loads ps2netfs from internal buffer
 		load_ps2ftpd();   // loads ps2dftpd from internal buffer
-		have_NetModules = 1;
+		have_NetModules = (have_ps2netfs && have_ps2ftpd);
 	}
 	strcpy(mainMsg, netConfig);
 	if (setting->GUI_skin[0]) {

@@ -368,10 +368,20 @@ $(EE_ASM_DIR)ps2ip_irx.s: $(PS2SDK)/iop/irx/ps2ip.irx | $(EE_ASM_DIR)
 $(EE_ASM_DIR)udptty.s: $(PS2SDK)/iop/irx/udptty.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ udptty_irx
 
-vpath ps2smap.irx $(PS2SDK)/iop/irx/
-vpath ps2smap.irx $(PS2DEV)/ps2eth/smap/
-vpath ps2smap.irx iop/__precompiled/
-$(EE_ASM_DIR)ps2smap_irx.s: ps2smap.irx | $(EE_ASM_DIR)
+# ETH stack policy:
+# Prefer current PS2SDK network drivers and avoid legacy ps2eth/precompiled fallbacks.
+PS2SMAP_SOURCE :=
+ifneq ($(wildcard $(PS2SDK)/iop/irx/smap-ps2ip.irx),)
+PS2SMAP_SOURCE := $(PS2SDK)/iop/irx/smap-ps2ip.irx
+else ifneq ($(wildcard $(PS2SDK)/iop/irx/ps2smap.irx),)
+PS2SMAP_SOURCE := $(PS2SDK)/iop/irx/ps2smap.irx
+endif
+
+ifeq ($(strip $(PS2SMAP_SOURCE)),)
+$(error Missing SMAP+PS2IP driver in PS2SDK. Install/update PS2SDK so iop/irx contains smap-ps2ip.irx (or ps2smap.irx).)
+endif
+
+$(EE_ASM_DIR)ps2smap_irx.s: $(PS2SMAP_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ps2smap_irx
 
 $(EE_ASM_DIR)ps2ftpd_irx.s: iop/ps2ftpd.irx | $(EE_ASM_DIR)
