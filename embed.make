@@ -328,9 +328,6 @@ $(ATA_BD_AUTOGEN): | iop/__generated
 		IOP_OBJS_DIR=$(abspath iop/__generated/ata_bd_obj)/ \
 		IOP_BIN=ata_bd.irx
 
-iop/__generated:
-	mkdir -p $@
-
 $(EE_ASM_DIR)ata_bd_irx.s:$(ATA_BD_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ata_bd_irx
 else
@@ -357,6 +354,9 @@ $(EE_ASM_DIR)iomanx_irx.s: $(IOMANX_SOURCE) | $(EE_ASM_DIR)
 
 $(EE_ASM_DIR)filexio_irx.s: $(FILEXIO_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ filexio_irx
+
+iop/__generated:
+	mkdir -p $@
 
 $(EE_ASM_DIR)ps2dev9_irx.s: $(PS2SDK)/iop/irx/ps2dev9.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ps2dev9_irx
@@ -397,6 +397,39 @@ $(EE_ASM_DIR)ps2netfs_irx.s: $(PS2SDK)/iop/irx/ps2netfs.irx | $(EE_ASM_DIR)
 
 $(EE_ASM_DIR)ps2host_irx.s: iop/ps2host.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ps2host_irx
+endif
+
+ifeq ($(UDPFS),1)
+UDPFS_SMAP_SOURCE := iop/__generated/udpfs_smap.irx
+UDPFS_MINISTACK_SOURCE := iop/__generated/udpfs_ministack.irx
+UDPFS_IOMAN_SOURCE := iop/__generated/udpfs_ioman.irx
+
+$(UDPFS_SMAP_SOURCE): | iop/__generated
+	$(MAKE) -C thirdparty/nhddl-legacy/iop/udpfs/smap \
+		IOP_BIN_DIR=$(abspath iop/__generated)/ \
+		IOP_OBJS_DIR=$(abspath iop/__generated/udpfs_smap_obj)/ \
+		IOP_BIN=udpfs_smap.irx
+
+$(UDPFS_MINISTACK_SOURCE): | iop/__generated
+	$(MAKE) -C thirdparty/nhddl-legacy/iop/udpfs/ministack \
+		IOP_BIN_DIR=$(abspath iop/__generated)/ \
+		IOP_OBJS_DIR=$(abspath iop/__generated/udpfs_ministack_obj)/ \
+		IOP_BIN=udpfs_ministack.irx
+
+$(UDPFS_IOMAN_SOURCE): | iop/__generated
+	$(MAKE) -C thirdparty/nhddl-legacy/iop/udpfs/udpfs UDPFS_IOMAN=1 \
+		IOP_BIN_DIR=$(abspath iop/__generated)/ \
+		IOP_OBJS_DIR=$(abspath iop/__generated/udpfs_ioman_obj)/ \
+		IOP_BIN=udpfs_ioman.irx
+
+$(EE_ASM_DIR)udpfs_smap_irx.s: $(UDPFS_SMAP_SOURCE) | $(EE_ASM_DIR)
+	$(BIN2S) $< $@ udpfs_smap_irx
+
+$(EE_ASM_DIR)udpfs_ministack_irx.s: $(UDPFS_MINISTACK_SOURCE) | $(EE_ASM_DIR)
+	$(BIN2S) $< $@ udpfs_ministack_irx
+
+$(EE_ASM_DIR)udpfs_ioman_irx.s: $(UDPFS_IOMAN_SOURCE) | $(EE_ASM_DIR)
+	$(BIN2S) $< $@ udpfs_ioman_irx
 endif
 
 iop/ps2ftpd.irx: iop/oldlibs/ps2ftpd

@@ -299,6 +299,9 @@ void load_vmc_fs(void);
 #ifdef ETH
 void load_ps2host(void);
 #endif
+#ifdef UDPFS
+void load_udpfs(void);
+#endif
 void loadHddModules(void);
 #ifdef DVRP
 void loadDVRPHddModules(void);
@@ -446,7 +449,7 @@ extern int nparties;                     //Clearing this causes FileBrowser to r
 extern unsigned char *elisaFnt;
 char *PathPad_menu(const char *path);
 int getFilePath(char *out, const int cnfmode);
-#ifdef ETH
+#if defined(ETH) || defined(UDPFS)
 void initHOST(void);
 char *makeHostPath(char *dp, char *sp);
 #endif

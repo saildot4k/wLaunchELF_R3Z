@@ -2747,6 +2747,7 @@ void config(char *mainMsg, char *CNF)
 			sprintf(c, "  Advanced Settings...");
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
+			y += FONT_HEIGHT;
 
 			sprintf(c, "  %s", LNG(OK));
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
@@ -2758,6 +2759,8 @@ void config(char *mainMsg, char *CNF)
 			y = Menu_start_y + (s + 1) * FONT_HEIGHT;
 			if (s >= CONFIG_MAIN_AFT_BTNS)
 				y += FONT_HEIGHT / 2;
+			if (s >= CONFIG_MAIN_OK)
+				y += FONT_HEIGHT;
 			drawChar(LEFT_CUR, x, y, setting->color[COLOR_TEXT]);
 
 			//Tooltip section

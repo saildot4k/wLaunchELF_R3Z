@@ -20,6 +20,12 @@ IMPORT_BIN2C(ps2netfs_irx);
 IMPORT_BIN2C(ps2ftpd_irx);
 #endif
 
+#ifdef UDPFS
+IMPORT_BIN2C(udpfs_smap_irx);
+IMPORT_BIN2C(udpfs_ministack_irx);
+IMPORT_BIN2C(udpfs_ioman_irx);
+#endif
+
 #ifdef IOPTRAP
 IMPORT_BIN2C(ioptrap_irx);
 #endif
@@ -151,6 +157,11 @@ static u8 have_ps2host = 0;
 static u8 have_ps2ip = 0;
 static u8 have_NetModules = 0;
 static u8 have_ps2netfs = 0;
+#ifdef UDPFS
+static u8 have_udpfs_smap = 0;
+static u8 have_udpfs_ministack = 0;
+static u8 have_udpfs_ioman = 0;
+#endif
 
 static u8 have_ps2ftpd = 0;
 static u8 have_ps2kbd = 0;
@@ -279,6 +290,9 @@ static void load_smbman(void);
 static void ShowDebugInfo(void);
 static void load_ps2ftpd(void);
 static void load_ps2netfs(void);
+#ifdef UDPFS
+static void load_udpfs_stack(void);
+#endif
 static void loadBasicModules(void);
 static void ensureCoreIoStackReady(void);
 static int loadExternalFile(char *argPath, void **fileBaseP, int *fileSizeP);
@@ -299,7 +313,12 @@ static void stopDs34Input(void);
 static void closeAllAndPoweroff(void);
 static void poweroffHandler(int i);
 static void setupPowerOff(void);
+#ifdef ETH
 static void loadNetModules(void);
+#endif
+#ifdef UDPFS
+void load_udpfs(void);
+#endif
 static void startKbd(void);
 static void ShowFont(void);
 static void Validate_CNF_Path(void);
@@ -1084,6 +1103,52 @@ void load_ps2host(void)
 		DPRINTF(" [PS2HOST]: ID=%d, ret=%d\n", ID, ret);
 		have_ps2host = (ID >= 0 && ret >= 0);
 	}
+}
+#endif
+
+#ifdef UDPFS
+static void load_udpfs_stack(void)
+{
+	int ret, ID __attribute__((unused));
+	char ministack_arg[32];
+
+	ensureCoreIoStackReady();
+	setupPowerOff();
+	getIpConfig();
+	load_ps2dev9();
+	if (!ps2dev9_loaded) {
+		DPRINTF(" [UDPFS]: skipping load because DEV9 failed to initialize\n");
+		return;
+	}
+
+	if (!have_udpfs_smap) {
+		ID = SifExecModuleBuffer(udpfs_smap_irx, size_udpfs_smap_irx, 0, NULL, &ret);
+		DPRINTF(" [UDPFS_SMAP]: ID=%d, ret=%d\n", ID, ret);
+		have_udpfs_smap = (ID >= 0 && ret >= 0);
+		if (!have_udpfs_smap)
+			return;
+	}
+
+	if (!have_udpfs_ministack) {
+		snprintf(ministack_arg, sizeof(ministack_arg), "ip=%s", ip);
+		ID = SifExecModuleBuffer(udpfs_ministack_irx, size_udpfs_ministack_irx,
+		                         (int)strlen(ministack_arg) + 1, ministack_arg, &ret);
+		DPRINTF(" [UDPFS_MINISTACK]: ID=%d, ret=%d, arg=%s\n", ID, ret, ministack_arg);
+		have_udpfs_ministack = (ID >= 0 && ret >= 0);
+		if (!have_udpfs_ministack)
+			return;
+	}
+
+	if (!have_udpfs_ioman) {
+		ID = SifExecModuleBuffer(udpfs_ioman_irx, size_udpfs_ioman_irx, 0, NULL, &ret);
+		DPRINTF(" [UDPFS_IOMAN]: ID=%d, ret=%d\n", ID, ret);
+		have_udpfs_ioman = (ID >= 0 && ret >= 0);
+	}
+}
+
+void load_udpfs(void)
+{
+	load_udpfs_stack();
 }
 #endif
 //------------------------------
@@ -2416,6 +2481,15 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 #else
 			goto ELFnotFound;
 #endif
+		} else if (!strncmp(path, "udpfs:", 6)) {
+#ifdef UDPFS
+			load_udpfs();
+			party[0] = 0;
+			snprintf(fullpath, sizeof(fullpath), "%s", path);
+			goto CheckELF_fullpath;
+#else
+			goto ELFnotFound;
+#endif
 		} else if (!stricmp(path, setting->Misc_OSDSYS)) {
 		char arg0[20], arg1[20], arg2[20], arg3[40];
 		char *args[4] = {arg0, arg1, arg2, arg3};
@@ -2751,6 +2825,11 @@ static void Reset()
 	have_ps2host = 0;
 	have_ps2ip = 0;
 	have_ps2netfs = 0;
+#ifdef UDPFS
+	have_udpfs_smap = 0;
+	have_udpfs_ministack = 0;
+	have_udpfs_ioman = 0;
+#endif
 	have_vmc_fs = 0;
 	have_smbman = 0;
 	have_ps2ftpd = 0;
@@ -3065,17 +3144,15 @@ int main(int argc, char *argv[])
 #endif
 		}
 	}
+#if defined(ETH) || defined(UDPFS)
 #ifdef ETH
-	if (!strncmp(LaunchElfDir, "host", 4)) {
+	if (!strncmp(LaunchElfDir, "host", 4))
 		boot = BOOT_DEVICE_HOST;
-	}
 #endif
-#ifdef MX4SIO
-	if ((boot == BOOT_DEVICE_MASS) && LaunchElfDir[0] && !wleExists(LaunchElfDir)) {
-		if (loadMx4sioModules()) {
-			DPRINTF("Boot path '%s' became accessible after loading MX4SIO.\n", LaunchElfDir);
-		}
-	}
+#ifdef UDPFS
+	if (!strncmp(LaunchElfDir, "udpfs", 5))
+		boot = BOOT_DEVICE_HOST;
+#endif
 #endif
 	DPRINTF("Boot device is %d\n", boot);
 	if (((p = strrchr(LaunchElfDir, '/')) == NULL) && ((p = strrchr(LaunchElfDir, '\\')) == NULL))
@@ -3092,11 +3169,20 @@ int main(int argc, char *argv[])
 	InitializeBootExecPath();
 
 	CNF_error = loadConfig(mainMsg, strcpy(CNF, "LAUNCHELF.CNF"));
-#ifdef ETH
+#if defined(ETH) || defined(UDPFS)
 	if (boot == BOOT_DEVICE_HOST) {
-		//If booted from the host: device, bring up the host device at this point.
+		//If booted from a network filesystem device, bring that stack up now.
 		getIpConfig();
+#if defined(ETH) && defined(UDPFS)
+		if (!strncmp(LaunchElfDir, "udpfs", 5))
+			load_udpfs();
+		else
+			initHOST();
+#elif defined(ETH)
 		initHOST();
+#else
+		load_udpfs();
+#endif
 	}
 #endif
 	DPRINTF("setupGS()\n");

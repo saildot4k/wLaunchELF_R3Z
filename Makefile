@@ -6,6 +6,7 @@ DS34 ?= 0
 SMB ?= 0
 TMANIP ?= 1
 ETH ?= 1
+UDPFS ?= 0
 EXFAT ?= 1
 DVRP ?= 1
 IOP_RESET ?= 1
@@ -20,7 +21,7 @@ LCDVD ?= LEGACY#or LATEST
 # ----------------------------- #
 .SILENT:
 
-BIN_NAME = $(HAS_EXFAT)$(HAS_DS34)$(HAS_ETH)$(HAS_MX4SIO)$(HAS_MMCE)$(HAS_SMB)$(HAS_DVRP)$(HAS_XFROM)$(HAS_EESIO)$(HAS_UDPTTY)$(HAS_PPCTTY)$(HAS_IOP_RESET)
+BIN_NAME = $(HAS_EXFAT)$(HAS_DS34)$(HAS_ETH)$(HAS_UDPFS)$(HAS_MX4SIO)$(HAS_MMCE)$(HAS_SMB)$(HAS_DVRP)$(HAS_XFROM)$(HAS_EESIO)$(HAS_UDPTTY)$(HAS_PPCTTY)$(HAS_IOP_RESET)
 ifeq ($(DEBUG), 0)
   EE_BIN = UNC-BOOT$(BIN_NAME).ELF
   EE_BIN_PKD = BOOT$(BIN_NAME).ELF
@@ -156,10 +157,26 @@ ifeq ($(IOP_RESET),0)
 endif
 
 ifeq ($(ETH),1)
+ifeq ($(UDPFS),1)
+    $(error ETH and UDPFS cannot be enabled together. Choose one network stack.)
+endif
+endif
+
+ifeq ($(ETH),1)
     EE_OBJS += ps2smap_irx.o ps2ftpd_irx.o ps2host_irx.o ps2netfs_irx.o ps2ip_irx.o
     EE_CFLAGS += -DETH
-else
+endif
+
+ifeq ($(UDPFS),1)
+    EE_OBJS += udpfs_smap_irx.o udpfs_ministack_irx.o udpfs_ioman_irx.o
+    EE_CFLAGS += -DUDPFS
+    HAS_UDPFS = -UDPFS
+endif
+
+ifneq ($(ETH),1)
+ifneq ($(UDPFS),1)
     HAS_ETH = -NO_NETWORK
+endif
 endif
 
 ifeq ($(UDPTTY),1)
