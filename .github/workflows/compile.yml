@@ -86,6 +86,22 @@ jobs:
       run: |
         chmod +x scripts/stale_code_audit.sh scripts/ci/resolve_make_args.sh
 
+    - name: Prepare fixed MMCEMan sources
+      run: |
+        if [ ! -d thirdparty/mmceman/mmceman ]; then
+          git clone --depth 1 https://github.com/ps2-mmce/mmceman thirdparty/mmceman
+        fi
+        if git -C thirdparty/mmceman apply --check ../scripts/ci/mmceman_mmce_cmds_fix.patch; then
+          git -C thirdparty/mmceman apply ../scripts/ci/mmceman_mmce_cmds_fix.patch
+        else
+          if grep -q "wrbuf\\[len + 4\\] = 0xff;" thirdparty/mmceman/mmceman/src/mmce_cmds.c; then
+            echo "MMCEMan fix already present."
+          else
+            echo "Failed to apply MMCEMan fix patch." >&2
+            exit 1
+          fi
+        fi
+
     - name: Compile wLaunchELF
       run: |
         FLAGS="$(scripts/ci/resolve_make_args.sh \

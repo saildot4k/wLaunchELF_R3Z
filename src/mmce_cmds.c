@@ -31,9 +31,9 @@
 #define MMCE_READY_POLL_DELAY_US (200 * 1000)
 /*
  * Hardware card/gameid/channel operations can take several seconds.
- * 30 * 200ms = 6s max polling window.
+ * 40 * 200ms = 8s max polling window.
  */
-#define MMCE_READY_POLL_MAX 30
+#define MMCE_READY_POLL_MAX 40
 
 static int mmceCmdGetStatusInternal(const char *devname)
 {

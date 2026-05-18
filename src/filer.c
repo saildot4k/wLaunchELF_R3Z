@@ -672,11 +672,7 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 
 	if (parseMmceChannelFromFilename(file->name, &channel_num) < 0)
 		return -4;
-	/*
-	 * UI/filename channels are 1-based (<name>-1, <name>-2, ...).
-	 * Send 1-based first; some MMCE stacks report or consume channel base
-	 * differently, so verification accepts either convention.
-	 */
+	/* UI/filename channels are 1-based (<name>-1, <name>-2, ...). */
 	channel_wire_num = channel_num;
 	DPRINTF("MMCE mount request path='%s' file='%s' unit=%d req_channel_ui=%u req_channel_wire=%u\n",
 	        path, file->name, unit, (unsigned int)channel_num, (unsigned int)channel_wire_num);
@@ -768,27 +764,25 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 	ret = mmceCmdWaitReady(devname);
 	if (ret < 0)
 		return ret;
-	/* Wait for post-switch channel readback to stabilize. */
-	ret = mmceCmdWaitChannelStable(devname, &active_channel);
-	if (ret < 0)
-		return ret;
 	/*
-	 * Accept either readback base:
-	 * - one-based: active == requested_ui
-	 * - zero-based: active + 1 == requested_ui
+	 * Verify strict 1-based channel readback:
+	 * request N, expect GET_CHANNEL == N.
 	 */
-	if ((active_channel == channel_num) || ((u16)(active_channel + 1) == channel_num)) {
+	ret = mmceCmdWaitChannelValue(devname, channel_wire_num, &active_channel);
+	if (ret >= 0) {
 		channel_verified = TRUE;
-		active_channel_ui = (active_channel == channel_num) ? active_channel : (u16)(active_channel + 1);
+		active_channel_ui = active_channel;
+	} else {
+		/* Capture best-effort active readback for diagnostics. */
+		(void)mmceCmdWaitChannelStable(devname, &active_channel);
 	}
-	DPRINTF("MMCE verify channel primary req_ui=%u req_wire=%u active_raw=%u active_ui_guess=%u verified=%d\n",
+	DPRINTF("MMCE verify channel strict req_ui=%u req_wire=%u active=%u verified=%d\n",
 	        (unsigned int)channel_num, (unsigned int)channel_wire_num,
-	        (unsigned int)active_channel, (unsigned int)((u16)(active_channel + 1)), channel_verified);
+	        (unsigned int)active_channel, channel_verified);
 
 	if (!channel_verified) {
 		if (active_channel_out != NULL) {
-			/* Show best-effort UI mapping from zero-based fallback when unknown. */
-			*active_channel_out = (u16)(active_channel + 1);
+			*active_channel_out = active_channel;
 		}
 		return -6;
 	}
@@ -834,15 +828,47 @@ static int promptMmceChannel1to8(void)
 	return input[0] - '0';
 }
 
-static int mmceSwitchChannelOnly(const char *path, int delta, int requested_ui, u16 *target_ui_out, u16 *active_ui_out)
+static int buildMmceChannelFileName(const FILEINFO *file, u16 channel_ui, char *out_name, size_t out_name_size)
+{
+	const char *dot, *dash;
+	size_t prefix_len;
+
+	if ((file == NULL) || (out_name == NULL) || (out_name_size == 0))
+		return -1;
+	if (!isMmceCardImageFile(file))
+		return -1;
+
+	dot = strrchr(file->name, '.');
+	if (dot == NULL)
+		return -1;
+	dash = dot;
+	while ((dash > file->name) && (*(dash - 1) != '-'))
+		dash--;
+	if ((dash <= file->name) || (*(dash - 1) != '-'))
+		return -1;
+	prefix_len = (size_t)(dash - file->name); /* includes trailing '-' */
+
+	if (prefix_len + 1 >= out_name_size)
+		return -1;
+	memcpy(out_name, file->name, prefix_len);
+	out_name[prefix_len] = '\0';
+	snprintf(out_name + prefix_len, out_name_size - prefix_len, "%u%s",
+	         (unsigned int)channel_ui, dot);
+	return 0;
+}
+
+static int mmceSwitchChannelOnly(const char *path, const FILEINFO *selected_file, int delta, int requested_ui, u16 *target_ui_out, u16 *active_ui_out)
 {
 	int ret, dummy;
 	int unit;
 	u16 current_raw = 0;
 	u16 current_ui = 1;
 	u16 target_ui;
-	u16 active_raw = 0;
+	u16 active_channel = 0xFFFF;
+	u16 active_card = 0xFFFF;
 	char devname[8];
+	char req_name[MAX_NAME];
+	FILEINFO req_file;
 
 	if (target_ui_out != NULL)
 		*target_ui_out = 0xFFFF;
@@ -852,6 +878,8 @@ static int mmceSwitchChannelOnly(const char *path, int delta, int requested_ui, 
 	unit = getMmceUnitFromPath(path);
 	if (unit < 0 || unit > 1)
 		return -1;
+	if ((selected_file == NULL) || !isMmceCardImageFile(selected_file))
+		return -2;
 
 	if ((requested_ui < 0) || (requested_ui > 8))
 		return -2;
@@ -868,7 +896,7 @@ static int mmceSwitchChannelOnly(const char *path, int delta, int requested_ui, 
 	if (ret < 0)
 		return ret;
 
-	current_ui = (u16)(current_raw + 1);
+	current_ui = current_raw;
 	if ((current_ui < 1) || (current_ui > 8))
 		current_ui = 1;
 
@@ -885,29 +913,31 @@ static int mmceSwitchChannelOnly(const char *path, int delta, int requested_ui, 
 	DPRINTF("MMCE channel-only switch unit=%d current_raw=%u current_ui=%u target_ui=%u delta=%d\n",
 	        unit, (unsigned int)current_raw, (unsigned int)current_ui, (unsigned int)target_ui, delta);
 
-	ret = mmceCmdSetChannel(devname, target_ui);
+	ret = buildMmceChannelFileName(selected_file, target_ui, req_name, sizeof(req_name));
 	if (ret < 0)
 		return ret;
-	ret = mmceCmdWaitReady(devname);
-	if (ret < 0)
-		return ret;
-	ret = mmceCmdWaitChannelStable(devname, &active_raw);
+
+	req_file = *selected_file;
+	snprintf(req_file.name, sizeof(req_file.name), "%s", req_name);
+	DPRINTF("MMCE channel-only context switch using '%s'\n", req_file.name);
+
+	ret = mountMmceCardImage(path, &req_file, NULL, &active_card, &active_channel);
 	if (ret < 0)
 		return ret;
 
 	if (target_ui_out != NULL)
 		*target_ui_out = target_ui;
 	if (active_ui_out != NULL)
-		*active_ui_out = (u16)(active_raw + 1);
+		*active_ui_out = active_channel;
 
-	DPRINTF("MMCE channel-only verify target_ui=%u active_raw=%u active_ui=%u\n",
-	        (unsigned int)target_ui, (unsigned int)active_raw, (unsigned int)(active_raw + 1));
+	DPRINTF("MMCE channel-only verify target_ui=%u active_ui=%u active_card=%u\n",
+	        (unsigned int)target_ui, (unsigned int)active_channel, (unsigned int)active_card);
 
-	/* Refresh MCMAN state after channel switch. */
+	/* Refresh MCMAN state after switch. */
 	mcGetInfo(unit, 0, &dummy, &dummy, &dummy);
 	mcSync(0, NULL, &dummy);
 
-	return ((u16)(active_raw + 1) == target_ui) ? 0 : -6;
+	return (active_channel == target_ui) ? 0 : -6;
 }
 #endif
 
@@ -2746,9 +2776,11 @@ int menu(const char *path, FILEINFO *file)
 	}
 #ifdef MMCE
 	if (!menu_disabled && (getMmceUnitFromPath(path) >= 0)) {
-		enable[MMCE_CH_DEC] = TRUE;
-		enable[MMCE_CH_INC] = TRUE;
-		enable[MMCE_CH_SET] = TRUE;
+		if (isMmceCardImageFile(file)) {
+			enable[MMCE_CH_DEC] = TRUE;
+			enable[MMCE_CH_INC] = TRUE;
+			enable[MMCE_CH_SET] = TRUE;
+		}
 	}
 #endif
 //#ifdef TMANIP
@@ -5343,16 +5375,19 @@ int getFilePath(char *out, int cnfmode)
 							}
 						}
 
-						x = mmceSwitchChannelOnly(path, delta, requested_channel, &mmce_target_channel, &mmce_active_channel);
+						x = mmceSwitchChannelOnly(path, &files[browser_sel], delta, requested_channel, &mmce_target_channel, &mmce_active_channel);
 						if (x >= 0) {
 							snprintf(msg0, sizeof(msg0), "MMCE channel switched! target=%u active=%u",
 							         (unsigned int)mmce_target_channel, (unsigned int)mmce_active_channel);
 							browser_pushed = FALSE;
+							browser_cd = TRUE;
 						} else if (x == -6) {
 							snprintf(msg1, sizeof(msg1),
 							         "\nMMCE channel switch failed.\nRequested channel=%u, active channel=%u",
 							         (unsigned int)mmce_target_channel, (unsigned int)mmce_active_channel);
 							(void)ynDialog(msg1);
+						} else if (x == -2) {
+							(void)ynDialog("\nMMCE channel actions require selecting a .mc2/.mcd file.");
 						} else {
 							snprintf(msg1, sizeof(msg1), "\nMMCE channel switch failed.\nResult=%d", x);
 							(void)ynDialog(msg1);

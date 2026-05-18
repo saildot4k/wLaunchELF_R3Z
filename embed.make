@@ -46,6 +46,10 @@ USBMASS_BD_SDK_MODULE_DIR :=
 IOMANX_SOURCE := iop/__precompiled/iomanX.irx
 FILEXIO_SOURCE := iop/__precompiled/fileXio.irx
 
+MMCEMAN_SOURCE :=
+MMCEMAN_THIRDPARTY_DIR := thirdparty/mmceman/mmceman
+MMCEMAN_THIRDPARTY_IRX := $(MMCEMAN_THIRDPARTY_DIR)/irx/mmceman.irx
+
 ifneq ($(wildcard $(PS2SDK)/iop/irx/bdm.irx),)
 BDM_SOURCE := $(PS2SDK)/iop/irx/bdm.irx
 endif
@@ -54,6 +58,20 @@ BDMFS_FATFS_SOURCE := $(PS2SDK)/iop/irx/bdmfs_fatfs.irx
 endif
 ifneq ($(wildcard $(PS2SDK)/iop/irx/usbmass_bd.irx),)
 USBMASS_BD_SOURCE := $(PS2SDK)/iop/irx/usbmass_bd.irx
+endif
+
+ifneq ($(wildcard $(MMCEMAN_THIRDPARTY_DIR)/Makefile),)
+MMCEMAN_SOURCE := $(MMCEMAN_THIRDPARTY_IRX)
+endif
+
+ifeq ($(strip $(MMCEMAN_SOURCE)),)
+ifneq ($(wildcard iop/__precompiled/mmceman.irx),)
+MMCEMAN_SOURCE := iop/__precompiled/mmceman.irx
+endif
+endif
+
+ifeq ($(strip $(MMCEMAN_SOURCE)),)
+$(error Missing mmceman.irx. Provide iop/__precompiled/mmceman.irx or thirdparty/mmceman/mmceman sources)
 endif
 
 ifeq ($(strip $(BDM_SOURCE)),)
@@ -226,8 +244,13 @@ $(MX4SIO_BD_AUTOGEN): | iop/__generated
 
 $(EE_ASM_DIR)mx4sio_bd.s: $(MX4SIO_BD_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ mx4sio_bd_irx
-	
-$(EE_ASM_DIR)mmceman_irx.s: iop/__precompiled/mmceman.irx | $(EE_ASM_DIR)
+
+ifneq ($(wildcard $(MMCEMAN_THIRDPARTY_DIR)/Makefile),)
+$(MMCEMAN_THIRDPARTY_IRX):
+	$(MAKE) -C $(MMCEMAN_THIRDPARTY_DIR) DEBUG=$(DEBUG)
+endif
+
+$(EE_ASM_DIR)mmceman_irx.s: $(MMCEMAN_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ mmceman_irx
  
 $(EE_ASM_DIR)extflash_irx.s: iop/__precompiled/extflash.irx | $(EE_ASM_DIR)

@@ -1,0 +1,113 @@
+diff --git a/mmceman/src/mmce_cmds.c b/mmceman/src/mmce_cmds.c
+index 2e93517..b0cfcc9 100644
+--- a/mmceman/src/mmce_cmds.c
++++ b/mmceman/src/mmce_cmds.c
+@@ -14,13 +14,16 @@ int mmce_cmd_ping(void)
+     u8 wrbuf[0x7];
+     u8 rdbuf[0x7];
+ 
++    memset(wrbuf, 0xff, sizeof(wrbuf));
++    memset(rdbuf, 0xff, sizeof(rdbuf));
++
+     wrbuf[0x0] = MMCE_ID;          //identifier
+     wrbuf[0x1] = MMCE_CMD_PING;    //command
+     wrbuf[0x2] = MMCE_RESERVED;    //reserved byte
+-    wrbuf[0x3] = 0;
+-    wrbuf[0x4] = 0;
+-    wrbuf[0x5] = 0;
+-    wrbuf[0x6] = 0;
++    wrbuf[0x3] = 0xff;
++    wrbuf[0x4] = 0xff;
++    wrbuf[0x5] = 0xff;
++    wrbuf[0x6] = 0xff;
+ 
+     mmce_sio2_lock();
+     res = mmce_sio2_tx_rx_pio(sizeof(wrbuf), sizeof(rdbuf), wrbuf, rdbuf, &timeout_200ms);
+@@ -51,6 +54,9 @@ int mmce_cmd_get_status(void)
+     u8 wrbuf[0x3];
+     u8 rdbuf[0x6];
+ 
++    memset(wrbuf, 0xff, sizeof(wrbuf));
++    memset(rdbuf, 0xff, sizeof(rdbuf));
++
+     wrbuf[0x0] = MMCE_ID;                //identifier
+     wrbuf[0x1] = MMCE_CMD_GET_STATUS;    //command
+     wrbuf[0x2] = MMCE_RESERVED;          //reserved byte
+@@ -80,6 +86,9 @@ int mmce_cmd_get_card(void)
+     u8 wrbuf[0x3];
+     u8 rdbuf[0x6];
+ 
++    memset(wrbuf, 0xff, sizeof(wrbuf));
++    memset(rdbuf, 0xff, sizeof(rdbuf));
++
+     wrbuf[0x0] = MMCE_ID;            //identifier
+     wrbuf[0x1] = MMCE_CMD_GET_CARD;  //command
+     wrbuf[0x2] = MMCE_RESERVED;      //reserved byte
+@@ -109,6 +118,9 @@ int mmce_cmd_set_card(u8 type, u8 mode, u16 num)
+     u8 wrbuf[0x8];
+     u8 rdbuf[0x2];
+ 
++    memset(wrbuf, 0xff, sizeof(wrbuf));
++    memset(rdbuf, 0xff, sizeof(rdbuf));
++
+     wrbuf[0x0] = MMCE_ID;           //identifier
+     wrbuf[0x1] = MMCE_CMD_SET_CARD; //command
+     wrbuf[0x2] = MMCE_RESERVED;     //reserved byte
+@@ -140,6 +152,9 @@ int mmce_cmd_get_channel(void)
+     u8 wrbuf[0x3];
+     u8 rdbuf[0x6];
+ 
++    memset(wrbuf, 0xff, sizeof(wrbuf));
++    memset(rdbuf, 0xff, sizeof(rdbuf));
++
+     wrbuf[0x0] = MMCE_ID;                //identifier
+     wrbuf[0x1] = MMCE_CMD_GET_CHANNEL;   //command
+     wrbuf[0x2] = MMCE_RESERVED;          //reserved byte
+@@ -169,6 +184,9 @@ int mmce_cmd_set_channel(u8 mode, u16 num)
+     u8 wrbuf[0x7];
+     u8 rdbuf[0x2];
+ 
++    memset(wrbuf, 0xff, sizeof(wrbuf));
++    memset(rdbuf, 0xff, sizeof(rdbuf));
++
+     wrbuf[0x0] = MMCE_ID;               //identifier
+     wrbuf[0x1] = MMCE_CMD_SET_CHANNEL;  //command
+     wrbuf[0x2] = MMCE_RESERVED;         //reserved byte
+@@ -199,6 +217,9 @@ int mmce_cmd_get_gameid(void *ptr)
+     u8 wrbuf[0x3];
+     u8 rdbuf[0xFF]; //fixed packet size of 255 bytes
+ 
++    memset(wrbuf, 0xff, sizeof(wrbuf));
++    memset(rdbuf, 0xff, sizeof(rdbuf));
++
+     wrbuf[0x0] = MMCE_ID;             //identifier
+     wrbuf[0x1] = MMCE_CMD_GET_GAMEID; //command
+     wrbuf[0x2] = MMCE_RESERVED;       //reserved byte
+@@ -232,6 +253,9 @@ int mmce_cmd_set_gameid(void *ptr)
+     u8 wrbuf[0xFF];
+     u8 rdbuf[0x2];
+ 
++    memset(wrbuf, 0xff, sizeof(wrbuf));
++    memset(rdbuf, 0xff, sizeof(rdbuf));
++
+     wrbuf[0x0] = MMCE_ID;             //identifier
+     wrbuf[0x1] = MMCE_CMD_SET_GAMEID; //command
+     wrbuf[0x2] = MMCE_RESERVED;       //reserved byte
+@@ -239,6 +263,7 @@ int mmce_cmd_set_gameid(void *ptr)
+ 
+     char *str = &wrbuf[0x4];
+     strcpy(str, ptr);
++    wrbuf[len + 4] = 0xff;
+ 
+     mmce_sio2_lock();
+     res = mmce_sio2_tx_rx_pio(len + 5, sizeof(rdbuf), wrbuf, rdbuf, &timeout_1s);
+@@ -263,6 +288,9 @@ int mmce_cmd_reset(void)
+     u8 wrbuf[0x5];
+     u8 rdbuf[0x5];
+ 
++    memset(wrbuf, 0xff, sizeof(wrbuf));
++    memset(rdbuf, 0xff, sizeof(rdbuf));
++
+     wrbuf[0x0] = MMCE_ID;           //identifier
+     wrbuf[0x1] = MMCE_CMD_RESET;    //command
+     wrbuf[0x2] = MMCE_RESERVED;     //reserved byte
