@@ -1755,7 +1755,6 @@ int getDir(const char *path, FILEINFO *info)
 		n = readHDDDVRP(path, info, max);
 #endif
 	else if (!strncmp(path, "mass", 4)) {
-		loadUsbModules();
 		if (!USB_mass_scanned)
 			scan_USB_mass();
 		n = readGENERIC(path, info, max);
@@ -1763,7 +1762,6 @@ int getDir(const char *path, FILEINFO *info)
 	else if (!strncmp(path, "usb", 3)) {
 		char mass_path[MAX_PATH];
 
-		loadUsbModules();
 		if (mapUsbPathToMassPath(path, mass_path) < 0)
 			return 0;
 		if (!USB_mass_scanned)
@@ -2882,14 +2880,13 @@ int copy(char *outPath, const char *inPath, FILEINFO file, int recurses)
 	    *buff = NULL, inParty[MAX_NAME], outParty[MAX_NAME];
 	int nfiles, i;
 	size_t size;
-	int ret = -1, pfsout = -1, pfsin = -1, in_fd = -1, out_fd = -1, buffSize, bytesRead, bytesWritten, chunkWritten, lseek_size;
+	int ret = -1, pfsout = -1, pfsin = -1, in_fd = -1, out_fd = -1, buffSize, bytesRead, bytesWritten;
 	int dummy;
 	sceMcTblGetDir stats;
 	int speed = 0;
 	int remain_time = 0, TimeDiff = 0;
 	long old_size = 0, SizeDiff = 0;
 	u64 OldTime = 0LL;
-	u64 listed_size;
 	psu_header PSU_head;
 	mcT_header *mcT_head_p = (mcT_header *)&file.stats;
 	mcT_header *mcT_files_p = (mcT_header *)&files[0].stats;
@@ -3340,12 +3337,7 @@ non_PSU_RESTORE_init:
 		in_fd = genOpen(in, FIO_O_RDONLY);
 		if (in_fd < 0)
 			goto copy_file_exit;
-		lseek_size = genLseek(in_fd, 0, SEEK_END);
-		listed_size = ((u64)file.stats.Reserve2 << 32) | file.stats.FileSizeByte;
-		if (lseek_size > 0)
-			size = (size_t)lseek_size;
-		else
-			size = (size_t)listed_size;
+		size = genLseek(in_fd, 0, SEEK_END);
 		genLseek(in_fd, 0, SEEK_SET);
 	}
 
@@ -3372,16 +3364,7 @@ non_PSU_RESTORE_init:
 			makeHostPath(out, out);
 #endif
 		genLimObjName(out, 0);                                //Limit dest file name
-#ifdef UDPFS
-		/*
-		 * UDPFS servers can be sensitive to remove-before-create flows.
-		 * O_TRUNC|O_CREAT is enough to replace existing files.
-		 */
-		if (strncmp(out, "udpfs:", 6))
-			genRemove(out);
-#else
 		genRemove(out);                                       //Remove old file if present
-#endif
 		out_fd = genOpen(out, FIO_O_WRONLY | FIO_O_TRUNC | FIO_O_CREAT);  //Create new file
 		if (out_fd < 0)
 			goto copy_file_exit;
@@ -3405,13 +3388,9 @@ non_PSU_RESTORE_init:
 		buffSize = 131072;  //Use 128KB when writing to ATA (BDM FATFS).
 	else if (!strncmp(in, "mc", 2))
 		buffSize = 262144;  //Use 256KB if reading from MC (still pretty slow)
-#ifdef UDPFS
-	else if (!strncmp(out, "udpfs", 5))
-		buffSize = 32768;  //Use 32KB for UDPFS writes to keep per-write transactions small.
-#endif
-#ifdef ETH
-	else if (!strncmp(out, "host", 4))
-		buffSize = 393216;  //Use 384KB if writing to HOST (acceptable)
+#if defined(ETH) || defined(UDPFS)
+	else if (!strncmp(out, "host", 4) || !strncmp(out, "udpfs", 5))
+		buffSize = 393216;  //Use 384KB if writing to HOST/UDPFS (acceptable)
 #endif
 	else if ((!strncmp(in, "mass", 4)) || (!strncmp(in, "host", 4)) || (!strncmp(in, "udpfs", 5))
 #ifdef MX4SIO
@@ -3420,10 +3399,8 @@ non_PSU_RESTORE_init:
 	         || (!strncmp(in, "ata", 3)))
 		buffSize = 524288;  //Use 512KB reading from USB or HOST (acceptable)
 
-	if (size > 0 && size < (size_t)buffSize)
+	if (size < buffSize)
 		buffSize = size;
-	if (buffSize < 1024)
-		buffSize = 1024;
 
 	buff = (char *)memalign(64, buffSize);  //Attempt buffer allocation
 	if (buff == NULL) {                     //if allocation fails
@@ -3437,45 +3414,6 @@ non_PSU_RESTORE_init:
 
 	old_size = written_size;  //Note initial progress data pos
 	OldTime = Timer();        //Note initial progress time
-
-	if (size == 0) {
-		/*
-		 * Fallback path for sources that report unknown/zero length:
-		 * stream copy until EOF so we never silently create empty output files.
-		 */
-		for (;;) {
-			bytesRead = genRead(in_fd, buff, buffSize);
-			if (bytesRead < 0) {
-				genClose(out_fd);
-				out_fd = -1;
-				if (PM_flag[recurses] != PM_PSU_BACKUP)
-					genRemove(out);
-				ret = -EIO;
-				goto copy_file_exit;
-			}
-			if (bytesRead == 0)
-				break;
-
-			bytesWritten = 0;
-			while (bytesWritten < bytesRead) {
-				chunkWritten = genWrite(out_fd, buff + bytesWritten, bytesRead - bytesWritten);
-				if (chunkWritten <= 0)
-					break;
-				bytesWritten += chunkWritten;
-			}
-			if (bytesWritten != bytesRead) {
-				genClose(out_fd);
-				out_fd = -1;
-				if (PM_flag[recurses] != PM_PSU_BACKUP)
-					genRemove(out);
-				ret = -EIO;
-				goto copy_file_exit;
-			}
-
-			written_size += bytesRead;
-		}
-		goto copy_file_data_done;
-	}
 
 	while (size > 0) {  // ----- The main copying loop starts here -----
 
@@ -3568,7 +3506,8 @@ non_PSU_RESTORE_init:
 			}
 		}
 		bytesRead = genRead(in_fd, buff, buffSize);
-		if (bytesRead <= 0) {
+		bytesWritten = (bytesRead == buffSize) ? genWrite(out_fd, buff, buffSize) : 0;
+		if ((bytesRead != buffSize) || (bytesWritten != buffSize)) {
 			genClose(out_fd);
 			out_fd = -1;
 			if (PM_flag[recurses] != PM_PSU_BACKUP)
@@ -3576,27 +3515,9 @@ non_PSU_RESTORE_init:
 			ret = -EIO;  // flag generic I/O error
 			goto copy_file_exit;
 		}
-
-		bytesWritten = 0;
-		while (bytesWritten < bytesRead) {
-			chunkWritten = genWrite(out_fd, buff + bytesWritten, bytesRead - bytesWritten);
-			if (chunkWritten <= 0)
-				break;
-			bytesWritten += chunkWritten;
-		}
-		if (bytesWritten != bytesRead) {
-			genClose(out_fd);
-			out_fd = -1;
-			if (PM_flag[recurses] != PM_PSU_BACKUP)
-				genRemove(out);
-			ret = -EIO;  // flag generic I/O error
-			goto copy_file_exit;
-		}
-
-		size -= bytesRead;
-		written_size += bytesRead;
+		size -= buffSize;
+		written_size += buffSize;
 	}  // ends while(size>0), ----- The main copying loop ends here -----
-copy_file_data_done:
 	ret = 0;
 	//Here the file has been copied. without error, as indicated by 'ret' above
 	//but we also need to copy attributes and timestamps (as yet only for MC)

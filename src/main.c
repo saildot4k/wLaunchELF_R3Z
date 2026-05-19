@@ -302,7 +302,7 @@ static void ensureCoreIoStackReady(void);
 static int loadExternalFile(char *argPath, void **fileBaseP, int *fileSizeP);
 static int loadExternalModule(char *modPath, void *defBase, int defSize);
 static void loadUsbDModule(void);
-void loadUsbModules(void);
+static void loadUsbModules(void);
 static void loadKbdModules(void);
 static void resetRuntimeDeviceState(void);
 static void resetUsbMassScanState(void);
@@ -1697,7 +1697,7 @@ static void loadDs34Modules(void)
 //endfunc loadDs34Modules
 //---------------------------------------------------------------------------
 #endif
-void loadUsbModules(void)
+static void loadUsbModules(void)
 {
 #ifdef EXFAT
 	int ret, ID __attribute__((unused));
@@ -3065,14 +3065,15 @@ int main(int argc, char *argv[])
 	LaunchElfDir[0] = 0;
 	boot_path[0] = 0;
 
+	DPRINTF("Loading USB modules\n");
+	loadUsbModules();
+
 	if ((argc > 0) && argv[0]) {
 		strcpy(LaunchElfDir, argv[0]);  //Default LaunchElfDir to the boot path.
 		strcpy(boot_path, argv[0]);
 		normalizeBootPath(LaunchElfDir);
 		normalizeBootPath(boot_path);
 		if (!strncmp(LaunchElfDir, "mass", 4) || !strncmp(LaunchElfDir, "usb", 3)) {
-			DPRINTF("Boot path is USB mass, loading USB modules\n");
-			loadUsbModules();
 			boot = BOOT_DEVICE_MASS;
 		} else if (!strncmp(LaunchElfDir, "mc", 2))
 			boot = BOOT_DEVICE_MC;
