@@ -1565,10 +1565,13 @@ char *makeHostPath(char *dp, char *sp)
 #endif
 #ifdef UDPFS
 	if (!strncmp(sp, "udpfs:", 6))
-		return strcpy(dp, sp);
+		goto copy_passthrough;
 #endif
 
-	return strcpy(dp, sp);
+copy_passthrough:
+	if (dp != sp)
+		strcpy(dp, sp);
+	return dp;
 }
 #endif
 //--------------------------------------------------------------

@@ -282,14 +282,18 @@ static int drawMainScreen2(int TV_mode);
 static void delay(int count);
 static void initsbv_patches(void);
 static void load_ps2dev9(void);
+#ifdef ETH
 static void load_ps2ip(void);
+#endif
 static void load_ps2atad(void);
 #ifdef SMB
 static void load_smbman(void);
 #endif
 static void ShowDebugInfo(void);
+#ifdef ETH
 static void load_ps2ftpd(void);
 static void load_ps2netfs(void);
+#endif
 #ifdef UDPFS
 static void load_udpfs_stack(void);
 #endif
