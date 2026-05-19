@@ -128,7 +128,7 @@ int host_error = 0;
 int host_elflist = 0;
 int host_use_Bsl = 1;  //By default assume that host paths use backslash
 #endif
-unsigned long written_size;  //Used for pasting progress report
+u64 written_size;            //Used for pasting progress report
 u64 PasteTime;               //Used for pasting progress report
 
 typedef struct
@@ -1255,6 +1255,13 @@ int genLseek(int fd, int where, int how)
 }
 //------------------------------
 //endfunc genLseek
+//--------------------------------------------------------------
+s64 genLseek64(int fd, s64 where, int how)
+{
+	return fileXioLseek64(fd, where, how);
+}
+//------------------------------
+//endfunc genLseek64
 //--------------------------------------------------------------
 int genRead(int fd, void *buf, int size)
 {
@@ -2879,13 +2886,13 @@ int copy(char *outPath, const char *inPath, FILEINFO file, int recurses)
 	    progress[MAX_PATH * 4],
 	    *buff = NULL, inParty[MAX_NAME], outParty[MAX_NAME];
 	int nfiles, i;
-	size_t size;
+	u64 size = 0;
 	int ret = -1, pfsout = -1, pfsin = -1, in_fd = -1, out_fd = -1, buffSize, bytesRead, bytesWritten;
 	int dummy;
 	sceMcTblGetDir stats;
 	int speed = 0;
 	int remain_time = 0, TimeDiff = 0;
-	long old_size = 0, SizeDiff = 0;
+	u64 old_size = 0, SizeDiff = 0;
 	u64 OldTime = 0LL;
 	psu_header PSU_head;
 	mcT_header *mcT_head_p = (mcT_header *)&file.stats;
@@ -3329,17 +3336,22 @@ non_PSU_RESTORE_init:
 	if (PM_flag[recurses] == PM_PSU_RESTORE) {
 		in_fd = PM_file[recurses];
 		size = mcT_head_p->size;
-	} else {  //Any other mode than PM_PSU_RESTORE
+		} else {  //Any other mode than PM_PSU_RESTORE
 #if defined(ETH) || defined(UDPFS)
-		if (!strncmp(in, "host:/", 6))
-			makeHostPath(in, in);
+			if (!strncmp(in, "host:/", 6))
+				makeHostPath(in, in);
 #endif
-		in_fd = genOpen(in, FIO_O_RDONLY);
-		if (in_fd < 0)
-			goto copy_file_exit;
-		size = genLseek(in_fd, 0, SEEK_END);
-		genLseek(in_fd, 0, SEEK_SET);
-	}
+			in_fd = genOpen(in, FIO_O_RDONLY);
+			if (in_fd < 0)
+				goto copy_file_exit;
+			{
+				s64 in_size = genLseek64(in_fd, 0, SEEK_END);
+				if (in_size < 0)
+					goto copy_file_exit;
+				size = (u64)in_size;
+			}
+			genLseek64(in_fd, 0, SEEK_SET);
+		}
 
 	//Here the input file has been opened, indicated by 'in_fd'
 	//It is now time to open the output file, indicated by 'out_fd'
@@ -3399,8 +3411,8 @@ non_PSU_RESTORE_init:
 	         || (!strncmp(in, "ata", 3)))
 		buffSize = 524288;  //Use 512KB reading from USB or HOST (acceptable)
 
-	if (size < buffSize)
-		buffSize = size;
+	if (size < (u64)buffSize)
+		buffSize = (int)size;
 
 	buff = (char *)memalign(64, buffSize);  //Attempt buffer allocation
 	if (buff == NULL) {                     //if allocation fails
@@ -3417,16 +3429,21 @@ non_PSU_RESTORE_init:
 
 	while (size > 0) {  // ----- The main copying loop starts here -----
 
-		if (size < buffSize)
-			buffSize = size;  //Adjust effective buffer size to remaining data
+		if (size < (u64)buffSize)
+			buffSize = (int)size;  //Adjust effective buffer size to remaining data
 
 		TimeDiff = Timer() - OldTime;
 		OldTime = Timer();
 		SizeDiff = written_size - old_size;
 		old_size = written_size;
-		if (SizeDiff) {                            //if anything was written this time
-			speed = (SizeDiff * 1000) / TimeDiff;  //calc real speed
-			remain_time = size / speed;            //calc time remaining for that speed
+		if (SizeDiff) {                                     //if anything was written this time
+			speed = (int)((SizeDiff * 1000ULL) / TimeDiff);  //calc real speed
+			if (speed > 0) {                                 //calc time remaining for that speed
+				u64 time_left = size / (u64)speed;
+				remain_time = (time_left > 0x7fffffffULL) ? 0x7fffffff : (int)time_left;
+			} else {
+				remain_time = -1;
+			}
 		} else if (TimeDiff) {                     //if nothing written though time passed
 			speed = 0;                             //set speed as zero
 			remain_time = -1;                      //set time remaining as unknown
@@ -3440,9 +3457,9 @@ non_PSU_RESTORE_init:
 		sprintf(tmp, "\n%s : ", LNG(Remain_Size));
 		strcat(progress, tmp);
 		if (size <= 1024)
-			sprintf(tmp, "%lu %s", (long)size, LNG(bytes));  // bytes
+			sprintf(tmp, "%lu %s", (unsigned long)size, LNG(bytes));  // bytes
 		else
-			sprintf(tmp, "%lu %s", (long)size / 1024, LNG(Kbytes));  // Kbytes
+			sprintf(tmp, "%.0f %s", (double)size / 1024.0, LNG(Kbytes));  // Kbytes
 		strcat(progress, tmp);
 
 		sprintf(tmp, "\n%s: ", LNG(Current_Speed));
@@ -3469,7 +3486,7 @@ non_PSU_RESTORE_init:
 
 		sprintf(tmp, "\n\n%s: ", LNG(Written_Total));
 		strcat(progress, tmp);
-		sprintf(tmp, "%lu %s", written_size / 1024, LNG(Kbytes));  //Kbytes
+		sprintf(tmp, "%.0f %s", (double)written_size / 1024.0, LNG(Kbytes));  //Kbytes
 		strcat(progress, tmp);
 
 		sprintf(tmp, "\n%s: ", LNG(Average_Speed));
@@ -3478,7 +3495,7 @@ non_PSU_RESTORE_init:
 		if (TimeDiff == 0)
 			strcpy(tmp, LNG(Unknown));
 		else {
-			speed = (written_size * 1000) / TimeDiff;  //calc real speed
+			speed = (int)((written_size * 1000ULL) / TimeDiff);  //calc real speed
 			if (speed <= 1024)
 				sprintf(tmp, "%d %s/sec", speed, LNG(bytes));  // bytes/sec
 			else
