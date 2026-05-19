@@ -1953,9 +1953,7 @@ void loadAtaModules(void)
 	int ret, id __attribute__((unused));
 	int needs_feedback;
 
-	needs_feedback = (!have_ps2atad ||
-	                  !have_ps2hdd ||
-	                  !have_ata_bd ||
+	needs_feedback = (!have_ata_bd ||
 	                  !ps2dev9_loaded ||
 	                  !have_usb_mass ||
 	                  (storage_driver_stack_mode != STORAGE_STACK_DEFAULT));
@@ -1965,11 +1963,7 @@ void loadAtaModules(void)
 	ensureCoreIoStackReady();
 	switchStorageDriverStack(STORAGE_STACK_DEFAULT);
 
-	/* Requested ATA stack order:
-	 * ps2dev9 -> ps2atad -> ps2hdd -> USB BDM stack -> ata_bd
-	 */
 	load_ps2dev9();
-	load_ps2atad();
 	if (!have_usb_mass)
 		loadUsbModules();
 	if (!have_ata_bd) {
