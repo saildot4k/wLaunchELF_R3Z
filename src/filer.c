@@ -87,6 +87,128 @@ char clipPath[MAX_PATH], LastDir[MAX_NAME], marks[MAX_ENTRY];
 FILEINFO clipFiles[MAX_ENTRY];
 int fileMode = FIO_S_IRUSR | FIO_S_IWUSR | FIO_S_IXUSR | FIO_S_IRGRP | FIO_S_IWGRP | FIO_S_IXGRP | FIO_S_IROTH | FIO_S_IWOTH | FIO_S_IXOTH;
 
+#define FILEOP_TRACE 1
+#if FILEOP_TRACE
+#define FILEOP_TRACE_FD_SLOTS 128
+typedef struct
+{
+	int fd;
+	int is_dir;
+	int mode;
+	char path[MAX_PATH];
+} FILEOP_FD_TRACE;
+
+static FILEOP_FD_TRACE fileop_fd_trace[FILEOP_TRACE_FD_SLOTS];
+static int fileop_fd_trace_inited = 0;
+
+static void fileopTraceInit(void)
+{
+	int i;
+
+	if (fileop_fd_trace_inited)
+		return;
+	for (i = 0; i < FILEOP_TRACE_FD_SLOTS; i++) {
+		fileop_fd_trace[i].fd = -1;
+		fileop_fd_trace[i].is_dir = 0;
+		fileop_fd_trace[i].mode = 0;
+		fileop_fd_trace[i].path[0] = '\0';
+	}
+	fileop_fd_trace_inited = 1;
+}
+
+static int fileopTraceFindSlotByFd(int fd)
+{
+	int i;
+
+	for (i = 0; i < FILEOP_TRACE_FD_SLOTS; i++) {
+		if (fileop_fd_trace[i].fd == fd)
+			return i;
+	}
+	return -1;
+}
+
+static int fileopTraceAllocSlot(void)
+{
+	int i;
+
+	for (i = 0; i < FILEOP_TRACE_FD_SLOTS; i++) {
+		if (fileop_fd_trace[i].fd < 0)
+			return i;
+	}
+	/* Fall back to a deterministic replacement slot when table is full. */
+	return (fileop_fd_trace_inited ? 0 : -1);
+}
+
+static void fileopTraceSet(int fd, const char *path, int mode, int is_dir)
+{
+	int slot;
+
+	if (fd < 0)
+		return;
+
+	fileopTraceInit();
+	slot = fileopTraceFindSlotByFd(fd);
+	if (slot < 0)
+		slot = fileopTraceAllocSlot();
+	if (slot < 0)
+		return;
+
+	fileop_fd_trace[slot].fd = fd;
+	fileop_fd_trace[slot].is_dir = is_dir;
+	fileop_fd_trace[slot].mode = mode;
+	if (path != NULL) {
+		strncpy(fileop_fd_trace[slot].path, path, MAX_PATH - 1);
+		fileop_fd_trace[slot].path[MAX_PATH - 1] = '\0';
+	} else {
+		fileop_fd_trace[slot].path[0] = '\0';
+	}
+}
+
+static void fileopTraceClear(int fd)
+{
+	int slot;
+
+	if (fd < 0)
+		return;
+
+	fileopTraceInit();
+	slot = fileopTraceFindSlotByFd(fd);
+	if (slot < 0)
+		return;
+
+	fileop_fd_trace[slot].fd = -1;
+	fileop_fd_trace[slot].is_dir = 0;
+	fileop_fd_trace[slot].mode = 0;
+	fileop_fd_trace[slot].path[0] = '\0';
+}
+
+static const FILEOP_FD_TRACE *fileopTraceGet(int fd)
+{
+	int slot;
+
+	fileopTraceInit();
+	slot = fileopTraceFindSlotByFd(fd);
+	if (slot < 0)
+		return NULL;
+
+	return &fileop_fd_trace[slot];
+}
+
+static void fileopTraceLogRw(const char *op, int fd, int size, int ret, u64 start, u64 end)
+{
+	const FILEOP_FD_TRACE *fd_info;
+	const char *path = "<unknown>";
+	u64 elapsed = (end >= start) ? (end - start) : 0;
+
+	fd_info = fileopTraceGet(fd);
+	if ((fd_info != NULL) && fd_info->path[0] != '\0')
+		path = fd_info->path;
+
+	printf("[FILEOP] %s fd=%d path=%s size=%d ret=%d dt=%llu ms\n",
+	       op, fd, path, size, ret, (unsigned long long)elapsed);
+}
+#endif
+
 char cnfmode_extU[CNFMODE_CNT][4] = {
     "*",    // cnfmode FALSE
     "ELF",  // cnfmode TRUE
@@ -1141,6 +1263,7 @@ int genFixPath(const char *inp_path, char *gen_path)
 int genRmdir(char *path)
 {
 	int ret;
+	u64 t0, t1;
 #if defined(ETH) || defined(UDPFS)
 	char mapped_path[MAX_PATH];
 
@@ -1149,9 +1272,15 @@ int genRmdir(char *path)
 #endif
 
 	genLimObjName(path, 0);
+	t0 = Timer();
 	ret = fileXioRmdir(path);
+	t1 = Timer();
 	if (!strncmp(path, "vmc", 3))
 		fileXioDevctl("vmc0:", DEVCTL_VMCFS_CLEAN, NULL, 0, NULL, 0);
+#if FILEOP_TRACE
+	printf("[FILEOP] rmdir path=%s ret=%d dt=%llu ms\n",
+	       path, ret, (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
+#endif
 	return ret;
 }
 //------------------------------
@@ -1161,6 +1290,7 @@ int genRemove(char *path)
 {
 	DPRINTF("%s: '%s'\n", __FUNCTION__, path);
 	int ret;
+	u64 t0, t1;
 #if defined(ETH) || defined(UDPFS)
 	char mapped_path[MAX_PATH];
 
@@ -1169,9 +1299,15 @@ int genRemove(char *path)
 #endif
 
 	genLimObjName(path, 0);
+	t0 = Timer();
 	ret = fileXioRemove(path);
+	t1 = Timer();
 	if (!strncmp(path, "vmc", 3))
 		fileXioDevctl("vmc0:", DEVCTL_VMCFS_CLEAN, NULL, 0, NULL, 0);
+#if FILEOP_TRACE
+	printf("[FILEOP] remove path=%s ret=%d dt=%llu ms\n",
+	       path, ret, (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
+#endif
 	return ret;
 }
 //------------------------------
@@ -1181,6 +1317,7 @@ int genOpen(const char *path, int mode)
 {
 	char open_path[MAX_PATH], alt_path[MAX_PATH], *sep;
 	int fd;
+	u64 t0, t1;
 
 	if (path == NULL || path[0] == '\0')
 		return -1;
@@ -1191,9 +1328,23 @@ int genOpen(const char *path, int mode)
 	makeHostPath(open_path, open_path);
 #endif
 	genLimObjName(open_path, 0);
+	t0 = Timer();
 	fd = fileXioOpen(open_path, mode, fileMode);
+	t1 = Timer();
+#if FILEOP_TRACE
+	printf("[FILEOP] open req=%s mapped=%s mode=0x%x fd=%d dt=%llu ms\n",
+	       path, open_path, mode, fd,
+	       (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
+#endif
 	if (fd >= 0)
+#if FILEOP_TRACE
+	{
+		fileopTraceSet(fd, open_path, mode, 0);
 		return fd;
+	}
+#else
+		return fd;
+#endif
 
 	/*
 	 * Path-style compatibility fallback:
@@ -1216,7 +1367,17 @@ int genOpen(const char *path, int mode)
 	}
 
 	genLimObjName(alt_path, 0);
-	return fileXioOpen(alt_path, mode, fileMode);
+	t0 = Timer();
+	fd = fileXioOpen(alt_path, mode, fileMode);
+	t1 = Timer();
+#if FILEOP_TRACE
+	printf("[FILEOP] open-fallback req=%s mapped=%s mode=0x%x fd=%d dt=%llu ms\n",
+	       path, alt_path, mode, fd,
+	       (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
+	if (fd >= 0)
+		fileopTraceSet(fd, alt_path, mode, 0);
+#endif
+	return fd;
 }
 //------------------------------
 //endfunc genOpen
@@ -1232,6 +1393,7 @@ int genDopen(char *path)
 
 	DPRINTF("%s: '%s'\n", __FUNCTION__, path);
 	int fd;
+	u64 t0, t1;
 
 	if (!strncmp(path, "pfs", 3) || !strncmp(path, "vmc", 3)) {
 		char tmp[MAX_PATH];
@@ -1239,9 +1401,27 @@ int genDopen(char *path)
 		strcpy(tmp, path);
 		if (tmp[strlen(tmp) - 1] == '/')
 			tmp[strlen(tmp) - 1] = '\0';
+		t0 = Timer();
 		fd = fileXioDopen(tmp);
+		t1 = Timer();
+#if FILEOP_TRACE
+		printf("[FILEOP] dopen req=%s mapped=%s fd=%d dt=%llu ms\n",
+		       path, tmp, fd,
+		       (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
+		if (fd >= 0)
+			fileopTraceSet(fd, tmp, 0, 1);
+#endif
 	} else {
+		t0 = Timer();
 		fd = fileXioDopen(path);
+		t1 = Timer();
+#if FILEOP_TRACE
+		printf("[FILEOP] dopen req=%s mapped=%s fd=%d dt=%llu ms\n",
+		       path, path, fd,
+		       (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
+		if (fd >= 0)
+			fileopTraceSet(fd, path, 0, 1);
+#endif
 	}
 
 	return fd;
@@ -1251,42 +1431,106 @@ int genDopen(char *path)
 //--------------------------------------------------------------
 int genLseek(int fd, int where, int how)
 {
-	return fileXioLseek(fd, where, how);
+	int ret;
+	u64 t0, t1;
+
+	t0 = Timer();
+	ret = fileXioLseek(fd, where, how);
+	t1 = Timer();
+#if FILEOP_TRACE
+	printf("[FILEOP] lseek fd=%d where=%d how=%d ret=%d dt=%llu ms\n",
+	       fd, where, how, ret,
+	       (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
+#endif
+	return ret;
 }
 //------------------------------
 //endfunc genLseek
 //--------------------------------------------------------------
 s64 genLseek64(int fd, s64 where, int how)
 {
-	return fileXioLseek64(fd, where, how);
+	s64 ret;
+	u64 t0, t1;
+
+	t0 = Timer();
+	ret = fileXioLseek64(fd, where, how);
+	t1 = Timer();
+#if FILEOP_TRACE
+	printf("[FILEOP] lseek64 fd=%d where=0x%08x%08x how=%d ret=0x%08x%08x dt=%llu ms\n",
+	       fd,
+	       (unsigned int)(where >> 32), (unsigned int)where, how,
+	       (unsigned int)(ret >> 32), (unsigned int)ret,
+	       (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
+#endif
+	return ret;
 }
 //------------------------------
 //endfunc genLseek64
 //--------------------------------------------------------------
 int genRead(int fd, void *buf, int size)
 {
-	return fileXioRead(fd, buf, size);
+	int ret;
+	u64 t0, t1;
+
+	t0 = Timer();
+	ret = fileXioRead(fd, buf, size);
+	t1 = Timer();
+#if FILEOP_TRACE
+	fileopTraceLogRw("read", fd, size, ret, t0, t1);
+#endif
+	return ret;
 }
 //------------------------------
 //endfunc genRead
 //--------------------------------------------------------------
 int genWrite(int fd, void *buf, int size)
 {
-	return fileXioWrite(fd, buf, size);
+	int ret;
+	u64 t0, t1;
+
+	t0 = Timer();
+	ret = fileXioWrite(fd, buf, size);
+	t1 = Timer();
+#if FILEOP_TRACE
+	fileopTraceLogRw("write", fd, size, ret, t0, t1);
+#endif
+	return ret;
 }
 //------------------------------
 //endfunc genWrite
 //--------------------------------------------------------------
 int genClose(int fd)
 {
-	return fileXioClose(fd);
+	int ret;
+	u64 t0, t1;
+
+	t0 = Timer();
+	ret = fileXioClose(fd);
+	t1 = Timer();
+#if FILEOP_TRACE
+	printf("[FILEOP] close fd=%d ret=%d dt=%llu ms\n",
+	       fd, ret, (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
+	fileopTraceClear(fd);
+#endif
+	return ret;
 }
 //------------------------------
 //endfunc genClose
 //--------------------------------------------------------------
 int genDclose(int fd)
 {
-	return fileXioDclose(fd);
+	int ret;
+	u64 t0, t1;
+
+	t0 = Timer();
+	ret = fileXioDclose(fd);
+	t1 = Timer();
+#if FILEOP_TRACE
+	printf("[FILEOP] dclose fd=%d ret=%d dt=%llu ms\n",
+	       fd, ret, (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
+	fileopTraceClear(fd);
+#endif
+	return ret;
 }
 //------------------------------
 //endfunc genDclose
@@ -2899,6 +3143,9 @@ int copy(char *outPath, const char *inPath, FILEINFO file, int recurses)
 	mcT_header *mcT_files_p = (mcT_header *)&files[0].stats;
 	int psu_pad_size = 0, PSU_restart_f = 0;
 	char *cp, *np;
+	int trace_net_copy = 0;
+	unsigned int trace_chunk_index = 0;
+	u64 chunk_remaining_before = 0;
 
 	if (recurses + 1 >= MAX_RECURSE)
 		return -1;
@@ -2957,6 +3204,11 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 
 	if (!strcmp(in, out))
 		return 0;  //if in and out are identical our work is done.
+
+#if FILEOP_TRACE
+	trace_net_copy = (!strncmp(in, "host", 4) || !strncmp(in, "udpfs", 5)
+	                  || !strncmp(out, "host", 4) || !strncmp(out, "udpfs", 5));
+#endif
 
 	//Here 'in' and 'out' are complete pathnames for the object to copy
 	//patched to contain appropriate 'pfs' refs where args used 'hdd'
@@ -3426,6 +3678,12 @@ non_PSU_RESTORE_init:
 
 	old_size = written_size;  //Note initial progress data pos
 	OldTime = Timer();        //Note initial progress time
+#if FILEOP_TRACE
+	if (trace_net_copy) {
+		printf("[FILEOP] copy-start in=%s out=%s size=%llu buff=%d mode=%d recurse=%d\n",
+		       in, out, (unsigned long long)size, buffSize, PM_flag[recurses], recurses);
+	}
+#endif
 
 	while (size > 0) {  // ----- The main copying loop starts here -----
 
@@ -3521,21 +3779,48 @@ non_PSU_RESTORE_init:
 				ret = -1;             // flag generic error
 				goto copy_file_exit;  // go deal with it
 			}
-		}
-		bytesRead = genRead(in_fd, buff, buffSize);
-		bytesWritten = (bytesRead == buffSize) ? genWrite(out_fd, buff, buffSize) : 0;
-		if ((bytesRead != buffSize) || (bytesWritten != buffSize)) {
-			genClose(out_fd);
-			out_fd = -1;
-			if (PM_flag[recurses] != PM_PSU_BACKUP)
-				genRemove(out);
-			ret = -EIO;  // flag generic I/O error
-			goto copy_file_exit;
-		}
-		size -= buffSize;
-		written_size += buffSize;
-	}  // ends while(size>0), ----- The main copying loop ends here -----
+			}
+			bytesRead = genRead(in_fd, buff, buffSize);
+			bytesWritten = (bytesRead == buffSize) ? genWrite(out_fd, buff, buffSize) : 0;
+#if FILEOP_TRACE
+			chunk_remaining_before = size;
+			if (trace_net_copy) {
+				printf("[FILEOP] copy-chunk in=%s out=%s idx=%u req=%d read=%d write=%d remain_before=%llu\n",
+				       in, out, trace_chunk_index, buffSize, bytesRead, bytesWritten,
+				       (unsigned long long)chunk_remaining_before);
+			}
+#endif
+			if ((bytesRead != buffSize) || (bytesWritten != buffSize)) {
+#if FILEOP_TRACE
+				printf("[FILEOP] copy-chunk-error in=%s out=%s idx=%u req=%d read=%d write=%d remain=%llu\n",
+				       in, out, trace_chunk_index, buffSize, bytesRead, bytesWritten,
+				       (unsigned long long)size);
+#endif
+				genClose(out_fd);
+				out_fd = -1;
+				if (PM_flag[recurses] != PM_PSU_BACKUP)
+					genRemove(out);
+				ret = -EIO;  // flag generic I/O error
+				goto copy_file_exit;
+			}
+			size -= buffSize;
+			written_size += buffSize;
+#if FILEOP_TRACE
+			trace_chunk_index++;
+			if (trace_net_copy) {
+				printf("[FILEOP] copy-chunk-ok in=%s out=%s idx=%u wrote=%d remain_after=%llu\n",
+				       in, out, trace_chunk_index, bytesWritten,
+				       (unsigned long long)size);
+			}
+#endif
+		}  // ends while(size>0), ----- The main copying loop ends here -----
 	ret = 0;
+#if FILEOP_TRACE
+	if (trace_net_copy) {
+		printf("[FILEOP] copy-complete in=%s out=%s chunks=%u total_written=%llu\n",
+		       in, out, trace_chunk_index, (unsigned long long)written_size);
+	}
+#endif
 	//Here the file has been copied. without error, as indicated by 'ret' above
 	//but we also need to copy attributes and timestamps (as yet only for MC)
 	//For PSU backup output padding may be needed, but not output file closure
