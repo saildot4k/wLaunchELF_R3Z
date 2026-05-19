@@ -306,6 +306,7 @@ void loadHddModules(void);
 #ifdef DVRP
 void loadDVRPHddModules(void);
 #endif
+void loadUsbModules(void);
 void loadHdlInfoModule(void);
 void loadCdModules(void);
 int uLE_related(char *pathout, const char *pathin);
