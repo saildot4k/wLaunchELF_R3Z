@@ -308,6 +308,8 @@ static int loadExternalModule(char *modPath, void *defBase, int defSize);
 static void loadUsbDModule(void);
 static void loadUsbModules(void);
 static void loadKbdModules(void);
+static void showLoadingModulesMsg(const char *device_name);
+static void showRebootingIopMsg(void);
 static void resetRuntimeDeviceState(void);
 static void resetUsbMassScanState(void);
 static void resetUsbMassRuntimeState(void);
@@ -996,6 +998,23 @@ static void initsbv_patches(void)
 //------------------------------
 //endfunc initsbv_patches
 //---------------------------------------------------------------------------
+static void showLoadingModulesMsg(const char *device_name)
+{
+	char msg[64];
+
+	if (is_early_init)
+		return;
+
+	snprintf(msg, sizeof(msg), "Loading %s modules...", device_name);
+	drawMsg(msg);
+}
+
+static void showRebootingIopMsg(void)
+{
+	if (!is_early_init)
+		drawMsg("Rebooting IOP...");
+}
+
 static void load_ps2dev9(void)
 {
 	int ID, rcode;
@@ -1062,20 +1081,25 @@ static void load_ps2atad(void)
 	                       "40";
 
 	load_ps2dev9();
+	if (!ps2dev9_loaded) {
+		DPRINTF(" [HDD]: skipping ATAD/HDD/FS load because DEV9 failed to initialize\n");
+		return;
+	}
+
 	if (!have_ps2atad) {
 		ID = SifExecModuleBuffer(ps2atad_irx, size_ps2atad_irx, 0, NULL, &ret);
 		DPRINTF(" [ATAD]: ID=%d, ret=%d\n", ID, ret);
-		have_ps2atad = 1;
+		have_ps2atad = (ID >= 0 && ret >= 0);
 	}
-	if (!have_ps2hdd) {
+	if (have_ps2atad && !have_ps2hdd) {
 		ID = SifExecModuleBuffer(ps2hdd_irx, size_ps2hdd_irx, sizeof(hddarg), hddarg, &ret);
 		DPRINTF(" [PS2HDD]: ID=%d, ret=%d\n", ID, ret);
-		have_ps2hdd = 1;
+		have_ps2hdd = (ID >= 0 && ret >= 0);
 	}
-	if (!have_ps2fs) {
+	if (have_ps2hdd && !have_ps2fs) {
 		ID = SifExecModuleBuffer(ps2fs_irx, size_ps2fs_irx, sizeof(pfsarg), pfsarg, &ret);
 		DPRINTF(" [PS2FS]: ID=%d, ret=%d\n", ID, ret);
-		have_ps2fs = 1;
+		have_ps2fs = (ID >= 0 && ret >= 0);
 	}
 }
 //------------------------------
@@ -1101,6 +1125,9 @@ void load_ps2host(void)
 {
 	int ret, ID __attribute__((unused));
 
+	if (!have_ps2host || !have_ps2ip || !have_ps2smap || !ps2dev9_loaded)
+		showLoadingModulesMsg("host");
+
 	ensureCoreIoStackReady();
 	setupPowerOff();  //resolves the stall out when opening host: from LaunchELF's FileBrowser
 	load_ps2ip();
@@ -1119,6 +1146,9 @@ static void load_udpfs_stack(void)
 {
 	int ret, ID __attribute__((unused));
 	char ministack_arg[32];
+
+	if (!have_udpfs_smap || !have_udpfs_ministack || !have_udpfs_ioman || !ps2dev9_loaded)
+		showLoadingModulesMsg("udpfs");
 
 	ensureCoreIoStackReady();
 	setupPowerOff();
@@ -1167,6 +1197,9 @@ static void load_smbman(void)
 {
 	int ret, ID __attribute__((unused));
 
+	if (!have_smbman || !have_ps2ip || !have_ps2smap || !ps2dev9_loaded)
+		showLoadingModulesMsg("smb");
+
 	ensureCoreIoStackReady();
 	setupPowerOff();  //resolves stall out when opening smb: FileBrowser
 	load_ps2ip();
@@ -1186,16 +1219,15 @@ static void load_ps2dvr(void)
 {
 	int ret, ID __attribute__((unused));
 
+	if (!have_dvrdrv || !have_dvrfile || !have_ps2atad || !have_ps2hdd || !have_ps2fs)
+		showLoadingModulesMsg("dvr");
+
 	load_ps2atad();
-	if (!is_early_init)  //Do not draw any text before the UI is initialized.
-		drawMsg("Loading dvrdrv");
 	if (!have_dvrdrv) {
 		ID = SifExecModuleBuffer(dvrdrv_irx, size_dvrdrv_irx, 0, NULL, &ret);
 		DPRINTF(" [DVRDRV]: ID=%d, ret=%d\n", ID, ret);
 		have_dvrdrv = 1;
 	}
-	if (!is_early_init)  //Do not draw any text before the UI is initialized.
-		drawMsg("Loading dvrfile");
 	if (!have_dvrfile) {
 		ID = SifExecModuleBuffer(dvrfile_irx, size_dvrfile_irx, 0, NULL, &ret);
 		DPRINTF(" [DVRFILE]: ID=%d, ret=%d\n", ID, ret);
@@ -1487,6 +1519,7 @@ void loadCdModules(void)
 	int ret, id __attribute__((unused));
 
 	if (!have_cdvd) {
+		showLoadingModulesMsg("cdvd");
 		sceCdInit(SCECdINoD);  // SCECdINoD init without check for a disc. Reduces risk of a lockup if the drive is in a erroneous state.
 		id = SifExecModuleBuffer(cdvd_irx, size_cdvd_irx, 0, NULL, &ret);
 		LCDVD_INIT();
@@ -1725,6 +1758,9 @@ static void loadUsbModules(void)
 	int ret, ID __attribute__((unused));
 #endif
 
+	if (!have_usbd || !have_usb_mass)
+		showLoadingModulesMsg("usb");
+
 	ensureCoreIoStackReady();
 	loadUsbDModule();
 
@@ -1774,6 +1810,9 @@ static void loadUsbModules(void)
 //---------------------------------------------------------------------------
 static void loadKbdModules(void)
 {
+	if (!have_usbd || !have_ps2kbd)
+		showLoadingModulesMsg("usbkbd");
+
 	ensureCoreIoStackReady();
 	loadUsbDModule();
 	if ((have_usbd && !have_ps2kbd) && (loadExternalModule(setting->usbkbd_file, &ps2kbd_irx, size_ps2kbd_irx)))
@@ -1816,6 +1855,7 @@ static void resetRuntimeDeviceState(void)
 #ifdef DS34
 	stopDs34Input();
 #endif
+	showRebootingIopMsg();
 	unmountAll();
 	Reset();
 	loadUsbModules();
@@ -1864,6 +1904,9 @@ void loadMmceModules(void)
 {
 	int ret, id __attribute__((unused));
 
+	if (!have_mmce || storage_driver_stack_mode != STORAGE_STACK_MMCE)
+		showLoadingModulesMsg("mmce");
+
 	ensureCoreIoStackReady();
 	switchStorageDriverStack(STORAGE_STACK_MMCE);
 	if (!have_mmce) {
@@ -1880,6 +1923,9 @@ void loadMmceModules(void)
 int loadMx4sioModules(void)
 {
 	int ret, id __attribute__((unused));
+
+	if (!have_mx4sio || storage_driver_stack_mode != STORAGE_STACK_MX4SIO)
+		showLoadingModulesMsg("mx4sio");
 
 	ensureCoreIoStackReady();
 	switchStorageDriverStack(STORAGE_STACK_MX4SIO);
@@ -1907,16 +1953,23 @@ void loadAtaModules(void)
 	int ret, id __attribute__((unused));
 	int needs_feedback;
 
-	needs_feedback = (!have_ata_bd ||
+	needs_feedback = (!have_ps2atad ||
+	                  !have_ps2hdd ||
+	                  !have_ata_bd ||
 	                  !ps2dev9_loaded ||
 	                  !have_usb_mass ||
 	                  (storage_driver_stack_mode != STORAGE_STACK_DEFAULT));
-	if (needs_feedback && !is_early_init)  //Do not draw any text before the UI is initialized.
-		drawMsg(LNG(Loading_HDD_Modules));
+	if (needs_feedback)
+		showLoadingModulesMsg("ata");
 
 	ensureCoreIoStackReady();
 	switchStorageDriverStack(STORAGE_STACK_DEFAULT);
+
+	/* Requested ATA stack order:
+	 * ps2dev9 -> ps2atad -> ps2hdd -> USB BDM stack -> ata_bd
+	 */
 	load_ps2dev9();
+	load_ps2atad();
 	if (!have_usb_mass)
 		loadUsbModules();
 	if (!have_ata_bd) {
@@ -1998,11 +2051,14 @@ void loadHddModules(void)
 #endif
 	ensureCoreIoStackReady();
 	if (!have_HDD_modules) {
-		if (!is_early_init)  //Do not draw any text before the UI is initialized.
-			drawMsg(LNG(Loading_HDD_Modules));
+		showLoadingModulesMsg("hdd");
 		setupPowerOff();
 		load_ps2atad();  //also loads ps2hdd & ps2fs
-		have_HDD_modules = TRUE;
+		have_HDD_modules = (have_ps2atad && have_ps2hdd && have_ps2fs);
+		if (!have_HDD_modules) {
+			DPRINTF(" [HDD]: stack incomplete (ATAD=%d HDD=%d FS=%d)\n",
+			        have_ps2atad, have_ps2hdd, have_ps2fs);
+		}
 	}
 }
 //------------------------------
@@ -2016,8 +2072,7 @@ void loadFlashModules(void)
 
 	ensureCoreIoStackReady();
 	if (!have_Flash_modules) {
-		if (!is_early_init)  //Do not draw any text before the UI is initialized.
-			drawMsg(LNG(Loading_Flash_Modules));
+		showLoadingModulesMsg("flash");
 		load_ps2dev9();
 		setupPowerOff();
 		load_pflash();
@@ -2037,8 +2092,7 @@ void loadDVRPHddModules(void)
 	switchPsxHddDriverStack(1);
 	ensureCoreIoStackReady();
 	if (!have_DVRP_HDD_modules) {
-		if (!is_early_init)  //Do not draw any text before the UI is initialized.
-			drawMsg(LNG(Loading_HDD_Modules));
+		showLoadingModulesMsg("dvr_hdd");
 		setupPowerOff();
 		load_ps2dvr();
 		//sceCdNoticeGameStart(0, NULL); //shouldn't this be done by the bootloader?
@@ -2058,7 +2112,7 @@ static void loadNetModules(void)
 {
 	ensureCoreIoStackReady();
 	if (!have_NetModules) {
-		drawMsg(LNG(Loading_NetFS_and_FTP_Server_Modules));
+		showLoadingModulesMsg("ps2net");
 
 		getIpConfig();  //RA NB: I always get that info, early in init
 		//             //But sometimes it is useful to do it again (HDD)
