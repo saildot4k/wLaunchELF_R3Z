@@ -4,6 +4,7 @@
 #include "launchelf.h"
 #include "init.h"
 #include "main_startup.h"
+#include <stdlib.h>
 
 extern char default_OSDSYS_path[30];
 extern char default_OSDSYS_path2[30];
