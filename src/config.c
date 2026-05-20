@@ -4,6 +4,7 @@
 #include "launchelf.h"
 #include "gui_colors.h"
 #include <stdbool.h>
+#include <stdlib.h>
 
 enum {
 	DEF_TIMEOUT = 10,

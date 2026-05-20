@@ -15,6 +15,7 @@ static unsigned short ROMVersion;
 
 static void normalizeBootPath(char *path);
 static void initializeBootExecPath(void);
+static void buildBootBlockPath(char *dst, size_t dst_size, const char *prefix, const char *partition, const char *path_part);
 
 // Parse network configuration from IPCONFIG.DAT
 // Now completely rewritten to fix some problems
@@ -290,6 +291,62 @@ static void normalizeBootPath(char *path)
 //------------------------------
 //endfunc normalizeBootPath
 //---------------------------------------------------------------------------
+static void buildBootBlockPath(char *dst, size_t dst_size, const char *prefix, const char *partition, const char *path_part)
+{
+	size_t len;
+	size_t chunk;
+	size_t room;
+
+	if (dst == NULL || dst_size == 0)
+		return;
+
+	if (prefix == NULL)
+		prefix = "";
+	if (partition == NULL)
+		partition = "";
+	if (path_part == NULL)
+		path_part = "";
+
+	dst[0] = '\0';
+	len = 0;
+
+	room = dst_size - 1 - len;
+	chunk = strlen(prefix);
+	if (chunk > room)
+		chunk = room;
+	memcpy(dst + len, prefix, chunk);
+	len += chunk;
+	dst[len] = '\0';
+
+	room = dst_size - 1 - len;
+	chunk = strlen(partition);
+	if (chunk > room)
+		chunk = room;
+	memcpy(dst + len, partition, chunk);
+	len += chunk;
+	dst[len] = '\0';
+
+	if (path_part[0] != '/') {
+		room = dst_size - 1 - len;
+		chunk = strlen("/");
+		if (chunk > room)
+			chunk = room;
+		memcpy(dst + len, "/", chunk);
+		len += chunk;
+		dst[len] = '\0';
+	}
+
+	room = dst_size - 1 - len;
+	chunk = strlen(path_part);
+	if (chunk > room)
+		chunk = room;
+	memcpy(dst + len, path_part, chunk);
+	len += chunk;
+	dst[len] = '\0';
+}
+//------------------------------
+//endfunc buildBootBlockPath
+//---------------------------------------------------------------------------
 enum BOOT_DEVICE prepareBootDeviceAndPath(const char *arg0, char *boot_path, size_t boot_path_len)
 {
 	enum BOOT_DEVICE boot = BOOT_DEV_UNKNOWN;
@@ -338,18 +395,14 @@ enum BOOT_DEVICE prepareBootDeviceAndPath(const char *arg0, char *boot_path, siz
 				However, (older) homebrew may not use this format. */
 			snprintf(temp, sizeof(temp), "%s", boot_path + 5);  //Skip "hdd0:" when copying.
 			t = strchr(temp, ':');                              //Check if the separator between the block device & the path exists.
-			if (t != NULL) {
-				char *path_part;
-				*(t) = 0;                      //If it does, get the block device name.
-				path_part = strchr(t + 1, ':');  //Get the path to the file
-				if (path_part != NULL) {
-					if (path_part[1] == '/')
-						snprintf(LaunchElfDir, sizeof(LaunchElfDir), "hdd0:/%s", temp);
-					else
-						snprintf(LaunchElfDir, sizeof(LaunchElfDir), "hdd0:/%s/", temp);
-					strncat(LaunchElfDir, path_part + 1, sizeof(LaunchElfDir) - strlen(LaunchElfDir) - 1);
+				if (t != NULL) {
+					char *path_part;
+					*(t) = 0;                      //If it does, get the block device name.
+					path_part = strchr(t + 1, ':');  //Get the path to the file
+					if (path_part != NULL) {
+						buildBootBlockPath(LaunchElfDir, sizeof(LaunchElfDir), "hdd0:/", temp, path_part + 1);
+					}
 				}
-			}
 
 			boot = BOOT_DEVICE_HDD;
 #ifdef DVRP
@@ -362,18 +415,14 @@ enum BOOT_DEVICE prepareBootDeviceAndPath(const char *arg0, char *boot_path, siz
 				However, (older) homebrew may not use this format. */
 			snprintf(temp, sizeof(temp), "%s", boot_path + 9);  //Skip "dvr_hdd0:" when copying.
 			t = strchr(temp, ':');                              //Check if the separator between the block device & the path exists.
-			if (t != NULL) {
-				char *path_part;
-				*(t) = 0;                      //If it does, get the block device name.
-				path_part = strchr(t + 1, ':');  //Get the path to the file
-				if (path_part != NULL) {
-					if (path_part[1] == '/')
-						snprintf(LaunchElfDir, sizeof(LaunchElfDir), "dvr_hdd0:/%s", temp);
-					else
-						snprintf(LaunchElfDir, sizeof(LaunchElfDir), "dvr_hdd0:/%s/", temp);
-					strncat(LaunchElfDir, path_part + 1, sizeof(LaunchElfDir) - strlen(LaunchElfDir) - 1);
+				if (t != NULL) {
+					char *path_part;
+					*(t) = 0;                      //If it does, get the block device name.
+					path_part = strchr(t + 1, ':');  //Get the path to the file
+					if (path_part != NULL) {
+						buildBootBlockPath(LaunchElfDir, sizeof(LaunchElfDir), "dvr_hdd0:/", temp, path_part + 1);
+					}
 				}
-			}
 
 			boot = BOOT_DEVICE_HDD;
 #endif
