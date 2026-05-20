@@ -77,9 +77,6 @@ int cdmode;      //Last detected disc type
 int old_cdmode;  //used for disc change detection
 int uLE_cdmode;  //used for smart disc detection
 
-#define SCECdESRDVD_0 0x15  // ESR-patched DVD, as seen without ESR driver active
-#define SCECdESRDVD_1 0x16  // ESR-patched DVD, as seen with ESR driver active
-
 typedef struct
 {
 	int type;

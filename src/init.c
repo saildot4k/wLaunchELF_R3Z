@@ -249,7 +249,7 @@ static void delay(int count)
 //---------------------------------------------------------------------------
 static void initsbv_patches(void)
 {
-	dbgprintf("Init MrBrown sbv_patches\n");
+	DPRINTF("Init MrBrown sbv_patches\n");
 	sbv_patch_enable_lmb();
 	sbv_patch_disable_prefix_check();
 }

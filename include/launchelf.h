@@ -123,6 +123,14 @@ static inline int wle_stricmp(const char *lhs, const char *rhs)
 #define TRUE 1
 #define FALSE 0
 
+#ifndef SCECdESRDVD_0
+#define SCECdESRDVD_0 0x15  // ESR-patched DVD, as seen without ESR driver active
+#endif
+
+#ifndef SCECdESRDVD_1
+#define SCECdESRDVD_1 0x16  // ESR-patched DVD, as seen with ESR driver active
+#endif
+
 enum {                // cnfmode values for getFilePath in browsing for configurable file paths
 	NON_CNF = 0,      // Normal browser mode, not configuration mode
 	LK_ELF_CNF,       // Normal ELF choice for launch keys
