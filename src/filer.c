@@ -283,6 +283,55 @@ void unmountAll(void)
 	#endif
 }  //ends unmountAll
 //--------------------------------------------------------------
+static int getHddPartyFromPath(const char *path, char *party, size_t party_size)
+{
+	const char *start;
+	const char *end;
+
+	if (strncmp(path, "hdd0:/", 6))
+		return 0;
+	start = path + 6;
+	if (start[0] == '\0')
+		return 0;
+	end = strchr(start, '/');
+	if (end == NULL)
+		end = start + strlen(start);
+	if (end <= start)
+		return 0;
+	snprintf(party, party_size, "hdd0:%.*s", (int)(end - start), start);
+	return 1;
+}
+
+static int clipboardUsesHddParty(const char *party)
+{
+	char clipParty[MAX_NAME];
+
+	if (nclipFiles <= 0 || clipPath[0] == '\0')
+		return 0;
+	if (!getHddPartyFromPath(clipPath, clipParty, sizeof(clipParty)))
+		return 0;
+	return (strcmp(clipParty, party) == 0);
+}
+
+static void unmountHddPartiesNotNeededByClipboard(void)
+{
+	int i;
+
+	for (i = 0; i < MOUNT_LIMIT; i++) {
+		if (mountedParty[i][0] == 0)
+			continue;
+		/*
+		 * Keep the source partition mounted only when clipboard entries still come
+		 * from that partition. Otherwise release mounts while at hdd0:/.
+		 */
+		if (clipboardUsesHddParty(mountedParty[i]))
+			continue;
+		if (Party_vmcIndex[i] >= 0)
+			continue;
+		unmountParty(i);
+	}
+}
+//--------------------------------------------------------------
 void invalidatePartitionCaches(void)
 {
 	nparties = 0;
@@ -672,6 +721,7 @@ int readHDD(const char *path, FILEINFO *info, int max)
 	}
 
 	if (!strcmp(path, "hdd0:/")) {
+		unmountHddPartiesNotNeededByClipboard();
 		for (i = 0; i < nparties; i++) {
 			strcpy(info[i].name, parties[i]);
 			info[i].stats.AttrFile = MC_ATTR_norm_folder;

@@ -333,10 +333,10 @@ static int load_ps2hdd_stack(int with_ata_bd)
 	                       "-n"
 	                       "\0"
 	                       "20";
-	/* Keep -m aligned with MOUNT_LIMIT in launchelf.h (currently 4). */
+	/* Limit simultaneously mounted PFS partitions for ATA+APA compatibility. */
 	static char pfsarg[] = "-m"
 	                       "\0"
-	                       "4"
+	                       "2"
 	                       "\0"
 	                       "-o"
 	                       "\0"
