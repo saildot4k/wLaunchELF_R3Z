@@ -1,5 +1,6 @@
 #include "launchelf.h"
 #include "init.h"
+#include <unistd.h>
 
 #define IMPORT_BIN2C(_n) \
     extern u8 _n[];   \
@@ -71,7 +72,6 @@ IMPORT_BIN2C(iomanx_irx);
 IMPORT_BIN2C(filexio_irx);
 IMPORT_BIN2C(ps2dev9_irx);
 IMPORT_BIN2C(vmc_fs_irx);
-IMPORT_BIN2C(ps2atad_irx);
 IMPORT_BIN2C(ps2hdd_irx);
 IMPORT_BIN2C(ps2fs_irx);
 IMPORT_BIN2C(poweroff_irx);
@@ -118,11 +118,12 @@ static u8 have_hdl_info = 0;
 //State of Checkable Modules (valid header)
 static u8 have_poweroff = 0;
 static u8 have_ps2dev9 = 0;
-static u8 have_ps2atad = 0;
 static u8 have_ps2hdd = 0;
 static u8 have_ps2fs = 0;
 static u8 have_vmc_fs = 0;
 #ifdef EXFAT
+static u8 have_bdm = 0;
+static u8 have_bdmfs = 0;
 static u8 have_ata_bd = 0;
 #endif
 #ifdef XFROM
@@ -187,7 +188,7 @@ static void load_ps2dev9(void);
 #ifdef ETH
 static void load_ps2ip(void);
 #endif
-static void load_ps2atad(void);
+static int load_ps2hdd_stack(int with_ata_bd);
 static void showLoadingModulesMsg(const char *device_name);
 static void showRebootingIopMsg(void);
 #ifdef ETH
@@ -213,6 +214,7 @@ static void resetRuntimeDeviceState(void);
 static void switchStorageDriverStack(int target_mode);
 static void switchBlockStorageStack(int target_mode);
 #ifdef EXFAT
+static int loadBdmCoreModules(void);
 static int loadAtaBlockDriver(void);
 static void pauseAfterAtaBlockDriverLoad(void);
 #endif
@@ -320,9 +322,10 @@ static void load_ps2ip(void)
 //------------------------------
 //endfunc load_ps2ip
 //---------------------------------------------------------------------------
-static void load_ps2atad(void)
+static int load_ps2hdd_stack(int with_ata_bd)
 {
 	int ret, ID __attribute__((unused));
+	int dev9_ready = 0;
 	static char hddarg[] = "-o"
 	                       "\0"
 	                       "4"
@@ -343,29 +346,30 @@ static void load_ps2atad(void)
 	                       "\0"
 	                       "40";
 
-	load_ps2dev9();
-	if (!ps2dev9_loaded) {
-		DPRINTF(" [HDD]: skipping ATAD/HDD/FS load because DEV9 failed to initialize\n");
-		return;
-	}
-
 #ifdef EXFAT
 	/*
 	 * Match nhddl-rewrite stack ordering:
-	 * DEV9 -> BDM -> BDMFS -> ATA_BD -> short pause -> ATAD/HDD/PFS.
+	 * BDM -> BDMFS -> DEV9 -> ATA_BD -> short pause -> PS2HDD/PS2FS.
 	 */
-	if (!loadAtaBlockDriver()) {
-		DPRINTF(" [HDD]: skipping ATAD/HDD/FS load because ATA_BD stack did not initialize\n");
-		return;
+	if (with_ata_bd && !loadAtaBlockDriver()) {
+		DPRINTF(" [HDD]: skipping HDD/FS load because ATA_BD stack did not initialize\n");
+		return 0;
 	}
+	if (with_ata_bd)
+		dev9_ready = ps2dev9_loaded;
 #endif
-
-	if (!have_ps2atad) {
-		ID = SifExecModuleBuffer(ps2atad_irx, size_ps2atad_irx, 0, NULL, &ret);
-		DPRINTF(" [ATAD]: ID=%d, ret=%d\n", ID, ret);
-		have_ps2atad = (ID >= 0 && ret >= 0);
+#ifndef EXFAT
+	(void)with_ata_bd;
+#endif
+	if (!dev9_ready) {
+		load_ps2dev9();
+		if (!ps2dev9_loaded) {
+			DPRINTF(" [HDD]: skipping HDD/FS load because DEV9 failed to initialize\n");
+			return 0;
+		}
 	}
-	if (have_ps2atad && !have_ps2hdd) {
+
+	if (!have_ps2hdd) {
 		ID = SifExecModuleBuffer(ps2hdd_irx, size_ps2hdd_irx, sizeof(hddarg), hddarg, &ret);
 		DPRINTF(" [PS2HDD]: ID=%d, ret=%d\n", ID, ret);
 		have_ps2hdd = (ID >= 0 && ret >= 0);
@@ -375,9 +379,11 @@ static void load_ps2atad(void)
 		DPRINTF(" [PS2FS]: ID=%d, ret=%d\n", ID, ret);
 		have_ps2fs = (ID >= 0 && ret >= 0);
 	}
+
+	return (have_ps2hdd && have_ps2fs);
 }
 //------------------------------
-//endfunc load_ps2atad
+//endfunc load_ps2hdd_stack
 //---------------------------------------------------------------------------
 #ifdef XFROM
 IMPORT_BIN2C(extflash_irx);
@@ -474,10 +480,10 @@ static void load_ps2dvr(void)
 {
 	int ret, ID __attribute__((unused));
 
-	if (!have_dvrdrv || !have_dvrfile || !have_ps2atad || !have_ps2hdd || !have_ps2fs)
+	if (!have_dvrdrv || !have_dvrfile || !have_ps2hdd || !have_ps2fs)
 		showLoadingModulesMsg("dvr");
 
-	load_ps2atad();
+	load_ps2hdd_stack(0);
 	if (!have_dvrdrv) {
 		ID = SifExecModuleBuffer(dvrdrv_irx, size_dvrdrv_irx, 0, NULL, &ret);
 		DPRINTF(" [DVRDRV]: ID=%d, ret=%d\n", ID, ret);
@@ -862,9 +868,14 @@ static int loadExternalModule(char *modPath, void *defBase, int defSize)
 //---------------------------------------------------------------------------
 static void loadUsbDModule(void)
 {
+	int ret, ID __attribute__((unused));
+
 	DPRINTF(" [USBD]:\n");
-	if ((!have_usbd) && (loadExternalModule("USBD.IRX", &usbd_irx, size_usbd_irx)))
-		have_usbd = 1;
+	if (!have_usbd) {
+		ID = SifExecModuleBuffer(usbd_irx, size_usbd_irx, 0, NULL, &ret);
+		DPRINTF(" [USBD] ID=%d, ret=%d\n", ID, ret);
+		have_usbd = (ID >= 0 && ret >= 0);
+	}
 }
 //------------------------------
 //endfunc loadUsbDModule
@@ -884,9 +895,7 @@ static void loadDs34Modules(void)
 #endif
 void loadUsbModules(void)
 {
-#ifdef EXFAT
 	int ret, ID __attribute__((unused));
-#endif
 
 	if (!have_usbd || !have_usb_mass)
 		showLoadingModulesMsg("usb");
@@ -901,18 +910,26 @@ void loadUsbModules(void)
 		 * EXFAT builds use the embedded BDM stack.
 		 * There is no dedicated external override path in current config.
 		 */
-		ID = SifExecModuleBuffer(bdm_irx, size_bdm_irx, 0, NULL, &ret);
-		DPRINTF(" [BDM] ID=%d, ret=%d\n", ID, ret);
-		if (ID < 0 || ret < 0)
+		if (!have_bdm) {
+			ID = SifExecModuleBuffer(bdm_irx, size_bdm_irx, 0, NULL, &ret);
+			DPRINTF(" [BDM] ID=%d, ret=%d\n", ID, ret);
+			have_bdm = (ID >= 0 && ret >= 0);
+		}
+		if (!have_bdm)
 			loaded_ok = 0;
-		ID = SifExecModuleBuffer(bdmfs_fatfs_irx, size_bdmfs_fatfs_irx, 0, NULL, &ret);
-		DPRINTF(" [BDMFS_FATFS] ID=%d, ret=%d\n", ID, ret);
-		if (ID < 0 || ret < 0)
+		if (loaded_ok && !have_bdmfs) {
+			ID = SifExecModuleBuffer(bdmfs_fatfs_irx, size_bdmfs_fatfs_irx, 0, NULL, &ret);
+			DPRINTF(" [BDMFS_FATFS] ID=%d, ret=%d\n", ID, ret);
+			have_bdmfs = (ID >= 0 && ret >= 0);
+		}
+		if (!have_bdmfs)
 			loaded_ok = 0;
-		ID = SifExecModuleBuffer(usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, &ret);
-		DPRINTF(" [USBMASS_BD] ID=%d, ret=%d\n", ID, ret);
-		if (ID < 0 || ret < 0)
-			loaded_ok = 0;
+		if (loaded_ok) {
+			ID = SifExecModuleBuffer(usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, &ret);
+			DPRINTF(" [USBMASS_BD] ID=%d, ret=%d\n", ID, ret);
+			if (ID < 0 || ret < 0)
+				loaded_ok = 0;
+		}
 		if (loaded_ok) {
 			delay(3);
 			USB_mass_loaded = 1;
@@ -920,9 +937,14 @@ void loadUsbModules(void)
 		}
 	}
 #else
-	if (have_usbd && !have_usb_mass && (USB_mass_loaded = loadExternalModule("USBMASS.IRX", &usb_mass_irx, size_usb_mass_irx))) {
-		delay(3);
-		have_usb_mass = 1;
+	if (have_usbd && !have_usb_mass) {
+		ID = SifExecModuleBuffer(usb_mass_irx, size_usb_mass_irx, 0, NULL, &ret);
+		DPRINTF(" [USBMASS] ID=%d, ret=%d\n", ID, ret);
+		if (ID >= 0 && ret >= 0) {
+			delay(3);
+			USB_mass_loaded = 1;  //internal embedded driver
+			have_usb_mass = 1;
+		}
 	}
 #endif
 
@@ -1101,23 +1123,43 @@ int loadMx4sioModules(void)
 #endif
 
 #ifdef EXFAT
+static int loadBdmCoreModules(void)
+{
+	int ret, id __attribute__((unused));
+
+	if (!have_bdm) {
+		id = SifExecModuleBuffer(bdm_irx, size_bdm_irx, 0, NULL, &ret);
+		DPRINTF(" [BDM]: id=%d ret=%d\n", id, ret);
+		have_bdm = (id >= 0 && ret >= 0);
+	}
+	if (have_bdm && !have_bdmfs) {
+		id = SifExecModuleBuffer(bdmfs_fatfs_irx, size_bdmfs_fatfs_irx, 0, NULL, &ret);
+		DPRINTF(" [BDMFS_FATFS]: id=%d ret=%d\n", id, ret);
+		have_bdmfs = (id >= 0 && ret >= 0);
+	}
+
+	return (have_bdm && have_bdmfs);
+}
+
 static void pauseAfterAtaBlockDriverLoad(void)
 {
 	/* Keep a brief settle window before loading/using APA stack modules. */
-	DelayThread(1000 * 1000);
+	sleep(1);
 }
 
 static int loadAtaBlockDriver(void)
 {
 	int ret, id __attribute__((unused));
 
+	if (!loadBdmCoreModules()) {
+		DPRINTF(" [ATA_BD]: skipping load because BDM core stack failed to initialize\n");
+		return 0;
+	}
 	load_ps2dev9();
 	if (!ps2dev9_loaded) {
 		DPRINTF(" [ATA_BD]: skipping load because DEV9 failed to initialize\n");
 		return 0;
 	}
-	if (!have_usb_mass)
-		loadUsbModules();
 	if (!have_ata_bd) {
 		id = SifExecModuleBuffer(ata_bd_irx, size_ata_bd_irx, 0, NULL, &ret);
 		DPRINTF(" [ATA_BD]: id=%d ret=%d\n", id, ret);
@@ -1135,7 +1177,8 @@ void loadAtaModules(void)
 
 	needs_feedback = (!have_ata_bd ||
 	                  !ps2dev9_loaded ||
-	                  !have_usb_mass ||
+	                  !have_bdm ||
+	                  !have_bdmfs ||
 	                  !(block_storage_stack_mode & BLOCK_STACK_ATA));
 	if (needs_feedback)
 		showLoadingModulesMsg("ata");
@@ -1222,11 +1265,11 @@ void loadHddModules(void)
 	if (!have_HDD_modules) {
 		showLoadingModulesMsg("hdd");
 		setupPowerOff();
-		load_ps2atad();  //also loads ps2hdd & ps2fs
-		have_HDD_modules = (have_ps2atad && have_ps2hdd && have_ps2fs);
+		load_ps2hdd_stack(1);  //also loads ps2hdd & ps2fs
+		have_HDD_modules = (have_ps2hdd && have_ps2fs);
 		if (!have_HDD_modules) {
-			DPRINTF(" [HDD]: stack incomplete (ATAD=%d HDD=%d FS=%d)\n",
-			        have_ps2atad, have_ps2hdd, have_ps2fs);
+			DPRINTF(" [HDD]: stack incomplete (HDD=%d FS=%d)\n",
+			        have_ps2hdd, have_ps2fs);
 		}
 	}
 	if (have_HDD_modules)
@@ -1371,10 +1414,11 @@ void Reset()
 	have_HDD_modules = 0;
 	have_poweroff = 0;
 	have_ps2dev9 = 0;
-	have_ps2atad = 0;
 	have_ps2hdd = 0;
 	have_ps2fs = 0;
 #ifdef EXFAT
+	have_bdm = 0;
+	have_bdmfs = 0;
 	have_ata_bd = 0;
 #endif
 #ifdef MMCE

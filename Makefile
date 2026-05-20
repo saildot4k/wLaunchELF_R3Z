@@ -30,7 +30,7 @@ else
 endif
 EE_OBJS = main.o init.o main_startup.o main_fileops.o config.o gui.o gui_colors.o elf.o draw.o loader_elf.o filer.o filer_fileops.o filer_actions.o filer_browser.o filer_copy.o \
 	gui_sort.o gui_texteditor.o gui_hdd0_format.o psu_functions.o mcpaste_functions.o \
-	poweroff_irx.o iomanx_irx.o filexio_irx.o ps2atad_irx.o ps2dev9_irx.o \
+	poweroff_irx.o iomanx_irx.o filexio_irx.o ps2dev9_irx.o \
 	ps2hdd_irx.o ps2fs_irx.o usbd_irx.o mcman_irx.o mcserv_irx.o \
 	cdvd_irx.o vmc_fs_irx.o ps2kbd_irx.o \
 	hdd.o hdl_rpc.o hdl_info_irx.o editor.o timer.o icon.o lang.o \

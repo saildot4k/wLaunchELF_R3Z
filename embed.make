@@ -478,9 +478,6 @@ endif
 iop/ps2ftpd.irx: iop/oldlibs/ps2ftpd
 	$(MAKE) -C $<
 
-$(EE_ASM_DIR)ps2atad_irx.s: $(PS2SDK)/iop/irx/ps2atad.irx | $(EE_ASM_DIR)
-	$(BIN2S) $< $@ ps2atad_irx
-
 $(EE_ASM_DIR)ps2hdd_irx.s: $(PS2SDK)/iop/irx/ps2hdd-osd.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ps2hdd_irx
 
