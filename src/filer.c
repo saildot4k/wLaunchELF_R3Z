@@ -1429,43 +1429,38 @@ int genDopen(char *path)
 //------------------------------
 //endfunc genDopen
 //--------------------------------------------------------------
-int genLseek(int fd, int where, int how)
+s64 genLseek(int fd, s64 where, int how)
 {
-	int ret;
-	u64 t0, t1;
+	s64 ret64;
+	int ret32 = -1;
+	int fallback_used = 0;
+	u64 t0, t1, t2 = 0, t3 = 0;
 
 	t0 = Timer();
-	ret = fileXioLseek(fd, where, how);
+	ret64 = fileXioLseek64(fd, where, how);
 	t1 = Timer();
+
+	if (ret64 < 0 && where <= 0x7FFFFFFFLL && where >= (-0x7FFFFFFFLL - 1)) {
+		fallback_used = 1;
+		t2 = Timer();
+		ret32 = fileXioLseek(fd, (int)where, how);
+		t3 = Timer();
+		ret64 = ret32;
+	}
+
 #if FILEOP_TRACE
-	printf("[FILEOP] lseek fd=%d where=%d how=%d ret=%d dt=%llu ms\n",
-	       fd, where, how, ret,
-	       (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
+	printf("[FILEOP] lseek fd=%d where=0x%08x%08x how=%d ret=0x%08x%08x lseek64_dt=%llu ms fallback=%d fallback_ret=%d fallback_dt=%llu ms\n",
+	       fd,
+	       (unsigned int)(where >> 32), (unsigned int)where, how,
+	       (unsigned int)(ret64 >> 32), (unsigned int)ret64,
+	       (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0),
+	       fallback_used, ret32,
+	       (unsigned long long)((t3 >= t2) ? (t3 - t2) : 0));
 #endif
-	return ret;
+	return ret64;
 }
 //------------------------------
 //endfunc genLseek
-//--------------------------------------------------------------
-s64 genLseek64(int fd, s64 where, int how)
-{
-	s64 ret;
-	u64 t0, t1;
-
-	t0 = Timer();
-	ret = fileXioLseek64(fd, where, how);
-	t1 = Timer();
-#if FILEOP_TRACE
-	printf("[FILEOP] lseek64 fd=%d where=0x%08x%08x how=%d ret=0x%08x%08x dt=%llu ms\n",
-	       fd,
-	       (unsigned int)(where >> 32), (unsigned int)where, how,
-	       (unsigned int)(ret >> 32), (unsigned int)ret,
-	       (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
-#endif
-	return ret;
-}
-//------------------------------
-//endfunc genLseek64
 //--------------------------------------------------------------
 int genRead(int fd, void *buf, int size)
 {
@@ -3597,12 +3592,12 @@ non_PSU_RESTORE_init:
 			if (in_fd < 0)
 				goto copy_file_exit;
 			{
-				s64 in_size = genLseek64(in_fd, 0, SEEK_END);
+				s64 in_size = genLseek(in_fd, 0, SEEK_END);
 				if (in_size < 0)
 					goto copy_file_exit;
 				size = (u64)in_size;
 			}
-			genLseek64(in_fd, 0, SEEK_SET);
+			genLseek(in_fd, 0, SEEK_SET);
 		}
 
 	//Here the input file has been opened, indicated by 'in_fd'

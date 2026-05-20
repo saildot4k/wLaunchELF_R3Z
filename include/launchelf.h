@@ -460,8 +460,7 @@ void genLimObjName(char *uLE_path, int reserve);
 int genFixPath(const char *inp_path, char *gen_path);
 /* mode must use fileXio-compatible flags (FIO_O_*). */
 int genOpen(const char *path, int mode);
-int genLseek(int fd, int where, int how);
-s64 genLseek64(int fd, s64 where, int how);
+s64 genLseek(int fd, s64 where, int how);
 int genRead(int fd, void *buf, int size);
 int genWrite(int fd, void *buf, int size);
 int genClose(int fd);
