@@ -188,6 +188,7 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 	if (!strncmp(inPath, "hdd", 3)) {
 		if (getHddParty(inPath, &file, inParty, in) < 0)
 			return -1;
+		/* Re-resolve/mount source partition each copy so stale browser mounts do not break paste/move. */
 		pfsin = mountParty(inParty);
 		if (pfsin < 0)
 			return -1;
@@ -207,6 +208,7 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 	if (!strncmp(outPath, "hdd", 3)) {
 		if (getHddParty(outPath, &newfile, outParty, out) < 0)
 			return -1;
+		/* Re-resolve/mount destination partition each copy so stale browser mounts do not break paste/move. */
 		pfsout = mountParty(outParty);
 		if (pfsout < 0)
 			return -1;

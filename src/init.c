@@ -163,9 +163,9 @@ static int storage_driver_stack_mode = STORAGE_STACK_DEFAULT;
 
 enum block_storage_stack_mode {
 	BLOCK_STACK_NONE = 0,
-	BLOCK_STACK_HDD,
+	BLOCK_STACK_HDD = (1 << 0),
 #ifdef EXFAT
-	BLOCK_STACK_ATA,
+	BLOCK_STACK_ATA = (1 << 1),
 #endif
 };
 static int block_storage_stack_mode = BLOCK_STACK_NONE;
@@ -212,6 +212,10 @@ static void resetUsbMassRuntimeState(void);
 static void resetRuntimeDeviceState(void);
 static void switchStorageDriverStack(int target_mode);
 static void switchBlockStorageStack(int target_mode);
+#ifdef EXFAT
+static int loadAtaBlockDriver(void);
+static void pauseAfterAtaBlockDriverLoad(void);
+#endif
 #ifdef DVRP
 static void switchPsxHddDriverStack(int use_dvr_stack);
 #endif
@@ -326,6 +330,7 @@ static void load_ps2atad(void)
 	                       "-n"
 	                       "\0"
 	                       "20";
+	/* Keep -m aligned with MOUNT_LIMIT in launchelf.h (currently 4). */
 	static char pfsarg[] = "-m"
 	                       "\0"
 	                       "4"
@@ -343,6 +348,17 @@ static void load_ps2atad(void)
 		DPRINTF(" [HDD]: skipping ATAD/HDD/FS load because DEV9 failed to initialize\n");
 		return;
 	}
+
+#ifdef EXFAT
+	/*
+	 * Match nhddl-rewrite stack ordering:
+	 * DEV9 -> BDM -> BDMFS -> ATA_BD -> short pause -> ATAD/HDD/PFS.
+	 */
+	if (!loadAtaBlockDriver()) {
+		DPRINTF(" [HDD]: skipping ATAD/HDD/FS load because ATA_BD stack did not initialize\n");
+		return;
+	}
+#endif
 
 	if (!have_ps2atad) {
 		ID = SifExecModuleBuffer(ps2atad_irx, size_ps2atad_irx, 0, NULL, &ret);
@@ -995,8 +1011,19 @@ static void switchStorageDriverStack(int target_mode)
 
 static void switchBlockStorageStack(int target_mode)
 {
-	if (block_storage_stack_mode == target_mode)
+	if ((block_storage_stack_mode & target_mode) == target_mode)
 		return;
+
+#ifdef EXFAT
+	/*
+	 * ATA_BD + APA stack can coexist in one IOP session.
+	 * Only force a reset for genuinely incompatible future stacks.
+	 */
+	if ((block_storage_stack_mode | target_mode) == (BLOCK_STACK_HDD | BLOCK_STACK_ATA)) {
+		block_storage_stack_mode |= target_mode;
+		return;
+	}
+#endif
 
 	if (block_storage_stack_mode != BLOCK_STACK_NONE) {
 		DPRINTF("Switching block storage stack (%d -> %d), resetting IOP\n", block_storage_stack_mode, target_mode);
@@ -1074,31 +1101,50 @@ int loadMx4sioModules(void)
 #endif
 
 #ifdef EXFAT
-void loadAtaModules(void)
+static void pauseAfterAtaBlockDriverLoad(void)
+{
+	/* Keep a brief settle window before loading/using APA stack modules. */
+	DelayThread(1000 * 1000);
+}
+
+static int loadAtaBlockDriver(void)
 {
 	int ret, id __attribute__((unused));
-	int needs_feedback;
-
-	needs_feedback = (!have_ata_bd ||
-	                  !ps2dev9_loaded ||
-	                  !have_usb_mass ||
-	                  (block_storage_stack_mode != BLOCK_STACK_ATA));
-	if (needs_feedback)
-		showLoadingModulesMsg("ata");
-
-	switchBlockStorageStack(BLOCK_STACK_ATA);
-	ensureCoreIoStackReady();
 
 	load_ps2dev9();
+	if (!ps2dev9_loaded) {
+		DPRINTF(" [ATA_BD]: skipping load because DEV9 failed to initialize\n");
+		return 0;
+	}
 	if (!have_usb_mass)
 		loadUsbModules();
 	if (!have_ata_bd) {
 		id = SifExecModuleBuffer(ata_bd_irx, size_ata_bd_irx, 0, NULL, &ret);
 		DPRINTF(" [ATA_BD]: id=%d ret=%d\n", id, ret);
 		have_ata_bd = (id >= 0 && ret >= 0);
+		if (have_ata_bd)
+			pauseAfterAtaBlockDriverLoad();
 	}
+
+	return have_ata_bd;
+}
+
+void loadAtaModules(void)
+{
+	int needs_feedback;
+
+	needs_feedback = (!have_ata_bd ||
+	                  !ps2dev9_loaded ||
+	                  !have_usb_mass ||
+	                  !(block_storage_stack_mode & BLOCK_STACK_ATA));
+	if (needs_feedback)
+		showLoadingModulesMsg("ata");
+
+	switchBlockStorageStack(BLOCK_STACK_ATA);
+	ensureCoreIoStackReady();
+	loadAtaBlockDriver();
 	if (have_ata_bd)
-		block_storage_stack_mode = BLOCK_STACK_ATA;
+		block_storage_stack_mode |= BLOCK_STACK_ATA;
 }
 #endif
 
@@ -1184,7 +1230,7 @@ void loadHddModules(void)
 		}
 	}
 	if (have_HDD_modules)
-		block_storage_stack_mode = BLOCK_STACK_HDD;
+		block_storage_stack_mode |= BLOCK_STACK_HDD;
 }
 //------------------------------
 //endfunc loadHddModules
