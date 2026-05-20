@@ -5,8 +5,6 @@
 
 #define IOCTL_RENAME 0xFEEDC0DE
 
-extern int fileMode;
-
 u64 getFileSize(const char *path, const FILEINFO *file)
 {
 	iox_stat_t stat;

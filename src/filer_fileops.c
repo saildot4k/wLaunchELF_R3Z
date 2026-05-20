@@ -1,6 +1,5 @@
 #include "launchelf.h"
-
-extern int fileMode;
+#include "filer_shared.h"
 
 #ifndef FILEOP_TRACE
 #define FILEOP_TRACE 1

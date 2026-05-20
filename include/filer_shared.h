@@ -57,6 +57,8 @@ extern int nclipFiles;
 extern int nmarks;
 extern u64 written_size;
 extern u64 PasteTime;
+extern int PSU_content;
+extern int fileMode;
 
 extern int file_show;
 extern int file_sort;
