@@ -526,9 +526,19 @@ static int KeyBoard_Entry(void)
 			} else if (KeyPress == 0x2C) {  // Key Up.
 				if (Editor_Cur > 0)
 					Editor_PushRows++;
+				else if (Editor_nChar > 0) {
+					Editor_Cur = Editor_nChar - 1;
+					if (Editor_Cur > 0 && TextBuffer[Active_Window][Editor_Cur] == '\0')
+						Editor_Cur--;
+					Editor_PushRows = 0;
+				}
 			} else if (KeyPress == 0x2B) {  // Key Down.
 				if (Editor_Cur < Editor_nChar && TextBuffer[Active_Window][Editor_Cur] != '\0')
 					Editor_PushRows--;
+				else {
+					Editor_Cur = 0;
+					Editor_PushRows = 0;
+				}
 			} else if (KeyPress == 0x24)  // Key Home.
 				Editor_Home = 1;
 			else if (KeyPress == 0x27)  // Key End.
@@ -1368,9 +1378,19 @@ void TextEditor(char *path)
 				if (new_pad & PAD_UP) {  // Text move up.
 					if (Editor_Cur > 0)
 						Editor_PushRows++;
+					else if (Editor_nChar > 0) {
+						Editor_Cur = Editor_nChar - 1;
+						if (Editor_Cur > 0 && TextBuffer[Active_Window][Editor_Cur] == '\0')
+							Editor_Cur--;
+						Editor_PushRows = 0;
+					}
 				} else if (new_pad & PAD_DOWN) {  // Text move down.
 					if (Editor_Cur < Editor_nChar && TextBuffer[Active_Window][Editor_Cur] != '\0')
 						Editor_PushRows--;
+					else {
+						Editor_Cur = 0;
+						Editor_PushRows = 0;
+					}
 				} else if (new_pad & PAD_LEFT) {  // Text move left.
 					if (Editor_Cur > 0)
 						Editor_Cur--;

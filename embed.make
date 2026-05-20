@@ -531,11 +531,6 @@ $(EE_ASM_DIR)ds34bt.s: iop/ds34bt.irx | $(EE_ASM_DIR)
 $(EE_ASM_DIR)padman.s: $(PADMAN_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ padman_irx
 
-ifeq ($(SMB),1)
-$(EE_ASM_DIR)smbman_irx.s: $(PS2SDK)/iop/irx/smbman.irx | $(EE_ASM_DIR)
-	$(BIN2S) $< $@ smbman_irx
-endif
-
 iop/vmc_fs.irx: iop/vmc_fs
 	$(MAKE) -C $<
 

@@ -52,7 +52,6 @@
 #endif
 #endif
 #include <libcdvd.h>
-#include "libjpg.h"
 #include <libkbd.h>
 #include <math.h>
 #include <usbhdfsd-common.h>
@@ -128,14 +127,11 @@ enum {                // cnfmode values for getFilePath in browsing for configur
 	NON_CNF = 0,      // Normal browser mode, not configuration mode
 	LK_ELF_CNF,       // Normal ELF choice for launch keys
 	USBD_IRX_CNF,     // USBD.IRX choice for startup
-	SKIN_CNF,         // Skin JPG choice
-	GUI_SKIN_CNF,     // GUI Skin JPG choice
 	USBKBD_IRX_CNF,   // USB keyboard IRX choice (only PS2SDK)
 	KBDMAP_FILE_CNF,  // USB keyboard mapping table choice
 	CNF_PATH_CNF,     // CNF Path override choice
 	TEXT_CNF,         // No restriction choice
 	DIR_CNF,          // Directory choice
-	JPG_CNF,          // Jpg viewer choice
 	USBMASS_IRX_CNF,  // USB_MASS.IRX choice for startup
 	LANG_CNF,         // Language file choice
 	FONT_CNF,         // Font file choice ( .fnt )
@@ -213,12 +209,7 @@ typedef struct
 	char Misc_PS2PowerOff[64];
 	char Misc_HddManager[64];
 	char Misc_TextEditor[64];
-	char Misc_JpgViewer[64];
 	char Misc_Configure[64];
-	char Misc_Load_CNFprev[64];
-	char Misc_Load_CNFnext[64];
-	char Misc_Set_CNF_Path[64];
-	char Misc_Load_CNF[64];
 	char Misc_ShowFont[64];
 	char Misc_Debug_Info[64];
 	char Misc_About_uLE[64];
@@ -226,24 +217,19 @@ typedef struct
 	char Misc_OSDSYS[64];
 	char usbkbd_file[MAX_PATH];
 	char kbdmap_file[MAX_PATH];
-	char skin[MAX_PATH];
-	char GUI_skin[MAX_PATH];
 	char Menu_Title[MAX_MENU_TITLE + 1];
 	char lang_file[MAX_PATH];
 	char font_file[MAX_PATH];
 	int Menu_Frame;
-	int Show_Menu;
 	int timeout;
 	int Hide_Paths;
 	u64 color[8];
 	int screen_x;
 	int screen_y;
-	int numCNF;
 	int swapKeys;
 	int HOSTwrite;
 	int app_gameid;
 	int cdrom_disable_gameid;
-	int Brightness;
 	int TV_mode;
 	int Popup_Opaque;
 	int Init_Delay;
@@ -251,9 +237,6 @@ typedef struct
 	int reboot_iop_elf_load;
 	int Show_Titles;
 	int PathPad_Lock;
-	int JpgView_Timer;
-	int JpgView_Trans;
-	int JpgView_Full;
 	int PSU_HugeNames;
 	int PSU_DateNames;
 	int PSU_NoOverwrite;
@@ -276,7 +259,6 @@ extern char LaunchElfDir[MAX_PATH], LastDir[MAX_NAME];
 /* main.c */
 extern int TV_mode;
 extern int swapKeys;
-extern int GUI_active;  // Skin and Main Skin switch
 extern int cdmode;      //Last detected disc type
 extern u8 console_is_PSX;
 extern char if_conf[IPCONF_MAX_LEN];
@@ -335,12 +317,6 @@ int checkELFheader(char *filename);
 void RunLoaderElf(char *filename, char *party, const char *selected_path, int exec_kind, int reboot_iop_elf_load);
 
 /* draw.c */
-#define BACKGROUND_PIC 0
-#define PREVIEW_PIC 1
-#define JPG_PIC 2
-#define THUMB_PIC 3
-#define PREVIEW_GUI 4
-
 #define FOLDER 0
 #define WARNING 1
 
@@ -348,9 +324,7 @@ extern unsigned char icon_folder[];
 extern unsigned char icon_warning[];
 
 extern GSGLOBAL *gsGlobal;
-extern GSTEXTURE TexSkin, TexPreview, TexPicture, TexThumb[MAX_ENTRY], TexIcon[2];
-extern int testskin, testsetskin, testjpg, testthumb;
-extern float PicWidth, PicHeight, PicW, PicH, PicCoeff;
+extern GSTEXTURE TexIcon[2];
 extern int SCREEN_WIDTH;
 extern int SCREEN_HEIGHT;
 extern int Menu_start_x;
@@ -361,8 +335,6 @@ extern int Menu_start_y;
 extern int Menu_end_y;
 extern int Frame_end_y;
 extern int Menu_tooltip_y;
-extern u64 BrightColor;
-extern int PicRotate, FullScreen;
 extern u8 FontBuffer[256 * 16];
 
 void setScrTmp(const char *msg0, const char *msg1);
@@ -374,8 +346,6 @@ void drawLastMsg(void);
 void setupGS(void);
 void updateScreenMode(void);
 void clrScr(u64 color);
-void setBrightness(int Brightness);
-void loadSkin(int Picture, char *Path, int ThumbNum);
 void drawScr(void);
 void drawFrame(int x1, int y1, int x2, int y2, u64 color);
 void drawChar(unsigned int c, int x, int y, u64 colour);
@@ -491,9 +461,6 @@ extern u64 WaitTime;
 extern u64 CurrTime;
 
 u64 Timer(void);
-
-/* jpgviewer.c */
-void JpgViewer(char *file);
 
 /* lang.c */
 typedef struct Language

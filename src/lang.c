@@ -311,18 +311,8 @@ void Load_External_Language(void)
 						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(HddManager));
 					else if (!strcmp(tmp + 1, setting->Misc_TextEditor + strlen(setting->Misc)))
 						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(TextEditor));
-					else if (!strcmp(tmp + 1, setting->Misc_JpgViewer + strlen(setting->Misc)))
-						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(JpgViewer));
 					else if (!strcmp(tmp + 1, setting->Misc_Configure + strlen(setting->Misc)))
 						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(Configure));
-					else if (!strcmp(tmp + 1, setting->Misc_Load_CNFprev + strlen(setting->Misc)))
-						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(Load_CNFprev));
-					else if (!strcmp(tmp + 1, setting->Misc_Load_CNFnext + strlen(setting->Misc)))
-						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(Load_CNFnext));
-					else if (!strcmp(tmp + 1, setting->Misc_Set_CNF_Path + strlen(setting->Misc)))
-						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(Set_CNF_Path));
-					else if (!strcmp(tmp + 1, setting->Misc_Load_CNF + strlen(setting->Misc)))
-						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(Load_CNF));
 					else if (!strcmp(tmp + 1, setting->Misc_ShowFont + strlen(setting->Misc)))
 						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(ShowFont));
 					else if (!strcmp(tmp + 1, setting->Misc_Debug_Info + strlen(setting->Misc)))
@@ -346,12 +336,7 @@ void Load_External_Language(void)
 	sprintf(setting->Misc_PS2PowerOff, "%s/%s", LNG(MISC), LNG(PS2PowerOff));
 	sprintf(setting->Misc_HddManager, "%s/%s", LNG(MISC), LNG(HddManager));
 	sprintf(setting->Misc_TextEditor, "%s/%s", LNG(MISC), LNG(TextEditor));
-	sprintf(setting->Misc_JpgViewer, "%s/%s", LNG(MISC), LNG(JpgViewer));
 	sprintf(setting->Misc_Configure, "%s/%s", LNG(MISC), LNG(Configure));
-	sprintf(setting->Misc_Load_CNFprev, "%s/%s", LNG(MISC), LNG(Load_CNFprev));
-	sprintf(setting->Misc_Load_CNFnext, "%s/%s", LNG(MISC), LNG(Load_CNFnext));
-	sprintf(setting->Misc_Set_CNF_Path, "%s/%s", LNG(MISC), LNG(Set_CNF_Path));
-	sprintf(setting->Misc_Load_CNF, "%s/%s", LNG(MISC), LNG(Load_CNF));
 	sprintf(setting->Misc_ShowFont, "%s/%s", LNG(MISC), LNG(ShowFont));
 	sprintf(setting->Misc_Debug_Info, "%s/%s", LNG(MISC), LNG(Debug_Info));
 	sprintf(setting->Misc_About_uLE, "%s/%s", LNG(MISC), LNG(About_uLE));

@@ -41,12 +41,7 @@ Misc_PS2Net = PS2Net
 Misc_PS2PowerOff = PS2PowerOff
 Misc_HddManager = HddManager
 Misc_TextEditor = TextEditor
-Misc_JpgViewer = JpgViewer
 Misc_Configure = Configure
-Misc_Load_CNFprev = Load CNF--
-Misc_Load_CNFnext = Load CNF++
-Misc_Set_CNF_Path = Set CNF_Path
-Misc_Load_CNF = Load CNF
 Misc_ShowFont = ShowFont
 Misc_Debug_Info = Debug Info
 Misc_About_uLE = About uLE
@@ -86,8 +81,8 @@ LK_Start_E1    =
 # strings to disable the keys entirely (for 'child safe' installations)
 # ----------------------------------------------------------------------
 LK_Select_E1 = MISC/Configure
-LK_Left_E1   = MISC/Load CNF--
-LK_Right_E1  = MISC/Load CNF++
+# LK_Left_E1
+# LK_Right_E1
 # ----------------------------------------------------------------------
 # After the launch key definitions we have the variables for diverse
 # settings, most of which use obvious naming schemes and have their
@@ -149,7 +144,7 @@ GUI_Col_8_ABGR = 00000000
 Init_CDVD_Check  = 0
 Screen_Interlace = 1
 Init_Reset_IOP   = 1
-Menu_Pages       = 1
+# Menu_Pages is deprecated and ignored (single-CNF mode only).
 GUI_Swap_Keys    = 0
 # ----------------------------------------------------------------------
 # The variables below have been added after the original design (v3.41t)
@@ -180,22 +175,6 @@ APP_GameID = 0
 # launches (MISC/PS2Disc path). Default is 0 (disc Game ID enabled).
 # ----------------------------------------------------------------------
 CDROM_Disable_GameID = 0
-# ----------------------------------------------------------------------
-#SKIN_FILE is used to select a JPG file that will be used as background
-#for the LaunchELF screen. Its value should be the full JPG pathname.
-#The default value is an empty string, meaning that the colour set by
-#GUI_Col_1_ABGR above will be used for screen background instead.
-# ----------------------------------------------------------------------
-SKIN_FILE =
-# ----------------------------------------------------------------------
-#GUI_SKIN_FILE is used to select a JPG file that will be used the same
-#way as SKIN_FILE, but only in the main launch menu. This allows the
-#design of screens that use the JPG to display GUI 'buttons' etc. But if
-#no such file is specified (or loadable at runtime) then the usage falls
-#back on the regular methods.
-# ----------------------------------------------------------------------
-GUI_SKIN_FILE =
-# ----------------------------------------------------------------------
 #Menu_Title is a string that will be displayed at the top left of the
 #screen. Its main purpose is to allow users to have different titles
 #for different config pages. It is editable in "STARTUP SETTINGS".
@@ -206,19 +185,6 @@ Menu_Title =
 # should be visible or not. By default it will be visible.
 # ----------------------------------------------------------------------
 Menu_Frame = 1
-# ----------------------------------------------------------------------
-# SKIN_Brightness is used to modify the brightness of a JPG skin, thus
-# allowing this to be set without changing the JPG file. The default is
-# 50, for using the JPG as-is, lower values will darken it while higher
-# values will brighten it. The maximum value allowed is 100.
-# ----------------------------------------------------------------------
-SKIN_Brightness = 50
-# ----------------------------------------------------------------------
-# Show_Menu flags whether or not the main menu is visible when a GUI
-# skin is selected. By default it will be visible.
-# ----------------------------------------------------------------------
-Show_Menu = 1
-# ----------------------------------------------------------------------
 # TV_mode is used to seup the video mode to suit your TV. You may use
 # the following values in the current implementation:
 # 0 => Automatic adaption of video mode to suit your console (default)
@@ -229,10 +195,9 @@ Show_Menu = 1
 TV_mode = 0
 # ----------------------------------------------------------------------
 # Popup_Opaque may be set to force popup menus to use simple background
-# colour (GUI_Col_1_ABGR) inside such menu box, instead of transparently
-# using the skin (if any) as background. If no skin is used then this
-# setting has no visible effect. Its default value is for transparency,
-# so change it to 1 to make such menus opaque.
+# colour (GUI_Col_1_ABGR) inside such menu box, instead of transparency.
+# Its default value is for transparency, so change it to 1 to make such
+# menus opaque.
 # ----------------------------------------------------------------------
 Popup_Opaque = 0
 # ----------------------------------------------------------------------
@@ -306,20 +271,6 @@ LANG_FILE =
 # missing or has an invalid format. (Fonts are released separately.)
 # ----------------------------------------------------------------------
 FONT_FILE =
-# ----------------------------------------------------------------------
-# From v3.84 two settings of JpgViewer are also saved here. These are
-# the slideshow interval timer (in seconds), and the picture transition
-# choice, a value from 1-4, with 1==NONE, 2==ZOOM 3==FADE, 4==BOTH.
-# In v3.96 another setting was added, being a flag for fullscreen mode. 
-# To save latest slideshow settings, just enter the main configuration
-# menu and exit it again using the OK command. This resaves the file.
-# Viewer settings found in a CNF will be used instead of the original
-# defaults, which are the values shown below.
-# ----------------------------------------------------------------------
-JpgView_Timer = 5
-JpgView_Trans = 2
-JpgView_Full = 0
-# ----------------------------------------------------------------------
 # From v3.92 Two options for PSU gamesave files are saved here.
 # Set PSU_HugeNames non-zero to make PSU names contain both original
 # gamesave folder names and the gamesave titles (from icon.sys).
@@ -350,7 +301,7 @@ PSU_NoOverwrite = 0
 # The icons will reuse colours already defined as follows:
 # Folders use Color5=='Graph1', ELFs use Color6=='Graph2', and other
 # files will all use Color7=='Graph3'. By default these colours will
-# be setup as yellow, green, and white, but can be changed for 'skins'.
+# be setup as yellow, green, and white, but can be changed in GUI colors.
 # In icon mode objects marked for operations are displayed differently
 # by switching to a slightly different icon definition (with a 'hole').
 # But if FB_NoIcons is set non-zero then the FileBrowser will revert

@@ -3,7 +3,6 @@
 # ---{ BUILD CONFIGURATION }--- #
 MMCE ?= 1
 DS34 ?= 0
-SMB ?= 0
 TMANIP ?= 1
 ETH ?= 1
 UDPFS ?= 0
@@ -21,7 +20,7 @@ LCDVD ?= LEGACY#or LATEST
 # ----------------------------- #
 .SILENT:
 
-BIN_NAME = $(HAS_EXFAT)$(HAS_DS34)$(HAS_ETH)$(HAS_UDPFS)$(HAS_MX4SIO)$(HAS_MMCE)$(HAS_SMB)$(HAS_DVRP)$(HAS_XFROM)$(HAS_EESIO)$(HAS_UDPTTY)$(HAS_PPCTTY)$(HAS_IOP_RESET)
+BIN_NAME = $(HAS_EXFAT)$(HAS_DS34)$(HAS_ETH)$(HAS_UDPFS)$(HAS_MX4SIO)$(HAS_MMCE)$(HAS_DVRP)$(HAS_XFROM)$(HAS_EESIO)$(HAS_UDPTTY)$(HAS_PPCTTY)$(HAS_IOP_RESET)
 ifeq ($(DEBUG), 0)
   EE_BIN = UNC-BOOT$(BIN_NAME).ELF
   EE_BIN_PKD = BOOT$(BIN_NAME).ELF
@@ -29,27 +28,23 @@ else
   EE_BIN = UNC-BOOT.ELF
   EE_BIN_PKD = BOOT.ELF
 endif
-EE_OBJS = main.o main_startup.o main_fileops.o config.o elf.o draw.o loader_elf.o filer.o \
+EE_OBJS = main.o init.o main_startup.o main_fileops.o config.o gui.o gui_colors.o elf.o draw.o loader_elf.o filer.o filer_fileops.o filer_actions.o filer_browser.o filer_copy.o \
+	gui_sort.o gui_texteditor.o gui_hdd0_format.o psu_functions.o mcpaste_functions.o \
 	poweroff_irx.o iomanx_irx.o filexio_irx.o ps2atad_irx.o ps2dev9_irx.o \
 	ps2hdd_irx.o ps2fs_irx.o usbd_irx.o mcman_irx.o mcserv_irx.o \
 	cdvd_irx.o vmc_fs_irx.o ps2kbd_irx.o \
-	hdd.o hdl_rpc.o hdl_info_irx.o editor.o timer.o jpgviewer.o icon.o lang.o \
+	hdd.o hdl_rpc.o hdl_info_irx.o editor.o timer.o icon.o lang.o \
 	font_uLE.o makeicon.o chkesr.o allowdvdv_irx.o
 
 EE_INCS := -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include -Iinclude
 
 EE_LDFLAGS := -L$(PS2DEV)/gsKit/lib -L$(PS2SDK)/ports/lib -Liop/oldlibs/libcdvd/lib -s -Wl,--no-warn-mismatch
-EE_JPEG_LIBS := -ljpeg
-ifneq ($(wildcard $(PS2SDK)/ports/lib/libjpeg_ps2_addons.a),)
-EE_JPEG_LIBS := -ljpeg_ps2_addons -ljpeg
-endif
-
 EE_MATH_LIB := -lm
 ifneq ($(wildcard $(PS2SDK)/ee/lib/libmf.a),)
 EE_MATH_LIB := -lmf
 endif
 
-EE_LIBS = -lgskit -ldmakit $(EE_JPEG_LIBS) -lmc -lhdd -lkbd $(EE_MATH_LIB) \
+EE_LIBS = -lgskit -ldmakit -lmc -lhdd -lkbd $(EE_MATH_LIB) \
 			-lcdvd -lc -lfileXio -lpatches -lpoweroff -ldebug
 EE_CFLAGS := -mgpopt -G10240 -G0 -DNEWLIB_PORT_AWARE -D_EE
 
@@ -70,12 +65,6 @@ ifeq ($(strip $(BIN2S_TOOL)),)
 $(error bin2s not found. Install PS2SDK tools, or set BIN2S_TOOL=/full/path/to/bin2s)
 endif
 BIN2S = @$(BIN2S_TOOL)
-
-ifeq ($(SMB),1)
-    EE_OBJS += smbman.o
-    HAS_SMB = -SMB
-    EE_CFLAGS += -DSMB
-endif
 
 ifeq ($(LCDVD),LEGACY)
   $(info -- Building with legacy libcdvd)

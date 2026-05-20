@@ -2,6 +2,7 @@
 // File name:   config.c
 //---------------------------------------------------------------------------
 #include "launchelf.h"
+#include "gui_colors.h"
 #include <stdbool.h>
 
 enum {
@@ -9,17 +10,17 @@ enum {
 	DEF_HIDE_PATHS = TRUE,
 #ifdef CUSTOM_COLORS
 	DEF_COLOR1 = GS_SETREG_RGBA(0, 0, 0, 0),  //Backgr
-	DEF_COLOR2 = GS_SETREG_RGBA(160, 160, 160, 0),     //Frame
+	DEF_COLOR2 = GS_SETREG_RGBA(160, 160, 160, 0),  //Frame
 #ifdef DVRP
 	DEF_COLOR3 = GS_SETREG_RGBA(0x7a, 0, 0xbe, 0),
 #else
-	DEF_COLOR3 = GS_SETREG_RGBA(0, 204, 255, 0),       //Select
+	DEF_COLOR3 = GS_SETREG_RGBA(0, 204, 255, 0),  //Select
 #endif
-	DEF_COLOR4 = GS_SETREG_RGBA(255, 255, 255, 0),        //Text
+	DEF_COLOR4 = GS_SETREG_RGBA(255, 255, 255, 0),  //Text
 	DEF_COLOR5 = GS_SETREG_RGBA(255, 255, 0, 0),      //Graph1
-	DEF_COLOR6 = GS_SETREG_RGBA(0, 255, 0, 0),       //Graph2
-	DEF_COLOR7 = GS_SETREG_RGBA(64, 64, 64, 0),  //Graph3
-	DEF_COLOR8 = GS_SETREG_RGBA(128, 128, 128, 0),        //Graph4
+	DEF_COLOR6 = GS_SETREG_RGBA(0, 255, 0, 0),        //Graph2
+	DEF_COLOR7 = GS_SETREG_RGBA(64, 64, 64, 0),       //Graph3
+	DEF_COLOR8 = GS_SETREG_RGBA(128, 128, 128, 0),    //Graph4
 #else
 	DEF_COLOR1 = GS_SETREG_RGBA(128, 128, 128, 0),  //Backgr
 	DEF_COLOR2 = GS_SETREG_RGBA(64, 64, 64, 0),     //Frame
@@ -31,22 +32,16 @@ enum {
 	DEF_COLOR8 = GS_SETREG_RGBA(0, 0, 0, 0),        //Graph4
 #endif //CUSTOM_COLORS
 	DEF_MENU_FRAME = TRUE,
-	DEF_MENU = TRUE,
-	DEF_NUMCNF = 1,
 	DEF_SWAPKEYS = FALSE,
 	DEF_HOSTWRITE = FALSE,
 	DEF_APP_GAMEID = FALSE,
 	DEF_CDROM_DISABLE_GAMEID = FALSE,
-	DEF_BRIGHT = 50,
 	DEF_POPUP_OPAQUE = FALSE,
 	DEF_INIT_DELAY = 0,
 	DEF_USBKBD_USED = 1,
 	DEF_STARTUP_RESET_IOP_ELFOAD = 0,
 	DEF_SHOW_TITLES = 1,
 	DEF_PATHPAD_LOCK = 0,
-	DEF_JPGVIEW_TIMER = 5,
-	DEF_JPGVIEW_TRANS = 2,
-	DEF_JPGVIEW_FULL = 0,
 	DEF_PSU_HUGENAMES = 0,
 	DEF_PSU_DATENAMES = 0,
 	DEF_PSU_NOOVERWRITE = 0,
@@ -54,23 +49,23 @@ enum {
 };
 
 static const char LK_ID[SETTING_LK_COUNT][10] = {
-    "auto",
-    "Circle",
-    "Cross",
-    "Square",
-    "Triangle",
-    "L1",
-    "R1",
-    "L2",
-    "R2",
-    "L3",
-    "R3",
-    "Start",
-    "Select",  //Predefined for "CONFIG"
-    "Left",    //Predefined for "LOAD CONFIG--"
-    "Right",   //Predefined for "LOAD CONFIG++"
-    "ESR",
-    "OSDSYS"};
+	"auto",
+	"Circle",
+	"Cross",
+	"Square",
+	"Triangle",
+	"L1",
+	"R1",
+	"L2",
+	"R2",
+	"L3",
+	"R3",
+	"Start",
+	"Select",  //Predefined for "CONFIG"
+	"Left",
+	"Right",
+	"ESR",
+	"OSDSYS"};
 
 char PathPad[MAX_PATH_PAD][MAX_PATH];
 SETTING *setting = NULL;
@@ -93,25 +88,6 @@ static void formatLabelValue(char *dst, size_t dst_size, const char *label, cons
 	if (value_len < 0)
 		value_len = 0;
 	snprintf(dst + prefix_len, dst_size - prefix_len, "%.*s", value_len, value ? value : "");
-}
-
-static void formatQuotedPathMessage(char *dst, size_t dst_size, const char *prefix, const char *path)
-{
-	int prefix_len;
-	int path_len;
-
-	if (dst_size == 0)
-		return;
-	prefix_len = snprintf(dst, dst_size, "%s \"", prefix ? prefix : "");
-	if (prefix_len < 0 || prefix_len >= (int)dst_size) {
-		dst[dst_size - 1] = '\0';
-		return;
-	}
-
-	path_len = (int)dst_size - prefix_len - 3;  // room for '"' '.' and '\0'
-	if (path_len < 0)
-		path_len = 0;
-	snprintf(dst + prefix_len, dst_size - prefix_len, "%.*s\".", path_len, path ? path : "");
 }
 //---------------------------------------------------------------------------
 // End of declarations
@@ -214,146 +190,6 @@ static int getLaunchMcPort(void)
 	return 0;
 }
 //---------------------------------------------------------------------------
-unsigned long hextoul(char *string)
-{
-	unsigned long value;
-	char c;
-
-	value = 0;
-	while (!(((c = *string++) < '0') || (c > 'F') || ((c > '9') && (c < 'A'))))
-		value = value * 16 + ((c > '9') ? (c - 'A' + 10) : (c - '0'));
-	return value;
-}
-//---------------------------------------------------------------------------
-//storeSkinCNF will save most cosmetic settings to a RAM area
-//------------------------------
-static size_t storeSkinCNF(char *cnf_buf)
-{
-	size_t CNF_size;
-
-	sprintf(cnf_buf,
-	        "GUI_Col_1_ABGR = %08X\r\n"
-	        "GUI_Col_2_ABGR = %08X\r\n"
-	        "GUI_Col_3_ABGR = %08X\r\n"
-	        "GUI_Col_4_ABGR = %08X\r\n"
-	        "GUI_Col_5_ABGR = %08X\r\n"
-	        "GUI_Col_6_ABGR = %08X\r\n"
-	        "GUI_Col_7_ABGR = %08X\r\n"
-	        "GUI_Col_8_ABGR = %08X\r\n"
-	        "SKIN_FILE = %s\r\n"
-	        "GUI_SKIN_FILE = %s\r\n"
-	        "SKIN_Brightness = %d\r\n"
-	        "TV_mode = %d\r\n"
-	        "Screen_Offset_X = %d\r\n"
-	        "Screen_Offset_Y = %d\r\n"
-	        "Popup_Opaque = %d\r\n"
-	        "Menu_Frame = %d\r\n"
-	        "Show_Menu = %d\r\n"
-	        "%n",                               // %n causes NO output, but only a measurement
-	        (u32)setting->color[COLOR_BACKGR],  //Col_1
-	        (u32)setting->color[COLOR_FRAME],   //Col_2
-	        (u32)setting->color[COLOR_SELECT],  //Col_3
-	        (u32)setting->color[COLOR_TEXT],    //Col_4
-	        (u32)setting->color[COLOR_GRAPH1],  //Col_5
-	        (u32)setting->color[COLOR_GRAPH2],  //Col_6
-	        (u32)setting->color[COLOR_GRAPH3],  //Col_7
-	        (u32)setting->color[COLOR_GRAPH4],  //Col_8
-	        setting->skin,                      //SKIN_FILE
-	        setting->GUI_skin,                  //GUI_SKIN_FILE
-	        setting->Brightness,                //SKIN_Brightness
-	        setting->TV_mode,                   //TV_mode
-	        setting->screen_x,                  //Screen_X
-	        setting->screen_y,                  //Screen_Y
-	        setting->Popup_Opaque,              //Popup_Opaque
-	        setting->Menu_Frame,                //Menu_Frame
-	        setting->Show_Menu,                 //Show_Menu
-	        &CNF_size                           // This variable measures the size of sprintf data
-	        );
-	return CNF_size;
-}
-//------------------------------
-//endfunc storeSkinCNF
-//---------------------------------------------------------------------------
-//saveSkinCNF will save most cosmetic settings to a skin CNF file
-//------------------------------
-static int saveSkinCNF(char *CNF)
-{
-	int ret, fd;
-	char tmp[26 * MAX_PATH + 30 * MAX_PATH];
-	char cnf_path[MAX_PATH];
-	size_t CNF_size;
-
-	CNF_size = storeSkinCNF(tmp);
-
-	ret = genFixPath(CNF, cnf_path);
-	if ((ret < 0) || ((fd = genOpen(cnf_path, FIO_O_CREAT | FIO_O_WRONLY | FIO_O_TRUNC)) < 0)) {
-		return -1;  //Failed open
-	}
-	ret = genWrite(fd, &tmp, CNF_size);
-	if (ret != CNF_size)
-		ret = -2;  //Failed writing
-	genClose(fd);
-
-	return ret;
-}
-//-----------------------------
-//endfunc saveSkinCNF
-//---------------------------------------------------------------------------
-//saveSkinBrowser will save most cosmetic settings to browsed skin CNF file
-//------------------------------
-static void saveSkinBrowser(void)
-{
-	int tst;
-	char path[MAX_PATH];
-	char tmp[MAX_PATH];
-	char *p;
-
-	tst = getFilePath(path, SAVE_CNF);
-	if (path[0] == '\0')
-		goto abort;
-	if (!strncmp(path, "cdfs", 4))
-		goto abort;
-
-	drawMsg(LNG(Enter_File_Name));
-
-	tmp[0] = 0;
-	if (tst > 0) {               //if an existing file was selected, use its name
-		p = strrchr(path, '/');  //find separator between path and name
-		if (p != NULL) {
-			strcpy(tmp, p + 1);
-			p[1] = '\0';
-		} else  //if we got a pathname without separator, something is wrong
-			goto abort;
-	}
-	if ((tst >= 0) && (keyboard(tmp, 36) > 0))
-		strcat(path, tmp);
-	else {
-	abort:
-		tst = -3;
-		goto test;
-	}
-
-	tst = saveSkinCNF(path);
-
-test:
-	switch (tst) {
-		case -1:
-			sprintf(tmp, "%s \"%s\".", LNG(Failed_To_Save), path);
-			break;
-		case -2:
-			sprintf(tmp, "%s \"%s\".", LNG(Failed_writing), path);
-			break;
-		case -3:
-			sprintf(tmp, "%s \"%s\".", LNG(Failed_Saving_File), path);
-			break;
-		default:
-			sprintf(tmp, "%s \"%s\".", LNG(Saved), path);
-	}
-	drawMsg(tmp);
-}
-//-----------------------------
-//endfunc saveSkinBrowser
-//---------------------------------------------------------------------------
 static char *preloadCNFFd(int fd, const char *cnf_path)
 {
 	int rd, total, cnf_seek_size;
@@ -449,99 +285,7 @@ char *preloadCNF(char *path)
 }
 //------------------------------
 //endfunc preloadCNF
-//---------------------------------------------------------------------------
-//scanSkinCNF will check for most cosmetic variables of a CNF
-//------------------------------
-int scanSkinCNF(char *name, char *value)
-{
-	if (!strcmp(name, "GUI_Col_1_ABGR"))
-		setting->color[COLOR_BACKGR] = hextoul(value);
-	else if (!strcmp(name, "GUI_Col_2_ABGR"))
-		setting->color[COLOR_FRAME] = hextoul(value);
-	else if (!strcmp(name, "GUI_Col_3_ABGR"))
-		setting->color[COLOR_SELECT] = hextoul(value);
-	else if (!strcmp(name, "GUI_Col_4_ABGR"))
-		setting->color[COLOR_TEXT] = hextoul(value);
-	else if (!strcmp(name, "GUI_Col_5_ABGR"))
-		setting->color[COLOR_GRAPH1] = hextoul(value);
-	else if (!strcmp(name, "GUI_Col_6_ABGR"))
-		setting->color[COLOR_GRAPH2] = hextoul(value);
-	else if (!strcmp(name, "GUI_Col_7_ABGR"))
-		setting->color[COLOR_GRAPH3] = hextoul(value);
-	else if (!strcmp(name, "GUI_Col_8_ABGR"))
-		setting->color[COLOR_GRAPH4] = hextoul(value);
-	//----------
-	else if (!strcmp(name, "SKIN_FILE"))
-		strcpy(setting->skin, value);
-	else if (!strcmp(name, "GUI_SKIN_FILE"))
-		strcpy(setting->GUI_skin, value);
-	else if (!strcmp(name, "SKIN_Brightness"))
-		setting->Brightness = atoi(value);
-	//----------
-	else if (!strcmp(name, "TV_mode"))
-		setting->TV_mode = atoi(value);
-	else if (!strcmp(name, "Screen_Offset_X"))
-		setting->screen_x = atoi(value);
-	else if (!strcmp(name, "Screen_Offset_Y"))
-		setting->screen_y = atoi(value);
-	//----------
-	else if (!strcmp(name, "Popup_Opaque"))
-		setting->Popup_Opaque = atoi(value);
-	else if (!strcmp(name, "Menu_Frame"))
-		setting->Menu_Frame = atoi(value);
-	else if (!strcmp(name, "Show_Menu"))
-		setting->Show_Menu = atoi(value);
-	else
-		return 0;  //when no skin variable
-	return 1;      //when skin variable found
-}
-//------------------------------
-//endfunc scanSkinCNF
-//---------------------------------------------------------------------------
-//loadSkinCNF will load most cosmetic settings from CNF file
-//------------------------------
-int loadSkinCNF(char *path)
-{
-	int var_cnt;
-	char *RAM_p, *CNF_p, *name, *value;
-
-	if (!(RAM_p = preloadCNF(path)))
-		return -1;
-	CNF_p = RAM_p;
-	for (var_cnt = 0; get_CNF_string(&CNF_p, &name, &value); var_cnt++)
-		scanSkinCNF(name, value);
-	free(RAM_p);
-	updateScreenMode();
-	if (setting->skin[0] != '\0')
-		loadSkin(BACKGROUND_PIC, 0, 0);
-	return 0;
-}
-//------------------------------
-//endfunc loadSkinCNF
-//---------------------------------------------------------------------------
-//loadSkinBrowser will load most cosmetic settings from browsed skin CNF file
-//------------------------------
-void loadSkinBrowser(void)
-{
-	int tst;
-	char path[MAX_PATH];
-	char mess[MAX_PATH];
-
-	getFilePath(path, TEXT_CNF);  // No Filtering, Be Careful.
-	tst = loadSkinCNF(path);
-	if (tst < 0)
-		formatQuotedPathMessage(mess, sizeof(mess), LNG(Failed_To_Load), path);
-	else
-		formatQuotedPathMessage(mess, sizeof(mess), LNG(Loaded_Config), path);
-
-	drawMsg(mess);
-}
-//------------------------------
-//endfunc loadSkinBrowser
-//---------------------------------------------------------------------------
-// Save LAUNCHELF.CNF (or LAUNCHELFx.CNF with multiple pages)
-// polo: ADD save SKIN_FILE string
-// suloku: ADD save MAIN_SKIN string //dlanor: changed to GUI_SKIN_FILE
+// Save LAUNCHELF.CNF
 //---------------------------------------------------------------------------
 void saveConfig(char *mainMsg, char *CNF)
 {
@@ -575,12 +319,7 @@ void saveConfig(char *mainMsg, char *CNF)
 	        "Misc_PS2PowerOff = %s\r\n"
 	        "Misc_HddManager = %s\r\n"
 	        "Misc_TextEditor = %s\r\n"
-	        "Misc_JpgViewer = %s\r\n"
 	        "Misc_Configure = %s\r\n"
-	        "Misc_Load_CNFprev = %s\r\n"
-	        "Misc_Load_CNFnext = %s\r\n"
-	        "Misc_Set_CNF_Path = %s\r\n"
-	        "Misc_Load_CNF = %s\r\n"
 	        "Misc_ShowFont = %s\r\n"
 	        "Misc_Debug_Info = %s\r\n"
 	        "Misc_About_uLE = %s\r\n"
@@ -595,12 +334,7 @@ void saveConfig(char *mainMsg, char *CNF)
 	        setting->Misc_PS2PowerOff + i,
 	        setting->Misc_HddManager + i,
 	        setting->Misc_TextEditor + i,
-	        setting->Misc_JpgViewer + i,
 	        setting->Misc_Configure + i,
-	        setting->Misc_Load_CNFprev + i,
-	        setting->Misc_Load_CNFnext + i,
-	        setting->Misc_Set_CNF_Path + i,
-	        setting->Misc_Load_CNF + i,
 	        setting->Misc_ShowFont + i,
 	        setting->Misc_Debug_Info + i,
 	        setting->Misc_About_uLE + i,
@@ -610,12 +344,11 @@ void saveConfig(char *mainMsg, char *CNF)
 	        );
 	CNF_size += CNF_step;
 
-	CNF_size += storeSkinCNF(tmp + CNF_size);
+	CNF_size += storeGuiColorsCNF(tmp + CNF_size);
 
 	sprintf(tmp + CNF_size,
 	        "LK_auto_Timer = %d\r\n"
 	        "Menu_Hide_Paths = %d\r\n"
-	        "Menu_Pages = %d\r\n"
 	        "GUI_Swap_Keys = %d\r\n"
 	        "NET_HOSTwrite = %d\r\n"
 	        "APP_GameID = %d\r\n"
@@ -631,9 +364,6 @@ void saveConfig(char *mainMsg, char *CNF)
 	        "CNF_Path = %s\r\n"
 	        "LANG_FILE = %s\r\n"
 	        "FONT_FILE = %s\r\n"
-	        "JpgView_Timer = %d\r\n"
-	        "JpgView_Trans = %d\r\n"
-	        "JpgView_Full = %d\r\n"
 	        "PSU_HugeNames = %d\r\n"
 	        "PSU_DateNames = %d\r\n"
 	        "PSU_NoOverwrite = %d\r\n"
@@ -641,7 +371,6 @@ void saveConfig(char *mainMsg, char *CNF)
 	        "%n",                      // %n causes NO output, but only a measurement
 	        setting->timeout,          //auto_Timer
 	        setting->Hide_Paths,       //Menu_Hide_Paths
-	        setting->numCNF,           //Menu_Pages
 	        setting->swapKeys,         //GUI_Swap_Keys
 	        setting->HOSTwrite,        //NET_HOST_write
 	        setting->app_gameid,       //app_gameid
@@ -657,9 +386,6 @@ void saveConfig(char *mainMsg, char *CNF)
 	        setting->CNF_Path,         //CNF_Path
 	        setting->lang_file,        //LANG_FILE
 	        setting->font_file,        //FONT_FILE
-	        setting->JpgView_Timer,    //JpgView_Timer
-	        setting->JpgView_Trans,    //JpgView_Trans
-	        setting->JpgView_Full,     //JpgView_Full
 	        setting->PSU_HugeNames,    //PSU_HugeNames
 	        setting->PSU_DateNames,    //PSU_DateNames
 	        setting->PSU_NoOverwrite,  //PSU_NoOverwrite
@@ -763,12 +489,7 @@ void initConfig(void)
 	sprintf(setting->Misc_PS2PowerOff, "%s/%s", LNG_DEF(MISC), LNG_DEF(PS2PowerOff));
 	sprintf(setting->Misc_HddManager, "%s/%s", LNG_DEF(MISC), LNG_DEF(HddManager));
 	sprintf(setting->Misc_TextEditor, "%s/%s", LNG_DEF(MISC), LNG_DEF(TextEditor));
-	sprintf(setting->Misc_JpgViewer, "%s/%s", LNG_DEF(MISC), LNG_DEF(JpgViewer));
 	sprintf(setting->Misc_Configure, "%s/%s", LNG_DEF(MISC), LNG_DEF(Configure));
-	sprintf(setting->Misc_Load_CNFprev, "%s/%s", LNG_DEF(MISC), LNG_DEF(Load_CNFprev));
-	sprintf(setting->Misc_Load_CNFnext, "%s/%s", LNG_DEF(MISC), LNG_DEF(Load_CNFnext));
-	sprintf(setting->Misc_Set_CNF_Path, "%s/%s", LNG_DEF(MISC), LNG_DEF(Set_CNF_Path));
-	sprintf(setting->Misc_Load_CNF, "%s/%s", LNG_DEF(MISC), LNG_DEF(Load_CNF));
 	sprintf(setting->Misc_ShowFont, "%s/%s", LNG_DEF(MISC), LNG_DEF(ShowFont));
 	sprintf(setting->Misc_Debug_Info, "%s/%s", LNG_DEF(MISC), LNG_DEF(Debug_Info));
 	sprintf(setting->Misc_About_uLE, "%s/%s", LNG_DEF(MISC), LNG_DEF(About_uLE));
@@ -789,8 +510,6 @@ void initConfig(void)
 	setting->LK_Flag[SETTING_LK_TRIANGLE] = 1;
 	setting->usbkbd_file[0] = '\0';
 	setting->kbdmap_file[0] = '\0';
-	setting->skin[0] = '\0';
-	setting->GUI_skin[0] = '\0';
 	setting->Menu_Title[0] = '\0';
 	setting->CNF_Path[0] = '\0';
 	setting->lang_file[0] = '\0';
@@ -808,13 +527,10 @@ void initConfig(void)
 	setting->screen_x = 0;
 	setting->screen_y = 0;
 	setting->Menu_Frame = DEF_MENU_FRAME;
-	setting->Show_Menu = DEF_MENU;
-	setting->numCNF = DEF_NUMCNF;
 	setting->swapKeys = DEF_SWAPKEYS;
 	setting->HOSTwrite = DEF_HOSTWRITE;
 	setting->app_gameid = DEF_APP_GAMEID;
 	setting->cdrom_disable_gameid = DEF_CDROM_DISABLE_GAMEID;
-	setting->Brightness = DEF_BRIGHT;
 	setting->TV_mode = TV_mode_AUTO;
 	setting->Popup_Opaque = DEF_POPUP_OPAQUE;
 	setting->Init_Delay = DEF_INIT_DELAY;
@@ -822,9 +538,6 @@ void initConfig(void)
 	setting->reboot_iop_elf_load = DEF_STARTUP_RESET_IOP_ELFOAD;
 	setting->Show_Titles = DEF_SHOW_TITLES;
 	setting->PathPad_Lock = DEF_PATHPAD_LOCK;
-	setting->JpgView_Timer = -1;  //only used to detect missing variable
-	setting->JpgView_Trans = -1;  //only used to detect missing variable
-	setting->JpgView_Full = DEF_JPGVIEW_FULL;
 	setting->PSU_HugeNames = DEF_PSU_HUGENAMES;
 	setting->PSU_DateNames = DEF_PSU_DATENAMES;
 	setting->PSU_NoOverwrite = DEF_PSU_NOOVERWRITE;
@@ -833,10 +546,8 @@ void initConfig(void)
 //------------------------------
 //endfunc initConfig
 //---------------------------------------------------------------------------
-// Load LAUNCHELF.CNF (or LAUNCHELFx.CNF with multiple pages)
-// polo: ADD load SKIN_FILE string
-// suloku: ADD load MAIN_SKIN string //dlanor: changed to GUI_SKIN_FILE
-// dlanor: added error flag return value 0==OK, -1==failure
+// Load LAUNCHELF.CNF
+// Return value: 0==OK, -1==failure
 //---------------------------------------------------------------------------
 int loadConfig(char *mainMsg, char *CNF)
 {
@@ -901,7 +612,7 @@ int loadConfig(char *mainMsg, char *CNF)
 			continue;
 		}
 
-		if (scanSkinCNF(name, value))
+		if (scanGuiColorsCNF(name, value))
 			continue;
 
 		for (i = 0; i < SETTING_LK_COUNT; i++) {
@@ -919,52 +630,42 @@ int loadConfig(char *mainMsg, char *CNF)
 		//----------
 		else if (!strcmp(name, "Misc"))
 			sprintf(setting->Misc, "%s/", value);
-		else if (!strcmp(name, "Misc_PS2Disc"))
-			sprintf(setting->Misc_PS2Disc, "%s%s", setting->Misc, value);
-		else if (!strcmp(name, "Misc_FileBrowser"))
-			sprintf(setting->Misc_FileBrowser, "%s%s", setting->Misc, value);
-		else if (!strcmp(name, "Misc_PS2Browser"))
-			sprintf(setting->Misc_PS2Browser, "%s%s", setting->Misc, value);
-		else if (!strcmp(name, "Misc_PS2Net"))
-			sprintf(setting->Misc_PS2Net, "%s%s", setting->Misc, value);
-		else if (!strcmp(name, "Misc_PS2PowerOff"))
-			sprintf(setting->Misc_PS2PowerOff, "%s%s", setting->Misc, value);
-		else if (!strcmp(name, "Misc_HddManager"))
-			sprintf(setting->Misc_HddManager, "%s%s", setting->Misc, value);
-		else if (!strcmp(name, "Misc_TextEditor"))
-			sprintf(setting->Misc_TextEditor, "%s%s", setting->Misc, value);
-		else if (!strcmp(name, "Misc_JpgViewer"))
-			sprintf(setting->Misc_JpgViewer, "%s%s", setting->Misc, value);
-		else if (!strcmp(name, "Misc_Configure"))
-			sprintf(setting->Misc_Configure, "%s%s", setting->Misc, value);
-		else if (!strcmp(name, "Misc_Load_CNFprev"))
-			sprintf(setting->Misc_Load_CNFprev, "%s%s", setting->Misc, value);
-		else if (!strcmp(name, "Misc_Load_CNFnext"))
-			sprintf(setting->Misc_Load_CNFnext, "%s%s", setting->Misc, value);
-		else if (!strcmp(name, "Misc_Set_CNF_Path"))
-			sprintf(setting->Misc_Set_CNF_Path, "%s%s", setting->Misc, value);
-		else if (!strcmp(name, "Misc_Load_CNF"))
-			sprintf(setting->Misc_Load_CNF, "%s%s", setting->Misc, value);
-		else if (!strcmp(name, "Misc_ShowFont"))
-			sprintf(setting->Misc_ShowFont, "%s%s", setting->Misc, value);
-		else if (!strcmp(name, "Misc_Debug_Info"))
-			sprintf(setting->Misc_Debug_Info, "%s%s", setting->Misc, value);
-		else if (!strcmp(name, "Misc_About_uLE"))
-			sprintf(setting->Misc_About_uLE, "%s%s", setting->Misc, value);
-		else if (!strcmp(name, "Misc_Show_Build_Info"))
-			sprintf(setting->Misc_Show_Build_Info, "%s%s", setting->Misc, value);
-		else if (!strcmp(name, "Misc_OSDSYS"))
-			sprintf(setting->Misc_OSDSYS, "%s%s", setting->Misc, value);
-		//----------
-		else if (!strcmp(name, "LK_auto_Timer"))
-			setting->timeout = atoi(value);
-		else if (!strcmp(name, "Menu_Hide_Paths"))
-			setting->Hide_Paths = atoi(value);
-		//---------- NB: color settings moved to scanSkinCNF
-		else if (!strcmp(name, "Menu_Pages"))
-			setting->numCNF = atoi(value);
-		else if (!strcmp(name, "GUI_Swap_Keys"))
-			setting->swapKeys = atoi(value);
+			else if (!strcmp(name, "Misc_PS2Disc"))
+				sprintf(setting->Misc_PS2Disc, "%s%s", setting->Misc, value);
+			else if (!strcmp(name, "Misc_FileBrowser"))
+				sprintf(setting->Misc_FileBrowser, "%s%s", setting->Misc, value);
+			else if (!strcmp(name, "Misc_PS2Browser"))
+				sprintf(setting->Misc_PS2Browser, "%s%s", setting->Misc, value);
+			else if (!strcmp(name, "Misc_PS2Net"))
+				sprintf(setting->Misc_PS2Net, "%s%s", setting->Misc, value);
+			else if (!strcmp(name, "Misc_PS2PowerOff"))
+				sprintf(setting->Misc_PS2PowerOff, "%s%s", setting->Misc, value);
+			else if (!strcmp(name, "Misc_HddManager"))
+				sprintf(setting->Misc_HddManager, "%s%s", setting->Misc, value);
+			else if (!strcmp(name, "Misc_TextEditor"))
+				sprintf(setting->Misc_TextEditor, "%s%s", setting->Misc, value);
+			else if (!strcmp(name, "Misc_Configure"))
+				sprintf(setting->Misc_Configure, "%s%s", setting->Misc, value);
+			else if (!strcmp(name, "Misc_ShowFont"))
+				sprintf(setting->Misc_ShowFont, "%s%s", setting->Misc, value);
+			else if (!strcmp(name, "Misc_Debug_Info"))
+				sprintf(setting->Misc_Debug_Info, "%s%s", setting->Misc, value);
+			else if (!strcmp(name, "Misc_About_uLE"))
+				sprintf(setting->Misc_About_uLE, "%s%s", setting->Misc, value);
+			else if (!strcmp(name, "Misc_Show_Build_Info"))
+				sprintf(setting->Misc_Show_Build_Info, "%s%s", setting->Misc, value);
+			else if (!strcmp(name, "Misc_OSDSYS"))
+				sprintf(setting->Misc_OSDSYS, "%s%s", setting->Misc, value);
+			//----------
+			else if (!strcmp(name, "LK_auto_Timer"))
+				setting->timeout = atoi(value);
+			else if (!strcmp(name, "Menu_Hide_Paths"))
+				setting->Hide_Paths = atoi(value);
+			//---------- NB: color settings moved to scanGuiColorsCNF
+			else if (!strcmp(name, "Menu_Pages")) {
+				// Legacy multi-CNF key, ignored.
+			} else if (!strcmp(name, "GUI_Swap_Keys"))
+				setting->swapKeys = atoi(value);
 		else if (!strcmp(name, "NET_HOSTwrite"))
 			setting->HOSTwrite = atoi(value);
 		else if (!strcmp(name, "APP_GameID") || !strcmp(name, "app_gameid") || !strcmp(name, "Enable_GameID"))
@@ -994,13 +695,6 @@ int loadConfig(char *mainMsg, char *CNF)
 			strcpy(setting->lang_file, value);
 		else if (!strcmp(name, "FONT_FILE"))
 			strcpy(setting->font_file, value);
-		//----------
-		else if (!strcmp(name, "JpgView_Timer"))
-			setting->JpgView_Timer = atoi(value);
-		else if (!strcmp(name, "JpgView_Trans"))
-			setting->JpgView_Trans = atoi(value);
-		else if (!strcmp(name, "JpgView_Full"))
-			setting->JpgView_Full = atoi(value);
 		//----------
 		else if (!strcmp(name, "PSU_HugeNames"))
 			setting->PSU_HugeNames = atoi(value);
@@ -1036,267 +730,16 @@ int loadConfig(char *mainMsg, char *CNF)
 	for (i = 0; i < SETTING_LK_BTN_COUNT; i++)
 		setting->LK_Title[i][MAX_ELF_TITLE - 1] = 0;
 	free(RAM_p);
-	if (setting->JpgView_Timer < 0)
-		setting->JpgView_Timer = DEF_JPGVIEW_TIMER;
-	if ((setting->JpgView_Trans < 1) || (setting->JpgView_Trans > 4))
-		setting->JpgView_Trans = DEF_JPGVIEW_TRANS;
 	sprintf(mainMsg, "%s (%s)", LNG(Loaded_Config), cnf_path);
 	return 0;
 }
 //------------------------------
 //endfunc loadConfig
 //---------------------------------------------------------------------------
-// Polo: ADD Skin Menu with Skin preview
-// suloku: ADD Main skin selection
+// Polo: added GUI color menu with preview
+// suloku: added main cosmetic/color selection
 //---------------------------------------------------------------------------
 
-enum CONFIG_SKIN {
-	CONFIG_SKIN_FIRST = 1,
-	CONFIG_SKIN_PATH = CONFIG_SKIN_FIRST,
-	CONFIG_SKIN_APPLY,
-	CONFIG_SKIN_BRIGHTNESS,
-	CONFIG_SKIN_GUI_PATH,
-	CONFIG_SKIN_GUI_APPLY,
-	CONFIG_SKIN_GUI_SHOW_MENU,
-	CONFIG_SKIN_RETURN,
-
-	CONFIG_SKIN_COUNT,
-};
-
-static void Config_Skin(void)
-{
-	int s, max_s = CONFIG_SKIN_COUNT - 1;
-	int x, y;
-	int len;
-	int event, post_event = 0;
-	char c[MAX_PATH];
-	char skinSave[MAX_PATH], GUI_Save[MAX_PATH];
-	int Brightness = setting->Brightness;
-	int current_preview = 0;
-
-	strcpy(skinSave, setting->skin);
-	strcpy(GUI_Save, setting->GUI_skin);
-
-	loadSkin(PREVIEW_PIC, 0, 0);
-	current_preview = PREVIEW_PIC;
-
-	s = CONFIG_SKIN_FIRST;
-	event = 1;  //event = initial entry
-	while (1) {
-		//Pad response section
-		waitPadReady(0, 0);
-		if (readpad()) {
-			if (new_pad & PAD_UP) {
-				event |= 2;  //event |= valid pad command
-				if (s != CONFIG_SKIN_FIRST)
-					s--;
-				else
-					s = max_s;
-			} else if (new_pad & PAD_DOWN) {
-				event |= 2;  //event |= valid pad command
-				if (s != max_s)
-					s++;
-				else
-					s = CONFIG_SKIN_FIRST;
-			} else if (new_pad & PAD_LEFT) {
-				event |= 2;  //event |= valid pad command
-				if (s != CONFIG_SKIN_FIRST)
-					s = CONFIG_SKIN_FIRST;
-				else
-					s = max_s;
-			} else if (new_pad & PAD_RIGHT) {
-				event |= 2;  //event |= valid pad command
-				if (s != max_s)
-					s = max_s;
-				else
-					s = CONFIG_SKIN_FIRST;
-			} else if ((!swapKeys && new_pad & PAD_CROSS) || (swapKeys && new_pad & PAD_CIRCLE)) {
-				event |= 2;                   //event |= valid pad command
-				if (s == CONFIG_SKIN_PATH) {  //Command == Cancel Skin Path
-					setting->skin[0] = '\0';
-					loadSkin(PREVIEW_PIC, 0, 0);
-					current_preview = PREVIEW_PIC;
-				} else if (s == CONFIG_SKIN_BRIGHTNESS) {  //Command == Decrease Brightness
-					if ((Brightness > 0) && (testsetskin == 1)) {
-						Brightness--;
-					}
-				} else if (s == CONFIG_SKIN_GUI_PATH) {  //Command == Cancel GUI Skin Path
-					setting->GUI_skin[0] = '\0';
-					loadSkin(PREVIEW_GUI, 0, 0);
-					current_preview = PREVIEW_GUI;
-				}
-			} else if ((swapKeys && new_pad & PAD_CROSS) || (!swapKeys && new_pad & PAD_CIRCLE)) {
-				event |= 2;                   //event |= valid pad command
-				if (s == CONFIG_SKIN_PATH) {  //Command == Set Skin Path
-					getFilePath(setting->skin, SKIN_CNF);
-					loadSkin(PREVIEW_PIC, 0, 0);
-					current_preview = PREVIEW_PIC;
-				} else if (s == CONFIG_SKIN_APPLY) {  //Command == Apply New Skin
-					GUI_active = 0;
-					loadSkin(BACKGROUND_PIC, 0, 0);
-					setting->Brightness = Brightness;
-					strcpy(skinSave, setting->skin);
-					loadSkin(PREVIEW_PIC, 0, 0);
-					current_preview = PREVIEW_PIC;
-				} else if (s == CONFIG_SKIN_BRIGHTNESS) {  //Command == Increase Brightness
-					if ((Brightness < 100) && (testsetskin == 1)) {
-						Brightness++;
-					}
-				} else if (s == CONFIG_SKIN_GUI_PATH) {  //Command == Set GUI Skin Path
-					getFilePath(setting->GUI_skin, GUI_SKIN_CNF);
-					loadSkin(PREVIEW_GUI, 0, 0);
-					current_preview = PREVIEW_GUI;
-				} else if (s == CONFIG_SKIN_GUI_APPLY) {  //Command == Apply GUI Skin
-					strcpy(GUI_Save, setting->GUI_skin);
-					loadSkin(PREVIEW_GUI, 0, 0);
-					current_preview = PREVIEW_GUI;
-				} else if (s == CONFIG_SKIN_GUI_SHOW_MENU) {  //Command == Show GUI Menu
-					setting->Show_Menu = !setting->Show_Menu;
-				} else if (s == CONFIG_SKIN_RETURN) {  //Command == RETURN
-					setting->skin[0] = '\0';
-					strcpy(setting->skin, skinSave);
-					setting->GUI_skin[0] = '\0';
-					strcpy(setting->GUI_skin, GUI_Save);
-					return;
-				}
-			} else if (new_pad & PAD_TRIANGLE) {
-				setting->skin[0] = '\0';
-				strcpy(setting->skin, skinSave);
-				setting->GUI_skin[0] = '\0';
-				strcpy(setting->GUI_skin, GUI_Save);
-				return;
-			}
-		}  //end if(readpad())
-
-		if (event || post_event) {  //NB: We need to update two frame buffers per event
-
-			//Display section
-			clrScr(setting->color[COLOR_BACKGR]);
-
-			if (testsetskin == 1) {
-				setBrightness(Brightness);
-				gsKit_prim_sprite_texture(gsGlobal, &TexPreview,
-				                          SCREEN_WIDTH / 4, (SCREEN_HEIGHT / 4) + 60, 0, 0,
-				                          (SCREEN_WIDTH / 4) * 3, ((SCREEN_HEIGHT / 4) * 3) + 60, SCREEN_WIDTH, SCREEN_HEIGHT,
-				                          0, BrightColor);
-				setBrightness(50);
-			} else {
-				gsKit_prim_sprite(gsGlobal,
-				                  SCREEN_WIDTH / 4, (SCREEN_HEIGHT / 4) + 60, (SCREEN_WIDTH / 4) * 3, ((SCREEN_HEIGHT / 4) * 3) + 60,
-				                  0, setting->color[COLOR_BACKGR]);
-			}
-			drawFrame((SCREEN_WIDTH / 4) - 2, ((SCREEN_HEIGHT / 4) + 60) - 1,
-			          ((SCREEN_WIDTH / 4) * 3) + 1, ((SCREEN_HEIGHT / 4) * 3) + 60,
-			          setting->color[COLOR_FRAME]);
-
-			x = Menu_start_x;
-			y = Menu_start_y;
-
-			printXY(LNG(SKIN_SETTINGS), x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			y += FONT_HEIGHT;
-
-			if (strlen(setting->skin) == 0)
-				formatLabelValue(c, sizeof(c), LNG(Skin_Path), LNG(NULL));
-			else
-				formatLabelValue(c, sizeof(c), LNG(Skin_Path), setting->skin);
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			y += FONT_HEIGHT;
-
-			sprintf(c, "  %s", LNG(Apply_New_Skin));
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			y += FONT_HEIGHT;
-
-			sprintf(c, "  %s: %d", LNG(Brightness), Brightness);
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			y += FONT_HEIGHT;
-
-			if (strlen(setting->GUI_skin) == 0)
-				snprintf(c, sizeof(c), "  %s %s: %.900s", LNG(GUI), LNG(Skin_Path), LNG(NULL));
-			else
-				snprintf(c, sizeof(c), "  %s %s: %.900s", LNG(GUI), LNG(Skin_Path), setting->GUI_skin);
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			y += FONT_HEIGHT;
-
-			sprintf(c, "  %s", LNG(Apply_GUI_Skin));
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			y += FONT_HEIGHT;
-
-			if (setting->Show_Menu)
-				sprintf(c, "  %s: %s", LNG(Show_Menu), LNG(ON));
-			else
-				sprintf(c, "  %s: %s", LNG(Show_Menu), LNG(OFF));
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			y += FONT_HEIGHT;
-
-			sprintf(c, "  %s", LNG(RETURN));
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			y += FONT_HEIGHT;
-
-			if (current_preview == PREVIEW_PIC)
-				sprintf(c, "%s ", LNG(Normal));
-			else
-				sprintf(c, "%s ", LNG(GUI));
-			strcat(c, LNG(Skin_Preview));
-			printXY(c, SCREEN_WIDTH / 4, (SCREEN_HEIGHT / 4) + 78 - FONT_HEIGHT, setting->color[COLOR_TEXT], TRUE, 0);
-
-			//Cursor positioning section
-			y = Menu_start_y + s * (FONT_HEIGHT);
-			drawChar(LEFT_CUR, x, y, setting->color[COLOR_TEXT]);
-
-			//Tooltip section
-			if ((s == 1) || (s == 4)) {
-				if (swapKeys)
-					len = sprintf(c, "\xFF"
-					                 "1:%s \xFF"
-					                 "0:%s",
-					              LNG(Edit), LNG(Clear));
-				else
-					len = sprintf(c, "\xFF"
-					                 "0:%s \xFF"
-					                 "1:%s",
-					              LNG(Edit), LNG(Clear));
-			} else if (s == 3) {  //if cursor at a colour component or a screen offset
-				if (swapKeys)
-					len = sprintf(c, "\xFF"
-					                 "1:%s \xFF"
-					                 "0:%s",
-					              LNG(Add), LNG(Subtract));
-				else
-					len = sprintf(c, "\xFF"
-					                 "0:%s \xFF"
-					                 "1:%s",
-					              LNG(Add), LNG(Subtract));
-			} else if (s == 6) {
-				if (swapKeys)
-					len = sprintf(c, "\xFF"
-					                 "1:%s",
-					              LNG(Change));
-				else
-					len = sprintf(c, "\xFF"
-					                 "0:%s",
-					              LNG(Change));
-			} else {
-				if (swapKeys)
-					len = sprintf(c, "\xFF"
-					                 "1:%s",
-					              LNG(OK));
-				else
-					len = sprintf(c, "\xFF"
-					                 "0:%s",
-					              LNG(OK));
-			}
-			sprintf(&c[len], " \xFF"
-			                 "3:%s",
-			        LNG(Return));
-			setScrTmp("", c);
-		}  //ends if(event||post_event)
-		drawScr();
-		post_event = event;
-		event = 0;
-
-	}  //ends while
-}  //ends Config_Skin
-//---------------------------------------------------------------------------
 
 enum CONFIG_SCREEN {
 	CONFIG_SCREEN_FIRST = 0,
@@ -1333,10 +776,6 @@ enum CONFIG_SCREEN {
 	CONFIG_SCREEN_TV_STARTX,
 	CONFIG_SCREEN_TV_STARTY,
 
-	CONFIG_SCREEN_SKIN,
-	CONFIG_SCREEN_LOAD_SKIN_BROWSER,
-	CONFIG_SCREEN_SAVE_SKIN_BROWSER,
-
 	CONFIG_SCREEN_MENU_TITLE,
 	CONFIG_SCREEN_MENU_FRAME,
 	CONFIG_SCREEN_POPUP_OPAQUE,
@@ -1367,11 +806,11 @@ static void Config_Screen(void)
 	}
 
 	s = CONFIG_SCREEN_FIRST;
-	while (1) {
-		//Pad response section
-		waitPadReady(0, 0);
-		if (readpad()) {
-			if (new_pad & PAD_UP) {
+		while (1) {
+			//Pad response section
+			waitPadReady(0, 0);
+			if (readpad()) {
+				if (new_pad & PAD_UP) {
 				event |= 2;  //event |= valid pad command
 				if (s == CONFIG_SCREEN_FIRST)
 					s = max_s;
@@ -1395,8 +834,6 @@ static void Config_Screen(void)
 				else if (s >= CONFIG_SCREEN_MENU_FRAME)
 					s = CONFIG_SCREEN_MENU_TITLE;
 				else if (s >= CONFIG_SCREEN_MENU_TITLE)
-					s = CONFIG_SCREEN_SKIN;
-				else if (s >= CONFIG_SCREEN_SKIN)
 					s = CONFIG_SCREEN_TV_MODE;
 				else if (s >= CONFIG_SCREEN_TV_STARTX)
 					s = CONFIG_SCREEN_TV_MODE;  //at or
@@ -1410,10 +847,8 @@ static void Config_Screen(void)
 					s = CONFIG_SCREEN_RETURN;
 				else if (s >= CONFIG_SCREEN_MENU_TITLE)
 					s = CONFIG_SCREEN_MENU_FRAME;
-				else if (s >= CONFIG_SCREEN_SKIN)
-					s = CONFIG_SCREEN_MENU_TITLE;
 				else if (s >= CONFIG_SCREEN_TV_STARTX)
-					s = CONFIG_SCREEN_SKIN;
+					s = CONFIG_SCREEN_MENU_TITLE;
 				else if (s >= CONFIG_SCREEN_TV_MODE)
 					s = CONFIG_SCREEN_TV_STARTX;
 				else if (s >= CONFIG_SCREEN_COL_LAST)
@@ -1462,12 +897,6 @@ static void Config_Screen(void)
 						setting->screen_y++;
 						updateScreenMode();
 					}
-				} else if (s == CONFIG_SCREEN_SKIN) {
-					Config_Skin();
-				} else if (s == CONFIG_SCREEN_LOAD_SKIN_BROWSER) {
-					loadSkinBrowser();
-				} else if (s == CONFIG_SCREEN_SAVE_SKIN_BROWSER) {
-					saveSkinBrowser();
 				} else if (s == CONFIG_SCREEN_MENU_TITLE) {  //cursor is at Menu_Title
 					char tmp[MAX_MENU_TITLE + 1];
 					strcpy(tmp, setting->Menu_Title);
@@ -1480,9 +909,6 @@ static void Config_Screen(void)
 				} else if (s == CONFIG_SCREEN_RETURN) {  //Always put 'RETURN' next to last
 					return;
 				} else if (s == CONFIG_SCREEN_DEFAULT) {  //Always put 'DEFAULT SCREEN SETTINGS' last
-					setting->skin[0] = '\0';
-					setting->GUI_skin[0] = '\0';
-					loadSkin(BACKGROUND_PIC, 0, 0);
 					setting->color[COLOR_BACKGR] = DEF_COLOR1;
 					setting->color[COLOR_FRAME] = DEF_COLOR2;
 					setting->color[COLOR_SELECT] = DEF_COLOR3;
@@ -1495,8 +921,6 @@ static void Config_Screen(void)
 					setting->screen_x = 0;
 					setting->screen_y = 0;
 					setting->Menu_Frame = DEF_MENU_FRAME;
-					setting->Show_Menu = DEF_MENU;
-					setting->Brightness = DEF_BRIGHT;
 					setting->Popup_Opaque = DEF_POPUP_OPAQUE;
 					updateScreenMode();
 
@@ -1575,17 +999,6 @@ static void Config_Screen(void)
 			y += FONT_HEIGHT;
 			y += FONT_HEIGHT / 2;
 
-			sprintf(c, "  %s...", LNG(Skin_Settings));
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			y += FONT_HEIGHT;
-			sprintf(c, "  %s...", LNG(Load_Skin_CNF));
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			y += FONT_HEIGHT;
-			sprintf(c, "  %s...", LNG(Save_Skin_CNF));
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			y += FONT_HEIGHT;
-			y += FONT_HEIGHT / 2;
-
 			if (setting->Menu_Title[0] == '\0')
 				sprintf(c, "  %s: %s", LNG(Menu_Title), LNG(NULL));
 			else
@@ -1632,10 +1045,8 @@ static void Config_Screen(void)
 					y += FONT_HEIGHT / 2;           //adjust for half-row space below colours
 				if (s >= CONFIG_SCREEN_TV_STARTX)   //if cursor at or beyond screen offsets
 					y += FONT_HEIGHT / 2;           //adjust for half-row space below TV mode choice
-				if (s >= CONFIG_SCREEN_SKIN)        //if cursor at or beyond 'SKIN SETTINGS'
-					y += FONT_HEIGHT / 2;           //adjust for half-row space below screen offsets
 				if (s >= CONFIG_SCREEN_MENU_TITLE)  //if cursor at or beyond 'Menu Title'
-					y += FONT_HEIGHT / 2;           //adjust for half-row space below 'SKIN SETTINGS'
+					y += FONT_HEIGHT / 2;           //adjust for half-row space below screen offsets
 				if (s >= CONFIG_SCREEN_MENU_FRAME)  //if cursor at or beyond 'Menu Frame'
 					y += FONT_HEIGHT / 2;           //adjust for half-row space below 'Menu Title'
 				if (s >= CONFIG_SCREEN_RETURN)      //if cursor at or beyond 'RETURN'
@@ -1665,15 +1076,6 @@ static void Config_Screen(void)
 					len = sprintf(c, "\xFF"
 					                 "0:%s",
 					              LNG(Change));
-			} else if (s == CONFIG_SCREEN_SKIN || s == CONFIG_SCREEN_LOAD_SKIN_BROWSER || s == CONFIG_SCREEN_SAVE_SKIN_BROWSER) {  //if cursor at 'SKIN SETTINGS'
-				if (swapKeys)
-					len = sprintf(c, "\xFF"
-					                 "1:%s",
-					              LNG(OK));
-				else
-					len = sprintf(c, "\xFF"
-					                 "0:%s",
-					              LNG(OK));
 			} else if (s == CONFIG_SCREEN_MENU_TITLE) {  //if cursor at Menu_Title
 				if (swapKeys)
 					len = sprintf(c, "\xFF"
@@ -1713,8 +1115,7 @@ static void Config_Screen(void)
 //---------------------------------------------------------------------------
 enum CONFIG_STARTUP {
 	CONFIG_STARTUP_FIRST = 1,
-	CONFIG_STARTUP_CNF_COUNT = CONFIG_STARTUP_FIRST,
-	CONFIG_STARTUP_SELECT_BTN,
+	CONFIG_STARTUP_SELECT_BTN = CONFIG_STARTUP_FIRST,
 	CONFIG_STARTUP_INIT_DELAY,
 	CONFIG_STARTUP_TIMEOUT,
 	CONFIG_STARTUP_RESET_IOP_ELFOAD,
@@ -1764,92 +1165,88 @@ static void Config_Startup(void)
 					s = max_s;
 				else
 					s = CONFIG_STARTUP_FIRST;
-			} else if (new_pad & PAD_RIGHT) {
-				event |= 2;  //event |= valid pad command
-				if (s != max_s)
-					s = max_s;
-				else
-					s = CONFIG_STARTUP_FIRST;
-			} else if ((!swapKeys && new_pad & PAD_CROSS) || (swapKeys && new_pad & PAD_CIRCLE)) {
-				event |= 2;  //event |= valid pad command
-				if (s == CONFIG_STARTUP_CNF_COUNT && setting->numCNF > 1)
-					setting->numCNF--;
-				else if (s == CONFIG_STARTUP_INIT_DELAY && setting->Init_Delay > 0)
-					setting->Init_Delay--;
-				else if (s == CONFIG_STARTUP_TIMEOUT && setting->timeout > 0)
-					setting->timeout--;
-				else if (s == CONFIG_STARTUP_USBKBD)
-					setting->usbkbd_file[0] = '\0';
-				else if (s == CONFIG_STARTUP_KBDMAP)
-					setting->kbdmap_file[0] = '\0';
-				else if (s == CONFIG_STARTUP_CNF)
-					setting->CNF_Path[0] = '\0';
-				else if (s == CONFIG_STARTUP_LANG) {
-					setting->lang_file[0] = '\0';
-					Load_External_Language();
-				} else if (s == CONFIG_STARTUP_FONT) {
-					setting->font_file[0] = '\0';
-					loadFont("");
-				} else if (s == CONFIG_STARTUP_ESR) {  //clear ESR file choice
-					setting->LK_Path[SETTING_LK_ESR][0] = 0;
-					setting->LK_Flag[SETTING_LK_ESR] = 0;
-				} else if (s == CONFIG_STARTUP_OSDSYS) {  //clear OSDSYS file choice
-					setting->LK_Path[SETTING_LK_OSDSYS][0] = 0;
-					setting->LK_Flag[SETTING_LK_OSDSYS] = 0;
-				}
-			} else if ((swapKeys && new_pad & PAD_CROSS) || (!swapKeys && new_pad & PAD_CIRCLE)) {
-				event |= 2;  //event |= valid pad command
-				if (s == CONFIG_STARTUP_CNF_COUNT)
-					setting->numCNF++;
-				else if (s == CONFIG_STARTUP_SELECT_BTN)
-					setting->swapKeys = !setting->swapKeys;
-				else if (s == CONFIG_STARTUP_INIT_DELAY)
-					setting->Init_Delay++;
-				else if (s == CONFIG_STARTUP_TIMEOUT)
-					setting->timeout++;
-				else if (s == CONFIG_STARTUP_KEYBOARD)
-					setting->usbkbd_used = !setting->usbkbd_used;
-				else if (s == CONFIG_STARTUP_RESET_IOP_ELFOAD)
-					setting->reboot_iop_elf_load = !setting->reboot_iop_elf_load;
-				else if (s == CONFIG_STARTUP_USBKBD)
-					getFilePath(setting->usbkbd_file, USBKBD_IRX_CNF);
-				else if (s == CONFIG_STARTUP_KBDMAP)
-					getFilePath(setting->kbdmap_file, KBDMAP_FILE_CNF);
-				else if (s == CONFIG_STARTUP_CNF) {
-					char *tmp;
-					getFilePath(setting->CNF_Path, CNF_PATH_CNF);
-					if ((tmp = strrchr(setting->CNF_Path, '/')))
-						tmp[1] = '\0';
-				} else if (s == CONFIG_STARTUP_LANG) {
-					getFilePath(setting->lang_file, LANG_CNF);
-					Load_External_Language();
-				} else if (s == CONFIG_STARTUP_FONT) {
-					getFilePath(setting->font_file, FONT_CNF);
-					if (loadFont(setting->font_file) == 0)
+				} else if (new_pad & PAD_RIGHT) {
+					event |= 2;  //event |= valid pad command
+					if (s != max_s)
+						s = max_s;
+					else
+						s = CONFIG_STARTUP_FIRST;
+				} else if ((!swapKeys && new_pad & PAD_CROSS) || (swapKeys && new_pad & PAD_CIRCLE)) {
+					event |= 2;  //event |= valid pad command
+					if (s == CONFIG_STARTUP_INIT_DELAY && setting->Init_Delay > 0)
+						setting->Init_Delay--;
+					else if (s == CONFIG_STARTUP_TIMEOUT && setting->timeout > 0)
+						setting->timeout--;
+					else if (s == CONFIG_STARTUP_USBKBD)
+						setting->usbkbd_file[0] = '\0';
+					else if (s == CONFIG_STARTUP_KBDMAP)
+						setting->kbdmap_file[0] = '\0';
+					else if (s == CONFIG_STARTUP_CNF)
+						setting->CNF_Path[0] = '\0';
+					else if (s == CONFIG_STARTUP_LANG) {
+						setting->lang_file[0] = '\0';
+						Load_External_Language();
+					} else if (s == CONFIG_STARTUP_FONT) {
 						setting->font_file[0] = '\0';
-				} else if (s == CONFIG_STARTUP_CNF) {  //Make ESR file choice
-					getFilePath(setting->LK_Path[SETTING_LK_ESR], LK_ELF_CNF);
-					if (!strncmp(setting->LK_Path[SETTING_LK_ESR], "mc0", 3) ||
-					    !strncmp(setting->LK_Path[SETTING_LK_ESR], "mc1", 3)) {
-						snprintf(c, sizeof(c), "mc%.*s", (int)sizeof(c) - 3, &setting->LK_Path[SETTING_LK_ESR][3]);
-						strcpy(setting->LK_Path[SETTING_LK_ESR], c);
+						loadFont("");
+					} else if (s == CONFIG_STARTUP_ESR) {  //clear ESR file choice
+						setting->LK_Path[SETTING_LK_ESR][0] = 0;
+						setting->LK_Flag[SETTING_LK_ESR] = 0;
+					} else if (s == CONFIG_STARTUP_OSDSYS) {  //clear OSDSYS file choice
+						setting->LK_Path[SETTING_LK_OSDSYS][0] = 0;
+						setting->LK_Flag[SETTING_LK_OSDSYS] = 0;
 					}
-					if (setting->LK_Path[SETTING_LK_ESR][0])
-						setting->LK_Flag[SETTING_LK_ESR] = 1;
-				} else if (s == CONFIG_STARTUP_OSDSYS) {  //Make OSDSYS file choice
-					getFilePath(setting->LK_Path[SETTING_LK_OSDSYS], TEXT_CNF);
-					if (!strncmp(setting->LK_Path[SETTING_LK_OSDSYS], "mc0", 3) ||
-					    !strncmp(setting->LK_Path[SETTING_LK_OSDSYS], "mc1", 3)) {
-						snprintf(c, sizeof(c), "mc%.*s", (int)sizeof(c) - 3, &setting->LK_Path[SETTING_LK_OSDSYS][3]);
-						strcpy(setting->LK_Path[SETTING_LK_OSDSYS], c);
-					}
-					if (setting->LK_Path[SETTING_LK_OSDSYS][0])
-						setting->LK_Flag[SETTING_LK_OSDSYS] = 1;
-				} else if (s == CONFIG_STARTUP_RETURN)
+				} else if ((swapKeys && new_pad & PAD_CROSS) || (!swapKeys && new_pad & PAD_CIRCLE)) {
+					event |= 2;  //event |= valid pad command
+					if (s == CONFIG_STARTUP_SELECT_BTN)
+						setting->swapKeys = !setting->swapKeys;
+					else if (s == CONFIG_STARTUP_INIT_DELAY)
+						setting->Init_Delay++;
+					else if (s == CONFIG_STARTUP_TIMEOUT)
+						setting->timeout++;
+					else if (s == CONFIG_STARTUP_KEYBOARD)
+						setting->usbkbd_used = !setting->usbkbd_used;
+					else if (s == CONFIG_STARTUP_RESET_IOP_ELFOAD)
+						setting->reboot_iop_elf_load = !setting->reboot_iop_elf_load;
+					else if (s == CONFIG_STARTUP_USBKBD)
+						getFilePath(setting->usbkbd_file, USBKBD_IRX_CNF);
+					else if (s == CONFIG_STARTUP_KBDMAP)
+						getFilePath(setting->kbdmap_file, KBDMAP_FILE_CNF);
+					else if (s == CONFIG_STARTUP_CNF) {
+						char *tmp;
+						getFilePath(setting->CNF_Path, CNF_PATH_CNF);
+						if ((tmp = strrchr(setting->CNF_Path, '/')))
+							tmp[1] = '\0';
+					} else if (s == CONFIG_STARTUP_LANG) {
+						getFilePath(setting->lang_file, LANG_CNF);
+						Load_External_Language();
+					} else if (s == CONFIG_STARTUP_FONT) {
+						getFilePath(setting->font_file, FONT_CNF);
+						if (loadFont(setting->font_file) == 0)
+							setting->font_file[0] = '\0';
+					} else if (s == CONFIG_STARTUP_ESR) {  //Make ESR file choice
+						getFilePath(setting->LK_Path[SETTING_LK_ESR], LK_ELF_CNF);
+						if (!strncmp(setting->LK_Path[SETTING_LK_ESR], "mc0", 3) ||
+						    !strncmp(setting->LK_Path[SETTING_LK_ESR], "mc1", 3)) {
+							snprintf(c, sizeof(c), "mc%.*s", (int)sizeof(c) - 3, &setting->LK_Path[SETTING_LK_ESR][3]);
+							strcpy(setting->LK_Path[SETTING_LK_ESR], c);
+						}
+						if (setting->LK_Path[SETTING_LK_ESR][0])
+							setting->LK_Flag[SETTING_LK_ESR] = 1;
+					} else if (s == CONFIG_STARTUP_OSDSYS) {  //Make OSDSYS file choice
+						getFilePath(setting->LK_Path[SETTING_LK_OSDSYS], TEXT_CNF);
+						if (!strncmp(setting->LK_Path[SETTING_LK_OSDSYS], "mc0", 3) ||
+						    !strncmp(setting->LK_Path[SETTING_LK_OSDSYS], "mc1", 3)) {
+							snprintf(c, sizeof(c), "mc%.*s", (int)sizeof(c) - 3, &setting->LK_Path[SETTING_LK_OSDSYS][3]);
+							strcpy(setting->LK_Path[SETTING_LK_OSDSYS], c);
+						}
+						if (setting->LK_Path[SETTING_LK_OSDSYS][0])
+							setting->LK_Flag[SETTING_LK_OSDSYS] = 1;
+					} else if (s == CONFIG_STARTUP_RETURN)
+						return;
+				} else if (new_pad & PAD_TRIANGLE)
 					return;
-			} else if (new_pad & PAD_TRIANGLE)
-				return;
-		}
+			}
 
 		if (event || post_event) {  //NB: We need to update two frame buffers per event
 
@@ -1862,10 +1259,6 @@ static void Config_Startup(void)
 			printXY(LNG(STARTUP_SETTINGS), x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 			y += FONT_HEIGHT / 2;
-
-			sprintf(c, "  %s: %d", LNG(Number_of_CNFs), setting->numCNF);
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			y += FONT_HEIGHT;
 
 			if (setting->swapKeys)
 				sprintf(c, "  %s: \xFF"
@@ -1947,7 +1340,7 @@ static void Config_Startup(void)
 					len = sprintf(c, "\xFF"
 					                 "0:%s",
 					              LNG(Change));
-			} else if ((s == CONFIG_STARTUP_CNF_COUNT) || (s == CONFIG_STARTUP_INIT_DELAY) || (s == CONFIG_STARTUP_TIMEOUT)) {  //numCNF || Init_Delay || timeout
+			} else if ((s == CONFIG_STARTUP_INIT_DELAY) || (s == CONFIG_STARTUP_TIMEOUT)) {  //Init_Delay || timeout
 				if (swapKeys)
 					len = sprintf(c, "\xFF"
 					                 "1:%s \xFF"
@@ -2460,7 +1853,11 @@ static void Config_Advanced(void)
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 
-			sprintf(c, "  Enable Host write: %s", setting->HOSTwrite ? LNG(ON) : LNG(OFF));
+#ifdef UDPFS
+			sprintf(c, "  %s: %s", LNG(Enable_Network_write), setting->HOSTwrite ? LNG(ON) : LNG(OFF));
+#else
+			sprintf(c, "  %s: %s", LNG(Enable_Host_write), setting->HOSTwrite ? LNG(ON) : LNG(OFF));
+#endif
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 
@@ -2476,7 +1873,7 @@ static void Config_Advanced(void)
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 
-			sprintf(c, "  Lock LaunchKey Paths: %s", setting->PathPad_Lock ? LNG(ON) : LNG(OFF));
+			sprintf(c, "  Lock Main LaunchKey/PathPad Paths: %s", setting->PathPad_Lock ? LNG(ON) : LNG(OFF));
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 
@@ -2600,40 +1997,44 @@ void config(char *mainMsg, char *CNF)
 					s = CONFIG_MAIN_AFT_BTNS;
 				else
 					s = CONFIG_MAIN_FIRST;
-			} else if (new_pad & PAD_RIGHT) {
-				event |= 2;  //event |= valid pad command
-				if (s < CONFIG_MAIN_AFT_BTNS)
-					s = CONFIG_MAIN_AFT_BTNS;
-				else if (s <= CONFIG_MAIN_LAST)
-					s = CONFIG_MAIN_OK;
-			} else if ((new_pad & PAD_SQUARE) && (s < CONFIG_MAIN_AFT_BTNS)) {
-				event |= 2;  //event |= valid pad command
-				strcpy(title_tmp, setting->LK_Title[s]);
-				if (keyboard(title_tmp, MAX_ELF_TITLE) >= 0)
-					strcpy(setting->LK_Title[s], title_tmp);
-			} else if ((!swapKeys && new_pad & PAD_CROSS) || (swapKeys && new_pad & PAD_CIRCLE)) {
-				event |= 2;  //event |= valid pad command
-				if (s < CONFIG_MAIN_AFT_BTNS) {
-					setting->LK_Path[s][0] = 0;
-					setting->LK_Title[s][0] = 0;
-				}
-			} else if ((swapKeys && new_pad & PAD_CROSS) || (!swapKeys && new_pad & PAD_CIRCLE)) {
-				event |= 2;  //event |= valid pad command
+				} else if (new_pad & PAD_RIGHT) {
+					event |= 2;  //event |= valid pad command
+					if (s < CONFIG_MAIN_AFT_BTNS)
+						s = CONFIG_MAIN_AFT_BTNS;
+					else if (s <= CONFIG_MAIN_LAST)
+						s = CONFIG_MAIN_OK;
+				} else if ((new_pad & PAD_SQUARE) && (s < CONFIG_MAIN_AFT_BTNS)) {
+					event |= 2;  //event |= valid pad command
+					strcpy(title_tmp, setting->LK_Title[s]);
+					if (keyboard(title_tmp, MAX_ELF_TITLE) >= 0)
+						strcpy(setting->LK_Title[s], title_tmp);
+				} else if ((!swapKeys && new_pad & PAD_CROSS) || (swapKeys && new_pad & PAD_CIRCLE)) {
+					event |= 2;  //event |= valid pad command
 					if (s < CONFIG_MAIN_AFT_BTNS) {
-						getFilePath(setting->LK_Path[s], TRUE);
-						if (!strncmp(setting->LK_Path[s], "mc0", 3) ||
-						    !strncmp(setting->LK_Path[s], "mc1", 3)) {
-							snprintf(c, sizeof(c), "mc%.*s", (int)sizeof(c) - 3, &setting->LK_Path[s][3]);
-							strcpy(setting->LK_Path[s], c);
+						if (!setting->PathPad_Lock) {
+							setting->LK_Path[s][0] = 0;
+							setting->LK_Title[s][0] = 0;
+						}
+					}
+				} else if ((swapKeys && new_pad & PAD_CROSS) || (!swapKeys && new_pad & PAD_CIRCLE)) {
+					event |= 2;  //event |= valid pad command
+					if (s < CONFIG_MAIN_AFT_BTNS) {
+						if (!setting->PathPad_Lock) {
+							getFilePath(setting->LK_Path[s], TRUE);
+							if (!strncmp(setting->LK_Path[s], "mc0", 3) ||
+							    !strncmp(setting->LK_Path[s], "mc1", 3)) {
+								snprintf(c, sizeof(c), "mc%.*s", (int)sizeof(c) - 3, &setting->LK_Path[s][3]);
+								strcpy(setting->LK_Path[s], c);
+							}
 						}
 					} else if (s == CONFIG_MAIN_SHOW_TITLES)
-					setting->Show_Titles = !setting->Show_Titles;
-				else if (s == CONFIG_MAIN_FILENAME)
-					setting->Hide_Paths = !setting->Hide_Paths;
-				else if (s == CONFIG_MAIN_SCREEN)
-					Config_Screen();
-				else if (s == CONFIG_MAIN_SETTINGS)
-					Config_Startup();
+						setting->Show_Titles = !setting->Show_Titles;
+					else if (s == CONFIG_MAIN_FILENAME)
+						setting->Hide_Paths = !setting->Hide_Paths;
+					else if (s == CONFIG_MAIN_SCREEN)
+						Config_Screen();
+					else if (s == CONFIG_MAIN_SETTINGS)
+						Config_Startup();
 				else if (s == CONFIG_MAIN_NETWORK)
 					Config_Network();
 				else if (s == CONFIG_MAIN_ADVANCED)
@@ -2641,10 +2042,6 @@ void config(char *mainMsg, char *CNF)
 				else if (s == CONFIG_MAIN_OK) {
 					free(tmpsetting);
 					saveConfig(mainMsg, CNF);
-					if (setting->GUI_skin[0]) {
-						GUI_active = 1;
-						loadSkin(BACKGROUND_PIC, 0, 0);
-					}
 					break;
 				} else if (s == CONFIG_MAIN_CANCEL)
 					goto cancel_exit;
@@ -2653,9 +2050,6 @@ void config(char *mainMsg, char *CNF)
 				free(setting);
 				setting = tmpsetting;
 				updateScreenMode();
-				if (setting->GUI_skin[0])
-					GUI_active = 1;
-				loadSkin(BACKGROUND_PIC, 0, 0);
 				Load_External_Language();
 				loadFont(setting->font_file);
 				mainMsg[0] = 0;
@@ -2763,21 +2157,26 @@ void config(char *mainMsg, char *CNF)
 				y += FONT_HEIGHT;
 			drawChar(LEFT_CUR, x, y, setting->color[COLOR_TEXT]);
 
-			//Tooltip section
-			if (s < CONFIG_MAIN_AFT_BTNS) {
-				if (swapKeys)
-					len = sprintf(c, "\xFF"
-					                 "1:%s \xFF"
-					                 "0:%s \xFF"
-					                 "2:%s",
-					              LNG(Browse), LNG(Clear), LNG(Edit_Title));
-				else
-					len = sprintf(c, "\xFF"
-					                 "0:%s \xFF"
-					                 "1:%s \xFF"
-					                 "2:%s",
-					              LNG(Browse), LNG(Clear), LNG(Edit_Title));
-			} else if ((s == CONFIG_MAIN_SHOW_TITLES) || (s == CONFIG_MAIN_FILENAME)) {
+				//Tooltip section
+				if (s < CONFIG_MAIN_AFT_BTNS) {
+					if (setting->PathPad_Lock) {
+						len = sprintf(c, "\xFF"
+						                 "2:%s",
+						              LNG(Edit_Title));
+					} else if (swapKeys) {
+						len = sprintf(c, "\xFF"
+						                 "1:%s \xFF"
+						                 "0:%s \xFF"
+						                 "2:%s",
+						              LNG(Browse), LNG(Clear), LNG(Edit_Title));
+					} else {
+						len = sprintf(c, "\xFF"
+						                 "0:%s \xFF"
+						                 "1:%s \xFF"
+						                 "2:%s",
+						              LNG(Browse), LNG(Clear), LNG(Edit_Title));
+					}
+				} else if ((s == CONFIG_MAIN_SHOW_TITLES) || (s == CONFIG_MAIN_FILENAME)) {
 				if (swapKeys)
 					len = sprintf(c, "\xFF"
 					                 "1:%s",

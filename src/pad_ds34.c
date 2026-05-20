@@ -1,5 +1,5 @@
 //---------------------------------------------------------------------------
-// File name:   pad_ds32.c
+// File name:   pad_ds34.c
 // description: variation of pad.c with support for the PlayStation 3 and 4 dualshock drivers by Alex Parrado
 //---------------------------------------------------------------------------
 #include "launchelf.h"
@@ -472,5 +472,5 @@ int setupPad(void)
 	return 1;
 }
 //---------------------------------------------------------------------------
-// End of file: pad.c
+// End of file: pad_ds34.c
 //---------------------------------------------------------------------------

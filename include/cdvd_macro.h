@@ -12,4 +12,5 @@
 #define LCDVD_STOP() sceCdStop()
 #define LCDVD_DISKREADY(x) sceCdDiskReady(x)
 #endif
-#endif
+
+#endif /* __CDVD_COMPAT_MACRO */

@@ -53,6 +53,16 @@ Completed so far:
 
 1. `src/main_fileops.c` now owns file/path support helpers (`wleExists`, `uLE_related`, file-type checks).
 2. `src/main_startup.c` now owns startup/system parsing helpers (`getIpConfig`, `readSystemCnf`).
+3. Legacy SMB and JPG subsystems were removed from runtime/build paths (`src/main.c`, `Makefile`, `embed.make`).
+4. `src/filer.c` helper splits now include:
+   - `src/gui_sort.c` (`cmpFile`, `sort`)
+   - `src/gui_texteditor.c` (`canOpenInTextEditor`)
+   - `src/gui_hdd0_format.c` (`getHddParty`, `getHddDVRPParty`)
+   - `src/psu_functions.c` (`clear_psu_header`, `pad_psu_header`)
+   - `src/mcpaste_functions.c` (`clear_mcTable`)
+   - `src/gui.c` (`ynDialog`, `nonDialog`, `keyboard`)
+   - `src/gui_colors.c` (`scanSkinCNF`, `storeSkinCNF`)
+5. PSU data layout structs are centralized in `include/psu_types.h` to avoid duplicated type blocks in `filer.c`.
 
 Recommended extraction order (lowest risk first):
 
