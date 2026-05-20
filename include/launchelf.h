@@ -21,6 +21,7 @@
 #include <sifrpc.h>
 #include <loadfile.h>
 #include <string.h>
+#include <stdlib.h>
 #include <malloc.h>
 #include <libhdd.h>
 #include <libmc.h>
@@ -100,6 +101,21 @@ static inline int wle_stricmp(const char *lhs, const char *rhs)
 
 #ifndef stricmp
 #define stricmp wle_stricmp
+#endif
+
+static inline size_t wle_strnlen(const char *s, size_t maxlen)
+{
+	size_t len = 0;
+
+	if (s == NULL)
+		return 0;
+	while (len < maxlen && s[len] != '\0')
+		len++;
+	return len;
+}
+
+#ifndef strnlen
+#define strnlen wle_strnlen
 #endif
 
 #ifndef FIO_MT_RDWR

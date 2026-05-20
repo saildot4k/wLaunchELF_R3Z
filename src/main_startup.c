@@ -62,7 +62,7 @@ void getIpConfig(void)
 	}
 
 	if (fd >= 0) {
-		bzero(buf, IPCONF_MAX_LEN);
+		memset(buf, 0, IPCONF_MAX_LEN);
 		len = genRead(fd, buf, IPCONF_MAX_LEN - 1);  //Save a byte for termination
 		genClose(fd);
 	}
@@ -79,7 +79,7 @@ void getIpConfig(void)
 		snprintf(gw, sizeof(gw), "%.15s", buf + i);
 	}
 
-	bzero(if_conf, IPCONF_MAX_LEN);
+	memset(if_conf, 0, IPCONF_MAX_LEN);
 	i = 0;
 	memcpy(if_conf + i, ip, strlen(ip) + 1);
 	i += strlen(ip) + 1;
