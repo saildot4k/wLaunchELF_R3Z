@@ -1814,7 +1814,7 @@ static int getConfigAdvancedItemY(int s)
 
 	for (i = CONFIG_ADVANCED_APP_GAMEID; i < s; i++) {
 		y += FONT_HEIGHT;
-		if (i != CONFIG_ADVANCED_APP_GAMEID && i != CONFIG_ADVANCED_PSU_HUGENAMES)
+		if (i != CONFIG_ADVANCED_APP_GAMEID && i != CONFIG_ADVANCED_PSU_HUGENAMES && i != CONFIG_ADVANCED_PSU_DATENAMES)
 			y += FONT_HEIGHT / 2;
 	}
 
@@ -1937,7 +1937,6 @@ static void Config_Advanced(void)
 				formatLabelValueAligned(c, sizeof(c), psu_date_label, setting->PSU_DateNames ? LNG(ON) : LNG(OFF), bool_label_width);
 				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 				y += FONT_HEIGHT;
-				y += FONT_HEIGHT / 2;
 
 				formatLabelValueAligned(c, sizeof(c), psu_nooverwrite_label, setting->PSU_NoOverwrite ? LNG(ON) : LNG(OFF), bool_label_width);
 				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);

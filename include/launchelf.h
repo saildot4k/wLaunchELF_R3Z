@@ -2,9 +2,9 @@
 #define LAUNCHELF_H
 #define HACK_FOLDER "BXEXEC-OPENTUNA"
 #ifndef DVRP
-#define ULE_VERSION "v4.43x_isr"
+#define ULE_VERSION "v4.50_R3Z"
 #else
-#define ULE_VERSION "v4.43x_isr_dvr"
+#define ULE_VERSION "v4.50_R3Z_dvr"
 #endif
 //#ifndef ULE_VERDATE
 //#define ULE_VERDATE __DATE__

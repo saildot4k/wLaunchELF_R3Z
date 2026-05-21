@@ -332,9 +332,9 @@ static void Show_About_uLE(void)
 			clrScr(setting->color[COLOR_BACKGR]);
 			sprintf(TextRow, "About wLaunchELF %s  %s", ULE_VERSION, ULE_VERDATE);
 			PrintPos(03, hpos, TextRow, COLOR_SELECT);
-			sprintf(TextRow, " commit: %s (based on commit 41e4ebe)", GIT_HASH);
+			sprintf(TextRow, " commit: %s", GIT_HASH);
 			PrintPos(04, hpos, TextRow, COLOR_TEXT);
-			PrintPos(05, hpos, "Mod created by: Matias Israelson", COLOR_TEXT);
+			PrintPos(05, hpos, "Mod by: R3Z3N & Codex 5.3 LLM", COLOR_TEXT);
 			PrintPos(-1, hpos, "DS3/DS4 support by Alex Parrado", COLOR_TEXT);
 			PrintPos(-1, hpos, "Project maintainers:  sp193 & AKuHAK", COLOR_TEXT);
 			PrintPos(-1, hpos, "  ", COLOR_TEXT);
@@ -344,17 +344,16 @@ static void Show_About_uLE(void)
 			PrintPos(-1, hpos, " ", COLOR_TEXT);
 			PrintPos(-1, hpos, "Other contributors:", COLOR_TEXT);
 			PrintPos(-1, hpos, "  Polo35, radad, Drakonite, sincro", COLOR_TEXT);
-			PrintPos(-1, hpos, "  kthu, Slam-Tilt, chip, pixel, Hermes", COLOR_TEXT);
+			PrintPos(-1, hpos, "  kthu, Slam-Tilt, chip, pixel, Hermes, PCM720", COLOR_TEXT);
 			PrintPos(-1, hpos, "  and others in the PS2Dev community", COLOR_TEXT);
 			PrintPos(-1, hpos, " ", COLOR_TEXT);
 			PrintPos(-1, hpos, "Main release site:", COLOR_TEXT);
 			PrintPos(-1, hpos, "   github.com/ps2homebrew/wLaunchELF/releases", COLOR_TEXT);
 			PrintPos(-1, hpos, "Mod Release site:", COLOR_SELECT);
-			PrintPos(-1, hpos, "   github.com/israpps/wLaunchELF_ISR/releases", COLOR_TEXT);
+			PrintPos(-1, hpos, "   github.com/saildot4k/wLaunchELF_R3Z/releases", COLOR_TEXT);
 			PrintPos(-1, hpos, "Ancestral project: LaunchELF v3.41 by Mirakichi", COLOR_TEXT);
-			//PrintPos(-1, hpos, "Created by:        Mirakichi");
 		}  //ends if(event||post_event)
-		drawScr();// https://github.com/israpps/wLaunchELF_ISR/tree/41e43b3-mod
+		drawScr();
 		post_event = event;
 		event = 0;
 	}  //ends while
@@ -458,11 +457,11 @@ static void Show_build_info(void)
 , COLOR_TEXT);
 #endif
 			PrintPos(-1, hpos, "Mod Release site:", COLOR_TEXT);
-			PrintPos(-1, hpos, "   github.com/israpps/wLaunchELF_ISR/releases", COLOR_TEXT);
+			PrintPos(-1, hpos, "   github.com/saildot4k/wLaunchELF_R3Z/releases", COLOR_TEXT);
 
 
 		}  //ends if(event||post_event)
-		drawScr();// https://github.com/israpps/wLaunchELF_ISR/tree/41e43b3-mod
+		drawScr();
 		post_event = event;
 		event = 0;
 	}  //ends while
