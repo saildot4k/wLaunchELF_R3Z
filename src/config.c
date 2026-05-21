@@ -90,6 +90,28 @@ static void formatLabelValue(char *dst, size_t dst_size, const char *label, cons
 		value_len = 0;
 	snprintf(dst + prefix_len, dst_size - prefix_len, "%.*s", value_len, value ? value : "");
 }
+
+static void formatLabelValueAligned(char *dst, size_t dst_size, const char *label, const char *value, int label_width)
+{
+	int prefix_len;
+	int value_len;
+
+	if (dst_size == 0)
+		return;
+	if (label_width < 0)
+		label_width = 0;
+
+	prefix_len = snprintf(dst, dst_size, "  %-*s: ", label_width, label ? label : "");
+	if (prefix_len < 0 || prefix_len >= (int)dst_size) {
+		dst[dst_size - 1] = '\0';
+		return;
+	}
+
+	value_len = (int)dst_size - prefix_len - 1;
+	if (value_len < 0)
+		value_len = 0;
+	snprintf(dst + prefix_len, dst_size - prefix_len, "%.*s", value_len, value ? value : "");
+}
 //---------------------------------------------------------------------------
 // End of declarations
 // Start of functions
@@ -796,6 +818,8 @@ static void Config_Screen(void)
 	int event, post_event = 0;
 	u8 rgb[COLOR_COUNT][3];
 	char c[MAX_PATH];
+	int bool_label_width;
+	const char *tv_mode_value;
 	int space = ((SCREEN_WIDTH - SCREEN_MARGIN - 4 * FONT_WIDTH) - (Menu_start_x + 2 * FONT_WIDTH)) / 8;
 
 	event = 1;  //event = initial entry
@@ -975,22 +999,27 @@ static void Config_Screen(void)
 				sprintf(c, "\xFF"
 				           "4");
 				printXY(c, x + (space * (i + 1)) - FONT_WIDTH, y, setting->color[i], TRUE, 0);
-			}  //ends loop for colour RGB values
-			y += FONT_HEIGHT * 2;
-			sprintf(c, "  %s: ", LNG(TV_mode));
-			if (setting->TV_mode == TV_mode_NTSC)
-				strcat(c, "NTSC");
-			else if (setting->TV_mode == TV_mode_PAL)
-				strcat(c, "PAL");
-			else if (setting->TV_mode == TV_mode_VGA)
-				strcat(c, "VGA");
-			else if (setting->TV_mode == TV_mode_480P)
-				strcat(c, "Progressive");
-			else
-				strcat(c, "AUTO");
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			y += FONT_HEIGHT;
-			y += FONT_HEIGHT / 2;
+				}  //ends loop for colour RGB values
+				y += FONT_HEIGHT * 2;
+				bool_label_width = (int)strlen(LNG(TV_mode));
+				if ((int)strlen(LNG(Menu_Frame)) > bool_label_width)
+					bool_label_width = (int)strlen(LNG(Menu_Frame));
+				if ((int)strlen(LNG(Popups_Opaque)) > bool_label_width)
+					bool_label_width = (int)strlen(LNG(Popups_Opaque));
+				if (setting->TV_mode == TV_mode_NTSC)
+					tv_mode_value = "NTSC";
+				else if (setting->TV_mode == TV_mode_PAL)
+					tv_mode_value = "PAL";
+				else if (setting->TV_mode == TV_mode_VGA)
+					tv_mode_value = "VGA";
+				else if (setting->TV_mode == TV_mode_480P)
+					tv_mode_value = "Progressive";
+				else
+					tv_mode_value = "AUTO";
+				formatLabelValueAligned(c, sizeof(c), LNG(TV_mode), tv_mode_value, bool_label_width);
+				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
+				y += FONT_HEIGHT;
+				y += FONT_HEIGHT / 2;
 
 			sprintf(c, "  %s: %d", LNG(Screen_X_offset), setting->screen_x);
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
@@ -1008,20 +1037,14 @@ static void Config_Screen(void)
 			y += FONT_HEIGHT;
 			y += FONT_HEIGHT / 2;
 
-			if (setting->Menu_Frame)
-				sprintf(c, "  %s: %s", LNG(Menu_Frame), LNG(ON));
-			else
-				sprintf(c, "  %s: %s", LNG(Menu_Frame), LNG(OFF));
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			y += FONT_HEIGHT;
+				formatLabelValueAligned(c, sizeof(c), LNG(Menu_Frame), setting->Menu_Frame ? LNG(ON) : LNG(OFF), bool_label_width);
+				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
+				y += FONT_HEIGHT;
 
-			if (setting->Popup_Opaque)
-				sprintf(c, "  %s: %s", LNG(Popups_Opaque), LNG(ON));
-			else
-				sprintf(c, "  %s: %s", LNG(Popups_Opaque), LNG(OFF));
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			y += FONT_HEIGHT;
-			y += FONT_HEIGHT / 2;
+				formatLabelValueAligned(c, sizeof(c), LNG(Popups_Opaque), setting->Popup_Opaque ? LNG(ON) : LNG(OFF), bool_label_width);
+				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
+				y += FONT_HEIGHT;
+				y += FONT_HEIGHT / 2;
 
 			sprintf(c, "  %s", LNG(RETURN));
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
@@ -1738,19 +1761,36 @@ enum CONFIG_ADVANCED {
 	CONFIG_ADVANCED_FIRST = 1,
 	CONFIG_ADVANCED_APP_GAMEID = CONFIG_ADVANCED_FIRST,
 	CONFIG_ADVANCED_CDROM_DISABLE_GAMEID,
-	CONFIG_ADVANCED_HOSTWRITE,
 	CONFIG_ADVANCED_PSU_HUGENAMES,
 	CONFIG_ADVANCED_PSU_DATENAMES,
 	CONFIG_ADVANCED_PSU_NOOVERWRITE,
 	CONFIG_ADVANCED_PATHPAD_LOCK,
 	CONFIG_ADVANCED_FB_NOICONS,
+	CONFIG_ADVANCED_HOSTWRITE,
 
 	CONFIG_ADVANCED_AFT_OPTIONS,
-	CONFIG_ADVANCED_OK = CONFIG_ADVANCED_AFT_OPTIONS,
-	CONFIG_ADVANCED_CANCEL,
+	CONFIG_ADVANCED_RETURN = CONFIG_ADVANCED_AFT_OPTIONS,
 
 	CONFIG_ADVANCED_COUNT
 };
+
+static int getConfigAdvancedItemY(int s)
+{
+	int y = Menu_start_y + FONT_HEIGHT + FONT_HEIGHT / 2;
+	int i;
+
+	if (s <= CONFIG_ADVANCED_APP_GAMEID)
+		return y;
+
+	for (i = CONFIG_ADVANCED_APP_GAMEID; i < s; i++) {
+		if (i == CONFIG_ADVANCED_APP_GAMEID)
+			y += FONT_HEIGHT;
+		else
+			y += FONT_HEIGHT + FONT_HEIGHT / 2;
+	}
+
+	return y;
+}
 
 static void Config_Advanced(void)
 {
@@ -1758,19 +1798,7 @@ static void Config_Advanced(void)
 	int x, y;
 	int len;
 	int event, post_event = 0;
-	int backup_app_gameid, backup_cdrom_disable_gameid, backup_hostwrite;
-	int backup_psu_hugenames, backup_psu_datenames, backup_psu_nooverwrite;
-	int backup_pathpad_lock, backup_fb_noicons;
 	char c[MAX_PATH];
-
-	backup_app_gameid = setting->app_gameid;
-	backup_cdrom_disable_gameid = setting->cdrom_disable_gameid;
-	backup_hostwrite = setting->HOSTwrite;
-	backup_psu_hugenames = setting->PSU_HugeNames;
-	backup_psu_datenames = setting->PSU_DateNames;
-	backup_psu_nooverwrite = setting->PSU_NoOverwrite;
-	backup_pathpad_lock = setting->PathPad_Lock;
-	backup_fb_noicons = setting->FB_NoIcons;
 
 	event = 1;
 	s = CONFIG_ADVANCED_FIRST;
@@ -1795,47 +1823,35 @@ static void Config_Advanced(void)
 					s = max_s;
 				else
 					s = CONFIG_ADVANCED_FIRST;
-			} else if (new_pad & PAD_RIGHT) {
-				event |= 2;
-				if (s != max_s)
-					s = max_s;
-				else
-					s = CONFIG_ADVANCED_FIRST;
-			} else if ((new_pad & PAD_CROSS) || (new_pad & PAD_CIRCLE)) {
-				event |= 2;
-				if (s == CONFIG_ADVANCED_APP_GAMEID)
-					setting->app_gameid = !setting->app_gameid;
-				else if (s == CONFIG_ADVANCED_CDROM_DISABLE_GAMEID)
-					setting->cdrom_disable_gameid = !setting->cdrom_disable_gameid;
-				else if (s == CONFIG_ADVANCED_HOSTWRITE)
-					setting->HOSTwrite = !setting->HOSTwrite;
-				else if (s == CONFIG_ADVANCED_PSU_HUGENAMES)
-					setting->PSU_HugeNames = !setting->PSU_HugeNames;
-				else if (s == CONFIG_ADVANCED_PSU_DATENAMES)
-					setting->PSU_DateNames = !setting->PSU_DateNames;
-				else if (s == CONFIG_ADVANCED_PSU_NOOVERWRITE)
-					setting->PSU_NoOverwrite = !setting->PSU_NoOverwrite;
-				else if (s == CONFIG_ADVANCED_PATHPAD_LOCK)
-					setting->PathPad_Lock = !setting->PathPad_Lock;
-				else if (s == CONFIG_ADVANCED_FB_NOICONS)
-					setting->FB_NoIcons = !setting->FB_NoIcons;
-				else if (s == CONFIG_ADVANCED_OK)
+				} else if (new_pad & PAD_RIGHT) {
+					event |= 2;
+					if (s != max_s)
+						s = max_s;
+					else
+						s = CONFIG_ADVANCED_FIRST;
+				} else if ((new_pad & PAD_CROSS) || (new_pad & PAD_CIRCLE)) {
+					event |= 2;
+					if (s == CONFIG_ADVANCED_APP_GAMEID)
+						setting->app_gameid = !setting->app_gameid;
+					else if (s == CONFIG_ADVANCED_CDROM_DISABLE_GAMEID)
+						setting->cdrom_disable_gameid = !setting->cdrom_disable_gameid;
+					else if (s == CONFIG_ADVANCED_PSU_HUGENAMES)
+						setting->PSU_HugeNames = !setting->PSU_HugeNames;
+					else if (s == CONFIG_ADVANCED_PSU_DATENAMES)
+						setting->PSU_DateNames = !setting->PSU_DateNames;
+					else if (s == CONFIG_ADVANCED_PSU_NOOVERWRITE)
+						setting->PSU_NoOverwrite = !setting->PSU_NoOverwrite;
+					else if (s == CONFIG_ADVANCED_PATHPAD_LOCK)
+						setting->PathPad_Lock = !setting->PathPad_Lock;
+					else if (s == CONFIG_ADVANCED_FB_NOICONS)
+						setting->FB_NoIcons = !setting->FB_NoIcons;
+					else if (s == CONFIG_ADVANCED_HOSTWRITE)
+						setting->HOSTwrite = !setting->HOSTwrite;
+					else if (s == CONFIG_ADVANCED_RETURN)
+						return;
+				} else if (new_pad & PAD_TRIANGLE)
 					return;
-				else if (s == CONFIG_ADVANCED_CANCEL)
-					goto cancel_advanced;
-			} else if (new_pad & PAD_TRIANGLE) {
-			cancel_advanced:
-				setting->app_gameid = backup_app_gameid;
-				setting->cdrom_disable_gameid = backup_cdrom_disable_gameid;
-				setting->HOSTwrite = backup_hostwrite;
-				setting->PSU_HugeNames = backup_psu_hugenames;
-				setting->PSU_DateNames = backup_psu_datenames;
-				setting->PSU_NoOverwrite = backup_psu_nooverwrite;
-				setting->PathPad_Lock = backup_pathpad_lock;
-				setting->FB_NoIcons = backup_fb_noicons;
-				return;
 			}
-		}
 
 		if (event || post_event) {
 			clrScr(setting->color[COLOR_BACKGR]);
@@ -1850,51 +1866,52 @@ static void Config_Advanced(void)
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 
-			sprintf(c, "  Disable RetroGem Game ID for Discs: %s", setting->cdrom_disable_gameid ? LNG(ON) : LNG(OFF));
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			y += FONT_HEIGHT;
-
-#ifdef UDPFS
-			sprintf(c, "  %s: %s", LNG(Enable_Network_write), setting->HOSTwrite ? LNG(ON) : LNG(OFF));
-#else
-			sprintf(c, "  %s: %s", LNG(Enable_Host_write), setting->HOSTwrite ? LNG(ON) : LNG(OFF));
-#endif
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			y += FONT_HEIGHT;
-
-			sprintf(c, "  Create PSU with ID and Game Title: %s", setting->PSU_HugeNames ? LNG(ON) : LNG(OFF));
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			y += FONT_HEIGHT;
-
-			sprintf(c, "  Create PSU with Date: %s", setting->PSU_DateNames ? LNG(ON) : LNG(OFF));
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			y += FONT_HEIGHT;
-
-			sprintf(c, "  Create New PSU if filename exists: %s", setting->PSU_NoOverwrite ? LNG(ON) : LNG(OFF));
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			y += FONT_HEIGHT;
-
-			sprintf(c, "  Lock Main LaunchKey/PathPad Paths: %s", setting->PathPad_Lock ? LNG(ON) : LNG(OFF));
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			y += FONT_HEIGHT;
-
-			sprintf(c, "  Disable Icons in File Browser: %s", setting->FB_NoIcons ? LNG(ON) : LNG(OFF));
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			y += FONT_HEIGHT;
-
-			y += FONT_HEIGHT / 2;
-			sprintf(c, "  %s", LNG(OK));
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			y += FONT_HEIGHT;
-			sprintf(c, "  %s", LNG(Cancel));
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-
-			y = Menu_start_y + s * FONT_HEIGHT + FONT_HEIGHT / 2;
-			if (s >= CONFIG_ADVANCED_AFT_OPTIONS)
+				sprintf(c, "  Disable RetroGem Game ID for Discs: %s", setting->cdrom_disable_gameid ? LNG(ON) : LNG(OFF));
+				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
+				y += FONT_HEIGHT;
 				y += FONT_HEIGHT / 2;
-			drawChar(LEFT_CUR, x, y, setting->color[COLOR_TEXT]);
 
-			if (s <= CONFIG_ADVANCED_FB_NOICONS) {
+				sprintf(c, "  Create PSU with ID and Game Title: %s", setting->PSU_HugeNames ? LNG(ON) : LNG(OFF));
+				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
+				y += FONT_HEIGHT;
+				y += FONT_HEIGHT / 2;
+
+				sprintf(c, "  Create PSU with Date: %s", setting->PSU_DateNames ? LNG(ON) : LNG(OFF));
+				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
+				y += FONT_HEIGHT;
+				y += FONT_HEIGHT / 2;
+
+				sprintf(c, "  Create New PSU if filename exists: %s", setting->PSU_NoOverwrite ? LNG(ON) : LNG(OFF));
+				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
+				y += FONT_HEIGHT;
+				y += FONT_HEIGHT / 2;
+
+				sprintf(c, "  Lock Main LaunchKey/PathPad Paths: %s", setting->PathPad_Lock ? LNG(ON) : LNG(OFF));
+				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
+				y += FONT_HEIGHT;
+				y += FONT_HEIGHT / 2;
+
+				sprintf(c, "  Disable Icons in File Browser: %s", setting->FB_NoIcons ? LNG(ON) : LNG(OFF));
+				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
+				y += FONT_HEIGHT;
+				y += FONT_HEIGHT / 2;
+
+	#ifdef UDPFS
+				sprintf(c, "  %s: %s", LNG(Enable_Network_write), setting->HOSTwrite ? LNG(ON) : LNG(OFF));
+	#else
+				sprintf(c, "  %s: %s", LNG(Enable_Host_write), setting->HOSTwrite ? LNG(ON) : LNG(OFF));
+	#endif
+				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
+				y += FONT_HEIGHT;
+				y += FONT_HEIGHT / 2;
+
+				sprintf(c, "  %s", LNG(RETURN));
+				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
+
+				y = getConfigAdvancedItemY(s);
+				drawChar(LEFT_CUR, x, y, setting->color[COLOR_TEXT]);
+
+				if (s < CONFIG_ADVANCED_AFT_OPTIONS) {
 				if (swapKeys)
 					len = sprintf(c, "\xFF"
 					                 "1:%s",
@@ -2142,7 +2159,7 @@ void config(char *mainMsg, char *CNF)
 			sprintf(c, "  Advanced Settings...");
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
-			y += FONT_HEIGHT;
+			y += FONT_HEIGHT / 2;
 
 			sprintf(c, "  %s", LNG(OK));
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
