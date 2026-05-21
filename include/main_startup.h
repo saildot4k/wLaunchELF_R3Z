@@ -19,5 +19,6 @@ void initializeBootGraphics(void);
 void loadConfiguredBootFont(void);
 void bringUpBootNetworkStack(enum BOOT_DEVICE boot_device);
 unsigned short getROMVersion(void);
+int shouldHideHddAtaDevices(void);
 
 #endif

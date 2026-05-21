@@ -12,10 +12,12 @@ extern char ROMVER_data[16];
 extern char rough_region;
 
 static unsigned short ROMVersion;
+static int hide_hdd_ata_devices = -1;
 
 static void normalizeBootPath(char *path);
 static void initializeBootExecPath(void);
 static void buildBootBlockPath(char *dst, size_t dst_size, const char *prefix, const char *partition, const char *path_part);
+static int getRomverPrefixNumber(void);
 
 // Parse network configuration from IPCONFIG.DAT
 // Now completely rewritten to fix some problems
@@ -236,6 +238,7 @@ static void initializeBootExecPath(void)
 	strncpy(romver_prefix, ROMVER_data, 4);
 	romver_prefix[4] = '\0';
 	ROMVersion = strtoul(romver_prefix, NULL, 16);
+	hide_hdd_ata_devices = (getRomverPrefixNumber() >= 220);
 
 	//Handle special cases, before osdmain.elf was supported.
 	switch (ROMVER_data[4]) {
@@ -509,4 +512,37 @@ void loadConfiguredBootFont(void)
 unsigned short getROMVersion(void)
 {
 	return ROMVersion;
+}
+
+static int getRomverPrefixNumber(void)
+{
+	char romver_prefix[5];
+	char *end;
+	unsigned long value;
+
+	if (ROMVER_data[0] == '\0')
+		return -1;
+
+	strncpy(romver_prefix, ROMVER_data, 4);
+	romver_prefix[4] = '\0';
+	value = strtoul(romver_prefix, &end, 10);
+	if (end == romver_prefix)
+		return -1;
+	if (value > 9999UL)
+		value = 9999UL;
+
+	return (int)value;
+}
+
+int shouldHideHddAtaDevices(void)
+{
+	int romver_prefix;
+
+	if (hide_hdd_ata_devices >= 0)
+		return hide_hdd_ata_devices;
+
+	uLE_InitializeRegion();
+	romver_prefix = getRomverPrefixNumber();
+	hide_hdd_ata_devices = (romver_prefix >= 220);
+	return hide_hdd_ata_devices;
 }

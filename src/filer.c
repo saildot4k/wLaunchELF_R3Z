@@ -7,6 +7,7 @@
 #include "gui_sort.h"
 #include "mcpaste_functions.h"
 #include "filer_shared.h"
+#include "main_startup.h"
 
 #define MC_ATTR_norm_folder 0x8427  //Normal folder on PS2 MC
 #define MC_ATTR_norm_file 0x8497    //file (PS2/PS1) on PS2 MC
@@ -1350,7 +1351,7 @@ int getDir(const char *path, FILEINFO *info)
 //--------------------------------------------------------------
 int setFileList(const char *path, const char *ext, FILEINFO *files, int cnfmode)
 {
-	int nfiles, i, j, ret, allow_usb_devices;
+	int nfiles, i, j, ret, allow_usb_devices, hide_hdd_ata_devices;
 
 	size_valid = 0;
 	time_valid = 0;
@@ -1360,6 +1361,7 @@ int setFileList(const char *path, const char *ext, FILEINFO *files, int cnfmode)
 		if (USB_mass_scanned)  //if mass drives were scanned in earlier browsing
 			scan_USB_mass();   //then allow another scan here (timer dependent)
 		allow_usb_devices = ((cnfmode != USBD_IRX_CNF) && (cnfmode != USBKBD_IRX_CNF) && (cnfmode != USBMASS_IRX_CNF));
+		hide_hdd_ata_devices = shouldHideHddAtaDevices();
 
 		strcpy(files[nfiles].name, "mc0:");
 		files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
@@ -1385,11 +1387,13 @@ int setFileList(const char *path, const char *ext, FILEINFO *files, int cnfmode)
 			}
 	#endif
 
+		if (!hide_hdd_ata_devices) {
 			strcpy(files[nfiles].name, "hdd0:");
 			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+		}
 
 #ifdef EXFAT
-		if (allow_usb_devices) {
+		if (allow_usb_devices && !hide_hdd_ata_devices) {
 			strcpy(files[nfiles].name, "ata:");
 			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
 		}
