@@ -1277,6 +1277,12 @@ int main(int argc, char *argv[])
 	initializeBootDisplayDefaults();
 
 	CNF_error = loadConfig(mainMsg, strcpy(CNF, "LAUNCHELF.CNF"));
+	if (CNF_error < 0) {
+		/* No config loaded: default pad mapping from ROM region (J/C => Circle=OK). */
+		if (ROMVER_data[0] == '\0')
+			uLE_InitializeRegion();
+		setting->swapKeys = ((ROMVER_data[4] == 'J') || (ROMVER_data[4] == 'C')) ? TRUE : FALSE;
+	}
 	bringUpBootNetworkStack(boot);
 	initializeBootGraphics();
 
