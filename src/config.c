@@ -95,13 +95,20 @@ static void formatLabelValueAligned(char *dst, size_t dst_size, const char *labe
 {
 	int prefix_len;
 	int value_len;
+	int pad_spaces;
+	int label_len;
 
 	if (dst_size == 0)
 		return;
 	if (label_width < 0)
 		label_width = 0;
 
-	prefix_len = snprintf(dst, dst_size, "  %-*s: ", label_width, label ? label : "");
+	label_len = (label != NULL) ? (int)strlen(label) : 0;
+	pad_spaces = label_width - label_len;
+	if (pad_spaces < 0)
+		pad_spaces = 0;
+
+	prefix_len = snprintf(dst, dst_size, "  %s: %*s", label ? label : "", pad_spaces, "");
 	if (prefix_len < 0 || prefix_len >= (int)dst_size) {
 		dst[dst_size - 1] = '\0';
 		return;
@@ -818,6 +825,7 @@ static void Config_Screen(void)
 	int event, post_event = 0;
 	u8 rgb[COLOR_COUNT][3];
 	char c[MAX_PATH];
+	char value_text[32];
 	int bool_label_width;
 	const char *tv_mode_value;
 	int space = ((SCREEN_WIDTH - SCREEN_MARGIN - 4 * FONT_WIDTH) - (Menu_start_x + 2 * FONT_WIDTH)) / 8;
@@ -1002,6 +1010,10 @@ static void Config_Screen(void)
 				}  //ends loop for colour RGB values
 				y += FONT_HEIGHT * 2;
 				bool_label_width = (int)strlen(LNG(TV_mode));
+				if ((int)strlen(LNG(Screen_X_offset)) > bool_label_width)
+					bool_label_width = (int)strlen(LNG(Screen_X_offset));
+				if ((int)strlen(LNG(Screen_Y_offset)) > bool_label_width)
+					bool_label_width = (int)strlen(LNG(Screen_Y_offset));
 				if ((int)strlen(LNG(Menu_Frame)) > bool_label_width)
 					bool_label_width = (int)strlen(LNG(Menu_Frame));
 				if ((int)strlen(LNG(Popups_Opaque)) > bool_label_width)
@@ -1021,10 +1033,12 @@ static void Config_Screen(void)
 				y += FONT_HEIGHT;
 				y += FONT_HEIGHT / 2;
 
-			sprintf(c, "  %s: %d", LNG(Screen_X_offset), setting->screen_x);
+			snprintf(value_text, sizeof(value_text), "%d", setting->screen_x);
+			formatLabelValueAligned(c, sizeof(c), LNG(Screen_X_offset), value_text, bool_label_width);
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
-			sprintf(c, "  %s: %d", LNG(Screen_Y_offset), setting->screen_y);
+			snprintf(value_text, sizeof(value_text), "%d", setting->screen_y);
+			formatLabelValueAligned(c, sizeof(c), LNG(Screen_Y_offset), value_text, bool_label_width);
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 			y += FONT_HEIGHT / 2;
@@ -1156,6 +1170,23 @@ enum CONFIG_STARTUP {
 
 	CONFIG_STARTUP_COUNT
 };
+
+static int getConfigStartupItemY(int s)
+{
+	int y = Menu_start_y + FONT_HEIGHT + FONT_HEIGHT / 2;
+	int i;
+
+	if (s <= CONFIG_STARTUP_FIRST)
+		return y;
+
+	for (i = CONFIG_STARTUP_FIRST; i < s; i++) {
+		y += FONT_HEIGHT;
+		if (i == CONFIG_STARTUP_RESET_IOP_ELFOAD || i == CONFIG_STARTUP_KBDMAP || i == CONFIG_STARTUP_OSDSYS)
+			y += FONT_HEIGHT / 2;
+	}
+
+	return y;
+}
 
 static void Config_Startup(void)
 {
@@ -1308,6 +1339,7 @@ static void Config_Startup(void)
 			sprintf(c, "  %s: %s", LNG(Reboot_IOP_loading_ELF), (setting->reboot_iop_elf_load) ? LNG(ON): LNG(OFF));
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
+			y += FONT_HEIGHT / 2;
 			
 			sprintf(c, "  %s: %s", LNG(USB_Keyboard_Used), (setting->usbkbd_used) ? LNG(ON): LNG(OFF));
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
@@ -1320,6 +1352,7 @@ static void Config_Startup(void)
 			formatLabelValue(c, sizeof(c), LNG(USB_Keyboard_Map), (strlen(setting->kbdmap_file) == 0) ? LNG(DEFAULT) : setting->kbdmap_file);
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
+			y += FONT_HEIGHT / 2;
 
 			formatLabelValue(c, sizeof(c), LNG(CNF_Path_override), (strlen(setting->CNF_Path) == 0) ? LNG(NONE) : setting->CNF_Path);
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
@@ -1347,10 +1380,7 @@ static void Config_Startup(void)
 			y += FONT_HEIGHT;
 
 			//Cursor positioning section
-			y = Menu_start_y + s * FONT_HEIGHT + FONT_HEIGHT / 2;
-
-			if (s >= max_s)
-				y += FONT_HEIGHT / 2;
+			y = getConfigStartupItemY(s);
 			drawChar(LEFT_CUR, x, y, setting->color[COLOR_TEXT]);
 
 
@@ -1783,10 +1813,9 @@ static int getConfigAdvancedItemY(int s)
 		return y;
 
 	for (i = CONFIG_ADVANCED_APP_GAMEID; i < s; i++) {
-		if (i == CONFIG_ADVANCED_APP_GAMEID)
-			y += FONT_HEIGHT;
-		else
-			y += FONT_HEIGHT + FONT_HEIGHT / 2;
+		y += FONT_HEIGHT;
+		if (i != CONFIG_ADVANCED_APP_GAMEID && i != CONFIG_ADVANCED_PSU_HUGENAMES)
+			y += FONT_HEIGHT / 2;
 	}
 
 	return y;
@@ -1799,6 +1828,15 @@ static void Config_Advanced(void)
 	int len;
 	int event, post_event = 0;
 	char c[MAX_PATH];
+	int bool_label_width;
+	const char *hostwrite_label;
+	const char *app_gameid_label = "RetroGem Game ID";
+	const char *cdrom_gameid_label = "Disable RetroGem Game ID for Discs";
+	const char *psu_huge_label = "Create PSU with ID and Game Title";
+	const char *psu_date_label = "Create PSU with Date";
+	const char *psu_nooverwrite_label = "Create New PSU if filename exists";
+	const char *pathpad_lock_label = "Lock Main LaunchKey/PathPad Paths";
+	const char *fb_noicons_label = "Disable Icons in File Browser";
 
 	event = 1;
 	s = CONFIG_ADVANCED_FIRST;
@@ -1858,49 +1896,65 @@ static void Config_Advanced(void)
 			x = Menu_start_x;
 			y = Menu_start_y;
 
+#ifdef UDPFS
+			hostwrite_label = LNG(Enable_Network_write);
+#else
+			hostwrite_label = LNG(Enable_Host_write);
+#endif
+			bool_label_width = (int)strlen(app_gameid_label);
+			if ((int)strlen(cdrom_gameid_label) > bool_label_width)
+				bool_label_width = (int)strlen(cdrom_gameid_label);
+			if ((int)strlen(psu_huge_label) > bool_label_width)
+				bool_label_width = (int)strlen(psu_huge_label);
+			if ((int)strlen(psu_date_label) > bool_label_width)
+				bool_label_width = (int)strlen(psu_date_label);
+			if ((int)strlen(psu_nooverwrite_label) > bool_label_width)
+				bool_label_width = (int)strlen(psu_nooverwrite_label);
+			if ((int)strlen(pathpad_lock_label) > bool_label_width)
+				bool_label_width = (int)strlen(pathpad_lock_label);
+			if ((int)strlen(fb_noicons_label) > bool_label_width)
+				bool_label_width = (int)strlen(fb_noicons_label);
+			if ((int)strlen(hostwrite_label) > bool_label_width)
+				bool_label_width = (int)strlen(hostwrite_label);
+
 			printXY("ADVANCED SETTINGS", x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 			y += FONT_HEIGHT / 2;
 
-			sprintf(c, "  RetroGem Game ID: %s", setting->app_gameid ? LNG(ON) : LNG(OFF));
+			formatLabelValueAligned(c, sizeof(c), app_gameid_label, setting->app_gameid ? LNG(ON) : LNG(OFF), bool_label_width);
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 
-				sprintf(c, "  Disable RetroGem Game ID for Discs: %s", setting->cdrom_disable_gameid ? LNG(ON) : LNG(OFF));
+				formatLabelValueAligned(c, sizeof(c), cdrom_gameid_label, setting->cdrom_disable_gameid ? LNG(ON) : LNG(OFF), bool_label_width);
 				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 				y += FONT_HEIGHT;
 				y += FONT_HEIGHT / 2;
 
-				sprintf(c, "  Create PSU with ID and Game Title: %s", setting->PSU_HugeNames ? LNG(ON) : LNG(OFF));
+				formatLabelValueAligned(c, sizeof(c), psu_huge_label, setting->PSU_HugeNames ? LNG(ON) : LNG(OFF), bool_label_width);
+				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
+				y += FONT_HEIGHT;
+
+				formatLabelValueAligned(c, sizeof(c), psu_date_label, setting->PSU_DateNames ? LNG(ON) : LNG(OFF), bool_label_width);
 				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 				y += FONT_HEIGHT;
 				y += FONT_HEIGHT / 2;
 
-				sprintf(c, "  Create PSU with Date: %s", setting->PSU_DateNames ? LNG(ON) : LNG(OFF));
+				formatLabelValueAligned(c, sizeof(c), psu_nooverwrite_label, setting->PSU_NoOverwrite ? LNG(ON) : LNG(OFF), bool_label_width);
 				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 				y += FONT_HEIGHT;
 				y += FONT_HEIGHT / 2;
 
-				sprintf(c, "  Create New PSU if filename exists: %s", setting->PSU_NoOverwrite ? LNG(ON) : LNG(OFF));
+				formatLabelValueAligned(c, sizeof(c), pathpad_lock_label, setting->PathPad_Lock ? LNG(ON) : LNG(OFF), bool_label_width);
 				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 				y += FONT_HEIGHT;
 				y += FONT_HEIGHT / 2;
 
-				sprintf(c, "  Lock Main LaunchKey/PathPad Paths: %s", setting->PathPad_Lock ? LNG(ON) : LNG(OFF));
+				formatLabelValueAligned(c, sizeof(c), fb_noicons_label, setting->FB_NoIcons ? LNG(ON) : LNG(OFF), bool_label_width);
 				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 				y += FONT_HEIGHT;
 				y += FONT_HEIGHT / 2;
 
-				sprintf(c, "  Disable Icons in File Browser: %s", setting->FB_NoIcons ? LNG(ON) : LNG(OFF));
-				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-				y += FONT_HEIGHT;
-				y += FONT_HEIGHT / 2;
-
-	#ifdef UDPFS
-				sprintf(c, "  %s: %s", LNG(Enable_Network_write), setting->HOSTwrite ? LNG(ON) : LNG(OFF));
-	#else
-				sprintf(c, "  %s: %s", LNG(Enable_Host_write), setting->HOSTwrite ? LNG(ON) : LNG(OFF));
-	#endif
+				formatLabelValueAligned(c, sizeof(c), hostwrite_label, setting->HOSTwrite ? LNG(ON) : LNG(OFF), bool_label_width);
 				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 				y += FONT_HEIGHT;
 				y += FONT_HEIGHT / 2;
@@ -1985,6 +2039,7 @@ void config(char *mainMsg, char *CNF)
 	int s;
 	int x, y;
 	int len;
+	int bool_label_width;
 	int event, post_event = 0;
 
 	tmpsetting = setting;
@@ -2139,11 +2194,15 @@ void config(char *mainMsg, char *CNF)
 
 			y += FONT_HEIGHT / 2;
 
-			sprintf(c, "  %s: %s", LNG(Show_launch_titles), (setting->Show_Titles)? LNG(ON) : LNG(OFF));
+			bool_label_width = (int)strlen(LNG(Show_launch_titles));
+			if ((int)strlen(LNG(Hide_full_ELF_paths)) > bool_label_width)
+				bool_label_width = (int)strlen(LNG(Hide_full_ELF_paths));
+
+			formatLabelValueAligned(c, sizeof(c), LNG(Show_launch_titles), (setting->Show_Titles)? LNG(ON) : LNG(OFF), bool_label_width);
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 
-			sprintf(c, "  %s: %s", LNG(Hide_full_ELF_paths), (setting->Hide_Paths)?LNG(ON): LNG(OFF));
+			formatLabelValueAligned(c, sizeof(c), LNG(Hide_full_ELF_paths), (setting->Hide_Paths)?LNG(ON): LNG(OFF), bool_label_width);
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 
