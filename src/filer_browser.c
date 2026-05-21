@@ -56,10 +56,61 @@ static const char *getRootDeviceLabel(const char *name)
 
 static void formatBrowserPathForDisplay(const char *path, char *display_path)
 {
+	const char *partition;
+	const char *subpath;
+	const char *sep;
+	int part_len;
+
 	if (!strncmp(path, "mass", 4)) {
 		snprintf(display_path, MAX_PATH, "usb%s", path + 4);
 		return;
 	}
+
+	if (!strncmp(path, "hdd0:/", 6)) {
+		partition = path + 6; // after "hdd0:/"
+		if (partition[0] == '\0') {
+			snprintf(display_path, MAX_PATH, "%s", path);
+			return;
+		}
+
+		sep = strchr(partition, '/');
+		if (sep == NULL) {
+			part_len = (int)strlen(partition);
+			subpath = "/";
+		} else {
+			part_len = (int)(sep - partition);
+			subpath = sep;
+		}
+
+		if (part_len > 0) {
+			snprintf(display_path, MAX_PATH, "hdd0:%.*s:pfs:%s", part_len, partition, subpath);
+			return;
+		}
+	}
+
+#ifdef DVRP
+	if (!strncmp(path, "dvr_hdd0:/", 10)) {
+		partition = path + 10; // after "dvr_hdd0:/"
+		if (partition[0] == '\0') {
+			snprintf(display_path, MAX_PATH, "%s", path);
+			return;
+		}
+
+		sep = strchr(partition, '/');
+		if (sep == NULL) {
+			part_len = (int)strlen(partition);
+			subpath = "/";
+		} else {
+			part_len = (int)(sep - partition);
+			subpath = sep;
+		}
+
+		if (part_len > 0) {
+			snprintf(display_path, MAX_PATH, "dvr_hdd0:%.*s:pfs:%s", part_len, partition, subpath);
+			return;
+		}
+	}
+#endif
 
 	snprintf(display_path, MAX_PATH, "%s", path);
 }
