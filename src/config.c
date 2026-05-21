@@ -2230,7 +2230,7 @@ void config(char *mainMsg, char *CNF)
 			if (s >= CONFIG_MAIN_AFT_BTNS)
 				y += FONT_HEIGHT / 2;
 			if (s >= CONFIG_MAIN_OK)
-				y += FONT_HEIGHT;
+				y += FONT_HEIGHT / 2;
 			drawChar(LEFT_CUR, x, y, setting->color[COLOR_TEXT]);
 
 				//Tooltip section
