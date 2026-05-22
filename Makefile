@@ -340,7 +340,7 @@ clean-ci-variants:
 rebuild: clean all
 
 info2:
-	$(info -------- wLaunchELF 4.43x_isr --------)
+	$(info -------- wLaunchELF 4.50_R3Z --------)
 	$(info EE_BIN = $(EE_BIN))
 	$(info EE_BIN_PKD = $(EE_BIN_PKD))
 	$(info EE_OBJS = $(EE_OBJS))

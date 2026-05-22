@@ -549,19 +549,17 @@ non_PSU_RESTORE_init:
 	else if (!strncmp(out, "mx4sio", 6))
 		buffSize = 131072;  //Use 128KB when writing to MX4SIO (FAT over SIO2).
 #endif
-	else if (!strncmp(out, "ata", 3))
-		buffSize = 131072;  //Use 128KB when writing to ATA (BDM FATFS).
 	else if (!strncmp(in, "mc", 2))
 		buffSize = 262144;  //Use 256KB if reading from MC (still pretty slow)
 #if defined(ETH) || defined(UDPFS)
-	else if (!strncmp(out, "host", 4) || !strncmp(out, "udpfs", 5))
-		buffSize = 393216;  //Use 384KB if writing to HOST/UDPFS (acceptable)
+	else if (!strncmp(out, "host", 4))
+		buffSize = 393216;  //Use 384KB if writing to HOST (acceptable)
 #endif
-	else if ((!strncmp(in, "mass", 4)) || (!strncmp(in, "host", 4)) || (!strncmp(in, "udpfs", 5))
+	else if ((!strncmp(in, "mass", 4)) || (!strncmp(in, "host", 4))
 #ifdef MX4SIO
 	         || (!strncmp(in, "mx4sio", 6))
 #endif
-	         || (!strncmp(in, "ata", 3)))
+	        )
 		buffSize = 524288;  //Use 512KB reading from USB or HOST (acceptable)
 
 	if (size < (u64)buffSize)
