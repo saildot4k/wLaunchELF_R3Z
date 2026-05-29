@@ -483,7 +483,7 @@ static void load_ps2dvr(void)
 	if (!have_dvrdrv || !have_dvrfile || !have_ps2hdd || !have_ps2fs)
 		showLoadingModulesMsg("dvr");
 
-	load_ps2hdd_stack(1);
+	load_ps2hdd_stack(0);
 	if (!have_dvrdrv) {
 		ID = SifExecModuleBuffer(dvrdrv_irx, size_dvrdrv_irx, 0, NULL, &ret);
 		DPRINTF(" [DVRDRV]: ID=%d, ret=%d\n", ID, ret);
@@ -1060,11 +1060,17 @@ static void switchPsxHddDriverStack(int use_dvr_stack)
 	if (!console_is_PSX)
 		return;
 
-	/*
-	 * Allow hdd0:/ and dvr_hdd0:/ to coexist in one IOP session.
-	 * Their module stacks are now treated as compatible, so no reset here.
-	 */
-	(void)use_dvr_stack;
+	if (use_dvr_stack) {
+		if (!have_HDD_modules)
+			return;
+		DPRINTF("Switching PSX HDD stack (hdd0:/ -> dvr_hdd0:/), resetting IOP\n");
+	} else {
+		if (!have_DVRP_HDD_modules)
+			return;
+		DPRINTF("Switching PSX HDD stack (dvr_hdd0:/ -> hdd0:/), resetting IOP\n");
+	}
+
+	resetRuntimeDeviceState();
 }
 #endif
 
