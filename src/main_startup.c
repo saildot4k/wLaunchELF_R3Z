@@ -8,7 +8,6 @@
 
 extern char default_OSDSYS_path[30];
 extern char default_OSDSYS_path2[30];
-extern char ROMVER_data[16];
 extern char rough_region;
 
 static unsigned short ROMVersion;

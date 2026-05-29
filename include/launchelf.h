@@ -296,6 +296,7 @@ extern char SystemCnf_BOOT[MAX_PATH];
 extern char SystemCnf_BOOT2[MAX_PATH];
 extern char SystemCnf_VER[10];
 extern char SystemCnf_VMODE[10];
+extern char ROMVER_data[16];
 
 #ifdef MX4SIO
 extern u8 mx4sio_driver_running;

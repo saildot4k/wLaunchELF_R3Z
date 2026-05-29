@@ -63,13 +63,19 @@ Completed so far:
    - `src/gui.c` (`ynDialog`, `nonDialog`, `keyboard`)
    - `src/gui_colors.c` (`scanSkinCNF`, `storeSkinCNF`)
 5. PSU data layout structs are centralized in `include/psu_types.h` to avoid duplicated type blocks in `filer.c`.
+6. `src/main.c` helper splits now include:
+   - `src/main_info_screens.c` (`Show_About_uLE`, `Show_build_info`, `ShowDebugInfo`, `ShowFont`)
+   - `src/main_gameid.c` (RetroGem/game-ID helpers)
+   - `src/main_actions.c` (`Execute` action dispatch + launch cleanup)
+7. Main startup/menu flow splits now include:
+   - `src/main_boot.c` (early boot sequence + argument capture)
+   - `src/main_modules.c` (runtime module/font/pad startup + CNF path validation)
+   - `src/main_menu.c` (main menu rendering/input/timer state helpers)
 
 Recommended extraction order (lowest risk first):
 
-1. `main_boot.c` (boot path normalize + startup config probing)
-2. `main_modules.c` (IRX/module loading + stack switching)
-3. `main_actions.c` (execute/launch command handlers)
-4. `filer_menu.c` (R1 menu enable/dispatch logic)
-5. `filer_paths.c` (device/path mapping helpers)
+1. `filer_menu.c` (R1 menu enable/dispatch logic)
+2. `filer_paths.c` (device/path mapping helpers)
+3. `main_loop.c` (disc polling + event loop orchestration)
 
 Keep each split behavior-neutral and verify on both PCSX2 and real hardware after each pass.

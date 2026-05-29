@@ -165,7 +165,7 @@ static int classifyPsuAction(const char *destPath)
 	if (all_psu)
 		return PSU_ACTION_EXTRACT;
 
-	if (all_dirs && src_is_mc_like && destPath && destPath[0] != '\0')
+	if (all_dirs && src_is_mc_like && destPath && destPath[0] != '\0' && !isMcLikePath(destPath))
 		return PSU_ACTION_CREATE;
 
 	return PSU_ACTION_NONE;
@@ -199,7 +199,6 @@ static int menu(const char *path, FILEINFO *file)
 	menu_len = strlen(LNG(New_Dir)) > menu_len ? strlen(LNG(New_Dir)) : menu_len;
 	menu_len = strlen(LNG(Get_Size)) > menu_len ? strlen(LNG(Get_Size)) : menu_len;
 	menu_len = strlen(LNG(TextEditor)) > menu_len ? strlen(LNG(TextEditor)) : menu_len;
-	menu_len = strlen(LNG(mcPaste)) > menu_len ? strlen(LNG(mcPaste)) : menu_len;
 	menu_len = strlen(psu_action_label) > menu_len ? strlen(psu_action_label) : menu_len;
     menu_len = strlen(LNG(time_manip)) > menu_len ? strlen(LNG(time_manip)) : menu_len;
     menu_len = strlen(LNG(title_cfg)) > menu_len ? strlen(LNG(title_cfg)) : menu_len;
@@ -263,7 +262,6 @@ static int menu(const char *path, FILEINFO *file)
 	if (write_disabled || menu_disabled) {
 		enable[CUT] = FALSE;
 		enable[PASTE] = FALSE;
-		enable[MCPASTE] = FALSE;
 		enable[PSUPASTE] = FALSE;
 		enable[DELETE] = FALSE;
 		enable[RENAME] = FALSE;
@@ -292,17 +290,9 @@ static int menu(const char *path, FILEINFO *file)
 	if (nclipFiles == 0) {
 		//Nothing in clipboard
 		enable[PASTE] = FALSE;
-		enable[MCPASTE] = FALSE;
 		enable[PSUPASTE] = FALSE;
 	} else {
 		//Something in clipboard
-		if (!strncmp(path, "mc", 2) || !strncmp(path, "vmc", 3)) {
-			if (!strncmp(clipPath, "mc", 2) || !strncmp(clipPath, "vmc", 3)) {
-				enable[MCPASTE] = FALSE;  //No mcPaste if both src and dest are MC
-			}
-		} else if (strncmp(clipPath, "mc", 2) && strncmp(clipPath, "vmc", 3)) {
-			enable[MCPASTE] = FALSE;  //No mcPaste if both src and dest non-MC
-		}
 		enable[PSUPASTE] = (enable[PSUPASTE] && (psu_action != PSU_ACTION_NONE));
 	}
 
@@ -355,8 +345,6 @@ static int menu(const char *path, FILEINFO *file)
 					strcpy(tmp, LNG(Cut));
 				else if (i == PASTE)
 					strcpy(tmp, LNG(Paste));
-				else if (i == MCPASTE)
-					strcpy(tmp, LNG(mcPaste));
 				else if (i == PSUPASTE)
 					strcpy(tmp, psu_action_label);
 				else if (i == DELETE)
@@ -747,7 +735,6 @@ static int browser_cd, browser_up, browser_repos, browser_pushed;
 static int browser_sel, browser_nfiles;
 static void submenu_func_GetSize(char *mess, char *path, FILEINFO *files);
 static void submenu_func_Paste(char *mess, char *path);
-static void submenu_func_mcPaste(char *mess, char *path);
 static void submenu_func_psuPaste(char *mess, char *path);
 int getFilePath(char *out, int cnfmode)
 {
@@ -1026,8 +1013,6 @@ int getFilePath(char *out, int cnfmode)
 					}  //ends RENAME
 					else if (ret == PASTE)
 						submenu_func_Paste(msg0, path);
-					else if (ret == MCPASTE)
-						submenu_func_mcPaste(msg0, path);
 					else if (ret == PSUPASTE)
 						submenu_func_psuPaste(msg0, path);
 					else if (ret == NEWDIR) {
@@ -1709,18 +1694,6 @@ static void submenu_func_Paste(char *mess, char *path)
 }
 //------------------------------
 //endfunc submenu_func_Paste
-//--------------------------------------------------------------
-static void submenu_func_mcPaste(char *mess, char *path)
-{
-	if (!strncmp(path, "mc", 2) || !strncmp(path, "vmc", 3)) {
-		PasteMode = PM_MC_RESTORE;
-	} else {
-		PasteMode = PM_MC_BACKUP;
-	}
-	subfunc_Paste(mess, path);
-}
-//------------------------------
-//endfunc submenu_func_mcPaste
 //--------------------------------------------------------------
 static void submenu_func_psuPaste(char *mess, char *path)
 {

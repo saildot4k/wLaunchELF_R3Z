@@ -18,7 +18,6 @@ enum {
 	COPY,
 	CUT,
 	PASTE,
-	MCPASTE,
 	PSUPASTE,
 	DELETE,
 	RENAME,
