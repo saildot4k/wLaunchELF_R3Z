@@ -31,10 +31,11 @@ enum BOOT_DEVICE performEarlyBootInitialization(const char *arg0, char *boot_pat
 		console_is_PSX = 1;
 		DPRINTF("# Console is PSX-DESR\n");
 	}
-	DPRINTF("Loading USB modules\n");
-	loadUsbModules();
-
 	boot = prepareBootDeviceAndPath(arg0, boot_path, boot_path_len);
+	if (boot == BOOT_DEVICE_MASS && (!strncmp(LaunchElfDir, "mass", 4) || !strncmp(LaunchElfDir, "usb", 3))) {
+		DPRINTF("Loading USB modules for USB boot\n");
+		loadUsbModules();
+	}
 	initializeBootDisplayDefaults();
 
 	cnf_path_buf = cnf_path;

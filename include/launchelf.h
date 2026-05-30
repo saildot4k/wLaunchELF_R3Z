@@ -307,11 +307,11 @@ void load_vmc_fs(void);
 void load_ps2host(void);
 #endif
 #ifdef UDPFS
-void load_udpfs(void);
+int load_udpfs(void);
 #endif
-void loadHddModules(void);
+int loadHddModules(void);
 #ifdef DVRP
-void loadDVRPHddModules(void);
+int loadDVRPHddModules(void);
 #endif
 void loadHdlInfoModule(void);
 void loadCdModules(void);
@@ -328,13 +328,13 @@ int IsSupportedFileType(char *path);
 void loadFlashModules(void);
 #endif
 #ifdef MMCE
-void loadMmceModules(void);
+int loadMmceModules(void);
 #endif
 #ifdef MX4SIO
 int loadMx4sioModules(void);
 #endif
 #ifdef EXFAT
-void loadAtaModules(void);
+int loadAtaModules(void);
 #endif
 
 /* elf.c */
@@ -569,5 +569,7 @@ extern int USB_mass_max_drives;
 extern u64 USB_mass_scan_time;
 extern int USB_mass_scanned;
 extern int USB_mass_loaded;  //0==none, 1==internal, 2==external
+void loadUsbModules(void);
+int ensureUsbKeyboardReady(void);
 
 #endif

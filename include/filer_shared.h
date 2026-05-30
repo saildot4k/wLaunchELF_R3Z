@@ -33,12 +33,14 @@ enum {
 };
 
 #define PM_NORMAL 0       //PasteMode value for normal copies
-#define PM_MC_BACKUP 1    //PasteMode value for gamesave backup from MC
-#define PM_MC_RESTORE 2   //PasteMode value for gamesave restore to MC
-#define PM_PSU_BACKUP 3   //PasteMode value for gamesave backup from MC to PSU
-#define PM_PSU_RESTORE 4  //PasteMode value for gamesave restore to MC from PSU
-#define PM_RENAME 5       //PasteMode value for normal copies with new names
-#define MAX_RECURSE 16    //Maximum folder recursion for MC Backup/Restore
+#define PM_PSU_BACKUP 1   //PasteMode value for gamesave backup from MC to PSU
+#define PM_PSU_RESTORE 2  //PasteMode value for gamesave restore to MC from PSU
+#define PM_RENAME 3       //PasteMode value for normal copies with new names
+#define MAX_RECURSE 16    //Maximum folder recursion for copy/PSU operations
+
+#define TRANSFER_STACK_READY 0
+#define TRANSFER_STACK_LOAD_FAILED -1
+#define TRANSFER_STACK_INCOMPATIBLE -2
 
 extern int PasteProgress_f;
 extern int PasteMode;
@@ -76,6 +78,8 @@ extern int host_elflist;
 #endif
 
 int getDir(const char *path, FILEINFO *info);
+int ensurePathDeviceStackReady(const char *path);
+int prepareTransferDeviceStacks(const char *src_path, const char *dst_path);
 int copy(char *outPath, const char *inPath, FILEINFO file, int recurses);
 
 #endif

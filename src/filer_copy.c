@@ -6,7 +6,6 @@
 #include "filer_actions.h"
 #include "filer_shared.h"
 #include "gui_hdd0_format.h"
-#include "mcpaste_functions.h"
 #include "psu_functions.h"
 #include "psu_types.h"
 
@@ -171,6 +170,9 @@ int copy(char *outPath, const char *inPath, FILEINFO file, int recurses)
 	if (recurses + 1 >= MAX_RECURSE)
 		return -1;
 
+	if (!ensurePathDeviceStackReady(inPath) || !ensurePathDeviceStackReady(outPath))
+		return -1;
+
 	PM_flag[recurses + 1] = PM_NORMAL;  //assume normal mode for next level
 	PM_file[recurses + 1] = -1;         //assume that no special file is needed
 
@@ -322,7 +324,7 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 				strcat(progress, tmp);
 				if (ynDialog(progress) < 0)
 					return -1;
-				if ((PasteMode == PM_MC_BACKUP) || (PasteMode == PM_MC_RESTORE) || (PasteMode == PM_PSU_RESTORE)) {
+				if (PasteMode == PM_PSU_RESTORE) {
 					ret = delete (outPath, &newfile);  //Attempt recursive delete
 					if (ret < 0)
 						return -1;
@@ -350,21 +352,6 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 			}
 		}
 		//Here a destination folder, or a PSU file exists, ready to receive files
-		if (PasteMode == PM_MC_BACKUP) {  //MC Backup mode folder paste preparation
-			out_fd = mcpaste_prepare_backup_dir(out, &file.stats);
-			if (out_fd >= 0) {
-				PM_file[recurses + 1] = out_fd;
-				PM_flag[recurses + 1] = PM_MC_BACKUP;
-			}
-		} else if (PasteMode == PM_MC_RESTORE) {  //MC Restore mode folder paste preparation
-			in_fd = mcpaste_prepare_restore_dir(in, &file.stats);
-			if (in_fd >= 0) {
-				PM_file[recurses + 1] = in_fd;
-				PM_flag[recurses + 1] = PM_MC_RESTORE;
-			}
-		}
-		if (PM_flag[recurses + 1] == PM_NORMAL) {  //Normal mode folder paste preparation
-		}
 		sprintf(in, "%s%s/", inPath, file.name);      //restore phys dev spec to 'in'
 		sprintf(out, "%s%s", outPath, newfile.name);  //restore phys dev spec to 'out'
 		genLimObjName(out, 0);                        //Limit dest folder name
@@ -389,13 +376,13 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 				//finally, we must adjust attributes of the new file copy, to ensure
 				//correct timestamps and attributes (requires MC-specific functions)
 				if (!strncmp(out, "mc", 2)) {
-					mcpaste_apply_entry_stats_to_mc(out, &files[0].stats, MC_SFI);
+					psu_restore_apply_entry_stats_to_mc(out, &files[0].stats, MC_SFI);
 				}
 			}                                 //ends main for loop of valid PM_PSU_RESTORE mode
 			genClose(PM_file[recurses + 1]);  //Close the PSU file
 			                                  //Finally fix the stats of the containing folder
 			                                  //It has to be done last, as timestamps would change when fixing files
-			                                  //--- This has been moved to a later clause, shared with PM_MC_RESTORE ---
+			                                  //--- This has been moved to a later clause.
 		} else {                              //Any other mode than a valid PM_PSU_RESTORE
 			nfiles = getDir(in, files);
 			for (i = 0; i < nfiles; i++) {
@@ -413,16 +400,9 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 		//Here folder contents have been copied error-free, but we also need to copy
 		//attributes and timestamps, and close the attribute/PSU file if such was used
 		//Lots of stuff need to be done here to make PSU operations work properly
-		if (PM_flag[recurses + 1] == PM_MC_BACKUP) {  //MC Backup mode folder paste closure
-			genClose(PM_file[recurses + 1]);
-		} else if (PM_flag[recurses + 1] == PM_PSU_BACKUP) {  //PSU Backup mode folder paste closure
+		if (PM_flag[recurses + 1] == PM_PSU_BACKUP) {  //PSU Backup mode folder paste closure
 			if (psu_backup_finalize_root_image(PM_file[recurses + 1], mcT_head_p, PSU_content) < 0)
 				return -1;
-		} else if (PM_flag[recurses + 1] == PM_MC_RESTORE) {  //MC Restore mode folder paste closure
-			mcpaste_finalize_restore_dir(PM_file[recurses + 1], out, MC_SFI);
-			//Finally fix the stats of the containing folder
-			//It has to be done last, as timestamps would change when fixing files
-			//--- This has been moved to a later clause, shared with PM_PSU_RESTORE ---
 		} else if (PM_flag[recurses + 1] == PM_NORMAL) {             //Normal mode folder paste closure
 			if (!strncmp(out, "mc", 2)) {                            //Handle folder copied to MC
 				mcGetInfo(out[2] - '0', 0, &dummy, &dummy, &dummy);  //Wakeup call
@@ -459,8 +439,7 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 				}
 			}
 		}
-		if (((PM_flag[recurses + 1] == PM_MC_RESTORE) || (PM_flag[recurses + 1] == PM_PSU_RESTORE)) &&
-		    !strncmp(out, "mc", 2)) {
+		if ((PM_flag[recurses + 1] == PM_PSU_RESTORE) && !strncmp(out, "mc", 2)) {
 			//Finally fix the stats of the containing folder
 			//It has to be done last, as timestamps would change when fixing files
 			mcGetInfo(out[2] - '0', 0, &dummy, &dummy, &dummy);  //Wakeup call
@@ -488,10 +467,6 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 		goto restart_copy;
 	}
 non_PSU_RESTORE_init:
-	//In MC Restore mode we must here avoid copying the attribute file
-	if (PM_flag[recurses] == PM_MC_RESTORE && mcpaste_is_attr_file(file.name))
-		return 0;
-
 	//It is now time to open the input file, indicated by 'in_fd'
 	//But in PSU Restore mode we must use the already open PSU file instead
 	if (PM_flag[recurses] == PM_PSU_RESTORE) {
@@ -730,13 +705,6 @@ non_PSU_RESTORE_init:
 		}
 		out_fd = -1;  //prevent output file closure below
 		goto copy_file_exit;
-	}
-
-	if (PM_flag[recurses] == PM_MC_BACKUP) {  //MC Backup mode file paste closure
-		if (mcpaste_write_file_stats(PM_file[recurses], &file.stats) < 0) {
-			ret = -1;  //Abort if attribute file crashed
-			goto copy_file_exit;
-		}
 	}
 
 	if (out_fd >= 0) {

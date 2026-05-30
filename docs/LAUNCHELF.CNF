@@ -289,7 +289,7 @@ PSU_DateNames = 0
 # check for an identical PSU filename at the destination, and if such
 # a file already exists the operation exits without error, as if a new
 # backup had been made. Thus you can select all saves on an MC and use
-# psuPaste to backup only those that have changed since last time.
+# Create PSU to back up only those that have changed since last time.
 # This improvement was contributed by 'ffgriever' at ps2-scene.
 # ----------------------------------------------------------------------
 PSU_NoOverwrite = 0

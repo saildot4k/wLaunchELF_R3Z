@@ -1646,9 +1646,17 @@ static void subfunc_Paste(char *mess, char *path)
 
 	written_size = 0;
 	PasteTime = Timer();  //Note initial pasting time
-	drawMsg(LNG(Pasting));
 	if (!strcmp(path, clipPath))
 		goto finished;
+	ret = prepareTransferDeviceStacks(clipPath, path);
+	if (ret == TRANSFER_STACK_INCOMPATIBLE) {
+		ynDialog("Incompatible drivers to perform action");
+		browser_pushed = FALSE;
+		return;
+	}
+	if (ret < 0)
+		goto finished;
+	drawMsg(LNG(Pasting));
 
 	for (i = 0; i < nclipFiles; i++) {
 		strcpy(tmp, clipFiles[i].name);

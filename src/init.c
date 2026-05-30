@@ -151,6 +151,10 @@ static u8 done_setupPowerOff = 0;
 #define FILEXIO_RWBUF_NET_FALLBACK (64 * 1024)
 static u8 ps2kbd_opened = 0;
 
+/*
+ * Tracks driver stacks proven loaded in the current IOP session.
+ * Reset() clears these so the next path access can rebuild an accurate view.
+ */
 enum storage_driver_stack_mode {
 	STORAGE_STACK_DEFAULT = 0,
 #ifdef MMCE
@@ -203,6 +207,7 @@ static int loadExternalFile(char *argPath, void **fileBaseP, int *fileSizeP);
 static int loadExternalModule(char *modPath, void *defBase, int defSize);
 static void loadUsbDModule(void);
 static void loadKbdModules(void);
+static int pathUsesUsbMass(const char *path);
 void loadUsbModules(void);
 void ensureCoreIoStackReady(void);
 void setupPowerOff(void);
@@ -210,6 +215,7 @@ void startKbd(void);
 void Reset(void);
 static void resetUsbMassScanState(void);
 static void resetUsbMassRuntimeState(void);
+static void resetDriverStackLoadTracking(void);
 static void resetRuntimeDeviceState(void);
 static void switchStorageDriverStack(int target_mode);
 static void switchBlockStorageStack(int target_mode);
@@ -467,9 +473,10 @@ static void load_udpfs_stack(void)
 	}
 }
 
-void load_udpfs(void)
+int load_udpfs(void)
 {
 	load_udpfs_stack();
+	return have_udpfs_ioman;
 }
 //------------------------------
 //endfunc load_udpfs
@@ -880,6 +887,21 @@ static void loadUsbDModule(void)
 //------------------------------
 //endfunc loadUsbDModule
 //---------------------------------------------------------------------------
+static int pathUsesUsbMass(const char *path)
+{
+	if (path == NULL)
+		return 0;
+	if (!strncmp(path, "uLE:/", 5))
+		return pathUsesUsbMass(LaunchElfDir);
+	if (!strncmp(path, "mass", 4) && (path[4] == ':' || (path[4] >= '0' && path[4] <= '9' && path[5] == ':')))
+		return 1;
+	if (!strncmp(path, "usb", 3) && (path[3] == ':' || (path[3] >= '0' && path[3] <= '9' && path[4] == ':')))
+		return 1;
+	return 0;
+}
+//------------------------------
+//endfunc pathUsesUsbMass
+//---------------------------------------------------------------------------
 #ifdef DS34
 static void loadDs34Modules(void)
 {
@@ -891,6 +913,18 @@ static void loadDs34Modules(void)
 }
 //------------------------------
 //endfunc loadDs34Modules
+//---------------------------------------------------------------------------
+void loadDs34InputModules(void)
+{
+	if (!have_ds34)
+		showLoadingModulesMsg("ds34");
+
+	ensureCoreIoStackReady();
+	loadUsbDModule();
+	loadDs34Modules();
+}
+//------------------------------
+//endfunc loadDs34InputModules
 //---------------------------------------------------------------------------
 #endif
 void loadUsbModules(void)
@@ -962,6 +996,8 @@ void loadUsbModules(void)
 //---------------------------------------------------------------------------
 static void loadKbdModules(void)
 {
+	if (pathUsesUsbMass(setting->usbkbd_file))
+		loadUsbModules();
 	if (!have_usbd || !have_ps2kbd)
 		showLoadingModulesMsg("usbkbd");
 
@@ -987,6 +1023,12 @@ static void resetUsbMassRuntimeState(void)
 	resetUsbMassScanState();
 }
 
+static void resetDriverStackLoadTracking(void)
+{
+	storage_driver_stack_mode = STORAGE_STACK_DEFAULT;
+	block_storage_stack_mode = BLOCK_STACK_NONE;
+}
+
 #ifdef DS34
 static void stopDs34Input(void)
 {
@@ -1010,8 +1052,11 @@ static void resetRuntimeDeviceState(void)
 	showRebootingIopMsg();
 	unmountAll();
 	Reset();
-	loadUsbModules();
+#ifdef DS34
+	loadDs34InputModules();
+#endif
 	setupPad();
+	DPRINTF("Starting keyboard\n");
 	startKbd();
 }
 
@@ -1024,7 +1069,6 @@ static void switchStorageDriverStack(int target_mode)
 	if (storage_driver_stack_mode != STORAGE_STACK_DEFAULT) {
 		DPRINTF("Switching storage driver stack (%d -> %d), resetting IOP\n", storage_driver_stack_mode, target_mode);
 		resetRuntimeDeviceState();
-		storage_driver_stack_mode = STORAGE_STACK_DEFAULT;
 	}
 #else
 	(void)target_mode;
@@ -1042,7 +1086,6 @@ static void switchBlockStorageStack(int target_mode)
 	 * Only force a reset for genuinely incompatible future stacks.
 	 */
 	if ((block_storage_stack_mode | target_mode) == (BLOCK_STACK_HDD | BLOCK_STACK_ATA)) {
-		block_storage_stack_mode |= target_mode;
 		return;
 	}
 #endif
@@ -1050,7 +1093,6 @@ static void switchBlockStorageStack(int target_mode)
 	if (block_storage_stack_mode != BLOCK_STACK_NONE) {
 		DPRINTF("Switching block storage stack (%d -> %d), resetting IOP\n", block_storage_stack_mode, target_mode);
 		resetRuntimeDeviceState();
-		block_storage_stack_mode = BLOCK_STACK_NONE;
 	}
 }
 
@@ -1075,7 +1117,7 @@ static void switchPsxHddDriverStack(int use_dvr_stack)
 #endif
 
 #ifdef MMCE
-void loadMmceModules(void)
+int loadMmceModules(void)
 {
 	int ret, id __attribute__((unused));
 
@@ -1091,6 +1133,7 @@ void loadMmceModules(void)
 	}
 	if (have_mmce)
 		storage_driver_stack_mode = STORAGE_STACK_MMCE;
+	return have_mmce;
 }
 #endif
 
@@ -1104,8 +1147,13 @@ int loadMx4sioModules(void)
 
 	ensureCoreIoStackReady();
 	switchStorageDriverStack(STORAGE_STACK_MX4SIO);
+#ifdef EXFAT
+	if (!loadBdmCoreModules())
+		return 0;
+#else
 	if (!have_usb_mass)
 		loadUsbModules();
+#endif
 	if (!have_mx4sio) {
 		id = SifExecModuleBuffer(mx4sio_bd_irx, size_mx4sio_bd_irx, 0, NULL, &ret);
 		DPRINTF(" [MX4SIO_BD]: id=%d ret=%d\n", id, ret);
@@ -1171,7 +1219,7 @@ static int loadAtaBlockDriver(void)
 	return have_ata_bd;
 }
 
-void loadAtaModules(void)
+int loadAtaModules(void)
 {
 	int needs_feedback;
 
@@ -1188,6 +1236,7 @@ void loadAtaModules(void)
 	loadAtaBlockDriver();
 	if (have_ata_bd)
 		block_storage_stack_mode |= BLOCK_STACK_ATA;
+	return have_ata_bd;
 }
 #endif
 
@@ -1255,7 +1304,7 @@ void setupPowerOff(void)
 //------------------------------
 //endfunc setupPowerOff
 //---------------------------------------------------------------------------
-void loadHddModules(void)
+int loadHddModules(void)
 {
 #ifdef DVRP
 	switchPsxHddDriverStack(0);
@@ -1274,6 +1323,7 @@ void loadHddModules(void)
 	}
 	if (have_HDD_modules)
 		block_storage_stack_mode |= BLOCK_STACK_HDD;
+	return have_HDD_modules;
 }
 //------------------------------
 //endfunc loadHddModules
@@ -1298,10 +1348,10 @@ void loadFlashModules(void)
 //---------------------------------------------------------------------------
 #endif
 #ifdef DVRP
-void loadDVRPHddModules(void)
+int loadDVRPHddModules(void)
 {
 	if (!console_is_PSX)
-		return;
+		return 0;
 
 	switchPsxHddDriverStack(1);
 	ensureCoreIoStackReady();
@@ -1312,6 +1362,7 @@ void loadDVRPHddModules(void)
 		//sceCdNoticeGameStart(0, NULL); //shouldn't this be done by the bootloader?
 		have_DVRP_HDD_modules = TRUE;
 	}
+	return have_DVRP_HDD_modules;
 }
 //------------------------------
 //endfunc loadDVRPHddModules
@@ -1347,30 +1398,44 @@ void startKbd(void)
 	int mapSize;
 
 	DPRINTF("Entering startKbd()\r\n");
-	if (setting->usbkbd_used) {
-		loadKbdModules();
-		PS2KbdInit();
-		ps2kbd_opened = 1;
-		if (setting->kbdmap_file[0]) {
-			if ((kbd_fd = fileXioOpen(PS2KBD_DEVFILE, FIO_O_RDONLY, 0)) >= 0) {
-				DPRINTF("kbd_fd=%d; Loading Kbd map file \"%s\"\r\n", kbd_fd, setting->kbdmap_file);
-				if (loadExternalFile(setting->kbdmap_file, &mapBase, &mapSize)) {
-					if (mapSize == 0x600) {
-						fileXioIoctl(kbd_fd, PS2KBD_IOCTL_SETKEYMAP, mapBase);
-						fileXioIoctl(kbd_fd, PS2KBD_IOCTL_SETSPECIALMAP, mapBase + 0x300);
-						fileXioIoctl(kbd_fd, PS2KBD_IOCTL_SETCTRLMAP, mapBase + 0x400);
-						fileXioIoctl(kbd_fd, PS2KBD_IOCTL_SETALTMAP, mapBase + 0x500);
-					}
-					DPRINTF("Freeing buffer after setting Kbd maps\r\n");
-					free(mapBase);
+	if (!setting->usbkbd_used || ps2kbd_opened)
+		return;
+
+	loadKbdModules();
+	if (!have_ps2kbd)
+		return;
+
+	PS2KbdInit();
+	ps2kbd_opened = 1;
+	if (setting->kbdmap_file[0]) {
+		if (pathUsesUsbMass(setting->kbdmap_file))
+			loadUsbModules();
+		if ((kbd_fd = fileXioOpen(PS2KBD_DEVFILE, FIO_O_RDONLY, 0)) >= 0) {
+			DPRINTF("kbd_fd=%d; Loading Kbd map file \"%s\"\r\n", kbd_fd, setting->kbdmap_file);
+			if (loadExternalFile(setting->kbdmap_file, &mapBase, &mapSize)) {
+				if (mapSize == 0x600) {
+					fileXioIoctl(kbd_fd, PS2KBD_IOCTL_SETKEYMAP, mapBase);
+					fileXioIoctl(kbd_fd, PS2KBD_IOCTL_SETSPECIALMAP, mapBase + 0x300);
+					fileXioIoctl(kbd_fd, PS2KBD_IOCTL_SETCTRLMAP, mapBase + 0x400);
+					fileXioIoctl(kbd_fd, PS2KBD_IOCTL_SETALTMAP, mapBase + 0x500);
 				}
-				fileXioClose(kbd_fd);
+				DPRINTF("Freeing buffer after setting Kbd maps\r\n");
+				free(mapBase);
 			}
+			fileXioClose(kbd_fd);
 		}
 	}
 }
 //------------------------------
 //endfunc startKbd
+//---------------------------------------------------------------------------
+int ensureUsbKeyboardReady(void)
+{
+	startKbd();
+	return ps2kbd_opened;
+}
+//------------------------------
+//endfunc ensureUsbKeyboardReady
 //---------------------------------------------------------------------------
 // reboot IOP (original source by Hermes in BOOT.c - cogswaploader)
 // dlanor: but changed now, as the original was badly bugged
@@ -1428,8 +1493,7 @@ void Reset()
 	have_mx4sio = 0;
 	mx4sio_driver_running = 0;
 #endif
-	storage_driver_stack_mode = STORAGE_STACK_DEFAULT;
-	block_storage_stack_mode = BLOCK_STACK_NONE;
+	resetDriverStackLoadTracking();
 	ps2dev9_loaded = 0;
 	done_setupPowerOff = 0;
 	ps2kbd_opened = 0;

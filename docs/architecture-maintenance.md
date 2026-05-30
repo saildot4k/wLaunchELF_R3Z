@@ -59,7 +59,6 @@ Completed so far:
    - `src/gui_texteditor.c` (`canOpenInTextEditor`)
    - `src/gui_hdd0_format.c` (`getHddParty`, `getHddDVRPParty`)
    - `src/psu_functions.c` (`clear_psu_header`, `pad_psu_header`)
-   - `src/mcpaste_functions.c` (`clear_mcTable`)
    - `src/gui.c` (`ynDialog`, `nonDialog`, `keyboard`)
    - `src/gui_colors.c` (`scanSkinCNF`, `storeSkinCNF`)
 5. PSU data layout structs are centralized in `include/psu_types.h` to avoid duplicated type blocks in `filer.c`.

@@ -6,6 +6,10 @@ void closeKeyboardIfOpened(void);
 
 void Reset(void);
 void loadUsbModules(void);
+int ensureUsbKeyboardReady(void);
+#ifdef DS34
+void loadDs34InputModules(void);
+#endif
 void setupPowerOff(void);
 void closeAllAndPoweroff(void);
 void startKbd(void);

@@ -509,7 +509,7 @@ static int KeyBoard_Entry(void)
 
 	Operation = 0;
 
-	if (PS2KbdRead(&KeyPress)) {  //KeyBoard Response Section.
+	if (setting->usbkbd_used && ensureUsbKeyboardReady() && PS2KbdRead(&KeyPress)) {  //KeyBoard Response Section.
 
 		ret = 1;  // Equal To event |= pad command.
 

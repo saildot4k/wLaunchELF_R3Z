@@ -259,7 +259,7 @@ int keyboard(char *out, int max)
 			}
 		}
 
-		if (setting->usbkbd_used && PS2KbdRead(&KeyPress)) {
+		if (setting->usbkbd_used && ensureUsbKeyboardReady() && PS2KbdRead(&KeyPress)) {
 			event |= 2;
 
 			if (KeyPress == PS2KBD_ESCAPE_KEY) {

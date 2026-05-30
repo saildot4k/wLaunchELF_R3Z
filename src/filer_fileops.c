@@ -168,7 +168,11 @@ int genRmdir(char *path)
 	u64 t0, t1;
 #if defined(ETH) || defined(UDPFS)
 	char mapped_path[MAX_PATH];
+#endif
 
+	if (!ensurePathDeviceStackReady(path))
+		return -1;
+#if defined(ETH) || defined(UDPFS)
 	makeHostPath(mapped_path, path);
 	path = mapped_path;
 #endif
@@ -190,12 +194,16 @@ int genRmdir(char *path)
 //--------------------------------------------------------------
 int genRemove(char *path)
 {
-	DPRINTF("%s: '%s'\n", __FUNCTION__, path);
 	int ret;
 	u64 t0, t1;
 #if defined(ETH) || defined(UDPFS)
 	char mapped_path[MAX_PATH];
+#endif
 
+	DPRINTF("%s: '%s'\n", __FUNCTION__, path);
+	if (!ensurePathDeviceStackReady(path))
+		return -1;
+#if defined(ETH) || defined(UDPFS)
 	makeHostPath(mapped_path, path);
 	path = mapped_path;
 #endif
@@ -222,6 +230,8 @@ int genOpen(const char *path, int mode)
 	u64 t0, t1;
 
 	if (path == NULL || path[0] == '\0')
+		return -1;
+	if (!ensurePathDeviceStackReady(path))
 		return -1;
 	DPRINTF("%s: '%s' @ %d\n", __FUNCTION__, path, mode);
 	strncpy(open_path, path, MAX_PATH - 1);
@@ -286,16 +296,20 @@ int genOpen(const char *path, int mode)
 //--------------------------------------------------------------
 int genDopen(char *path)
 {
+	int fd;
+	u64 t0, t1;
 #if defined(ETH) || defined(UDPFS)
 	char mapped_path[MAX_PATH];
+#endif
 
+	if (!ensurePathDeviceStackReady(path))
+		return -1;
+#if defined(ETH) || defined(UDPFS)
 	makeHostPath(mapped_path, path);
 	path = mapped_path;
 #endif
 
 	DPRINTF("%s: '%s'\n", __FUNCTION__, path);
-	int fd;
-	u64 t0, t1;
 
 	if (!strncmp(path, "pfs", 3) || !strncmp(path, "vmc", 3)) {
 		char tmp[MAX_PATH];

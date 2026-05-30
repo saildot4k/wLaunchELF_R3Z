@@ -23,6 +23,9 @@ void initializeRuntimeInputModules(enum BOOT_DEVICE boot_device)
 		getIpConfig();
 
 	WaitTime = Timer();
+#ifdef DS34
+	loadDs34InputModules();
+#endif
 	DPRINTF("setup pad\n");
 	setupPad();  //Comment out this line when using early setupPad above
 	DPRINTF("Starting keyboard\n");

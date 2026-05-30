@@ -32,7 +32,7 @@ int readCD(const char *path, FILEINFO *info, int max)
 		     !strcmp(TocEntryList[i].filename, "..")))
 			continue;  //Skip pseudopaths "." and ".."
 		strcpy(info[j].name, TocEntryList[i].filename);
-		clear_mcTable(&info[j].stats);
+		clearMcTable(&info[j].stats);
 		if (TocEntryList[i].fileProperties & 0x02) {
 			info[j].stats.AttrFile = MC_ATTR_norm_folder;
 		} else {

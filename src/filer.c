@@ -5,12 +5,134 @@
 #include "filer_copy.h"
 #include "gui_hdd0_format.h"
 #include "gui_sort.h"
-#include "mcpaste_functions.h"
 #include "filer_shared.h"
 #include "main_startup.h"
 
 #define MC_ATTR_norm_folder 0x8427  //Normal folder on PS2 MC
 #define MC_ATTR_norm_file 0x8497    //file (PS2/PS1) on PS2 MC
+
+static void clearMcTable(sceMcTblGetDir *mcT)
+{
+	memset((void *)mcT, 0, sizeof(sceMcTblGetDir));
+}
+
+enum {
+	TRANSFER_STORAGE_DEFAULT = 0,
+	TRANSFER_STORAGE_MMCE,
+	TRANSFER_STORAGE_MX4SIO
+};
+
+enum {
+	TRANSFER_PSX_HDD_NONE = 0,
+	TRANSFER_PSX_HDD_ATA,
+	TRANSFER_PSX_HDD_DVR
+};
+
+#if defined(ETH) || defined(UDPFS)
+extern int host_error;
+#endif
+
+static int transferStorageGateForPath(const char *path)
+{
+	if (path == NULL)
+		return TRANSFER_STORAGE_DEFAULT;
+#ifdef MMCE
+	if (!strncmp(path, "mmce", 4))
+		return TRANSFER_STORAGE_MMCE;
+#endif
+#ifdef MX4SIO
+	if (!strncmp(path, "mx4sio", 6))
+		return TRANSFER_STORAGE_MX4SIO;
+#endif
+	return TRANSFER_STORAGE_DEFAULT;
+}
+
+static int transferPsxHddGateForPath(const char *path)
+{
+	if (path == NULL)
+		return TRANSFER_PSX_HDD_NONE;
+#ifdef DVRP
+	if (!strncmp(path, "dvr_hdd", 7) || !strncmp(path, "dvr_pfs", 7))
+		return TRANSFER_PSX_HDD_DVR;
+#endif
+	if (!strncmp(path, "hdd", 3) || !strncmp(path, "pfs", 3))
+		return TRANSFER_PSX_HDD_ATA;
+	return TRANSFER_PSX_HDD_NONE;
+}
+
+int ensurePathDeviceStackReady(const char *path)
+{
+	if (path == NULL || path[0] == '\0')
+		return TRUE;
+	if (!strncmp(path, "mc", 2) || !strncmp(path, "vmc", 3))
+		return TRUE;
+	if (!strncmp(path, "mass", 4) || !strncmp(path, "usb", 3)) {
+		loadUsbModules();
+		return (USB_mass_loaded != 0);
+	}
+#ifdef MMCE
+	if (!strncmp(path, "mmce", 4)) {
+		return loadMmceModules();
+	}
+#endif
+#ifdef MX4SIO
+	if (!strncmp(path, "mx4sio", 6))
+		return loadMx4sioModules();
+#endif
+#ifdef EXFAT
+	if (!strncmp(path, "ata", 3)) {
+		return loadAtaModules();
+	}
+#endif
+	if (!strncmp(path, "hdd", 3) || !strncmp(path, "pfs", 3)) {
+		return loadHddModules();
+	}
+#ifdef DVRP
+	if (!strncmp(path, "dvr_hdd", 7) || !strncmp(path, "dvr_pfs", 7)) {
+		return loadDVRPHddModules();
+	}
+#endif
+	if (!strncmp(path, "cdfs", 4)) {
+		loadCdModules();
+		return TRUE;
+	}
+#ifdef ETH
+	if (!strncmp(path, "host", 4)) {
+		initHOST();
+		return !host_error;
+	}
+#endif
+#ifdef UDPFS
+	if (!strncmp(path, "udpfs", 5)) {
+		return load_udpfs();
+	}
+#endif
+	return TRUE;
+}
+
+int prepareTransferDeviceStacks(const char *src_path, const char *dst_path)
+{
+	int src_storage = transferStorageGateForPath(src_path);
+	int dst_storage = transferStorageGateForPath(dst_path);
+	int src_psx_hdd = transferPsxHddGateForPath(src_path);
+	int dst_psx_hdd = transferPsxHddGateForPath(dst_path);
+
+	if (src_storage != TRANSFER_STORAGE_DEFAULT &&
+	    dst_storage != TRANSFER_STORAGE_DEFAULT &&
+	    src_storage != dst_storage)
+		return TRANSFER_STACK_INCOMPATIBLE;
+
+	if (src_psx_hdd != TRANSFER_PSX_HDD_NONE &&
+	    dst_psx_hdd != TRANSFER_PSX_HDD_NONE &&
+	    src_psx_hdd != dst_psx_hdd)
+		return TRANSFER_STACK_INCOMPATIBLE;
+
+	if (!ensurePathDeviceStackReady(src_path))
+		return TRANSFER_STACK_LOAD_FAILED;
+	if (!ensurePathDeviceStackReady(dst_path))
+		return TRANSFER_STACK_LOAD_FAILED;
+	return TRANSFER_STACK_READY;
+}
 
 int PasteProgress_f = 0;   //Flags progress report having been made in Pasting
 int PasteMode;             //Top-level PasteMode flag
@@ -400,7 +522,7 @@ int readCD(const char *path, FILEINFO *info, int max)
 		if ((FIO_S_ISDIR(record.stat.mode)) && (!strcmp(record.name, ".") || !strcmp(record.name, "..")))
 			continue;  //Skip entry if pseudo-folder "." or ".."
 		strcpy(info[n].name, record.name);
-		clear_mcTable(&info[n].stats);
+		clearMcTable(&info[n].stats);
 		if (FIO_S_ISDIR(record.stat.mode)) {
 			info[n].stats.AttrFile = MC_ATTR_norm_folder;
 		} else if (FIO_S_ISREG(record.stat.mode)) {
@@ -557,6 +679,7 @@ int genFixPath(const char *inp_path, char *gen_path)
 		char mass_path[MAX_PATH];
 		char *mass_sep;
 
+		loadUsbModules();
 		if (mapUsbPathToMassPath(uLE_path, mass_path) < 0) {
 			part_ix = -1;
 		} else {
@@ -568,6 +691,7 @@ int genFixPath(const char *inp_path, char *gen_path)
 		//end of clause for using a USB alias path
 
 	} else if (!strncmp(uLE_path, "mass", 4)) {  //if using USB mass: path
+		loadUsbModules();
 		if (pathSep && (pathSep - uLE_path < 7) && pathSep[-1] == ':')
 			strcpy(gen_path + (pathSep - uLE_path), pathSep + 1);
 		//end of clause for using a USB mass: path
@@ -674,7 +798,7 @@ int readVMC(const char *path, FILEINFO *info, int max)
 			continue;  //Skip pseudopaths "." and ".."
 
 		strcpy(info[i].name, dirbuf.name);
-		clear_mcTable(&info[i].stats);
+		clearMcTable(&info[i].stats);
 		//		if(dirbuf.stat.mode & FIO_S_IFDIR){  //NB: normal usage (non-vmcfs)
 		//			info[i].stats.attrFile = MC_ATTR_norm_folder;
 		//		}
@@ -745,7 +869,7 @@ int readHDD(const char *path, FILEINFO *info, int max)
 			continue;  //Skip pseudopaths "." and ".."
 
 		strcpy(info[i].name, dirbuf.name);
-		clear_mcTable(&info[i].stats);
+		clearMcTable(&info[i].stats);
 		if (dirbuf.stat.mode & FIO_S_IFDIR) {
 			info[i].stats.AttrFile = MC_ATTR_norm_folder;
 		} else if (dirbuf.stat.mode & FIO_S_IFREG) {
@@ -810,7 +934,7 @@ int readHDDDVRP(const char *path, FILEINFO *info, int max)
 			continue;  //Skip pseudopaths "." and ".."
 
 		strcpy(info[i].name, dirbuf.name);
-		clear_mcTable(&info[i].stats);
+		clearMcTable(&info[i].stats);
 		if (dirbuf.stat.mode & FIO_S_IFDIR) {
 			info[i].stats.AttrFile = MC_ATTR_norm_folder;
 		} else if (dirbuf.stat.mode & FIO_S_IFREG) {
@@ -844,6 +968,11 @@ void scan_USB_mass(void)
 	int i;
 	iox_stat_t chk_stat;
 	char mass_path[8] = "mass0:/";
+
+	loadUsbModules();
+	if (!USB_mass_loaded)
+		return;
+
 	if ((USB_mass_max_drives < 2)  //No need for dynamic lists with only one drive
 	    || (USB_mass_scanned && ((Timer() - USB_mass_scan_time) < 5000)))
 		return;
@@ -874,7 +1003,7 @@ int readGENERIC(const char *path, FILEINFO *info, int max)
 			continue;  //Skip entry if pseudo-folder "." or ".."
 
 		strcpy(info[n].name, record.name);
-		clear_mcTable(&info[n].stats);
+		clearMcTable(&info[n].stats);
 		if (FIO_S_ISDIR(record.stat.mode)) {
 			info[n].stats.AttrFile = MC_ATTR_norm_folder;
 		} else if (FIO_S_ISREG(record.stat.mode)) {
@@ -1048,7 +1177,7 @@ int readHOST(const char *path, FILEINFO *info, int max)
 			if ((elflistchar == 0x0a) || (rv == size)) {
 				host_next[contentptr] = 0;
 				snprintf(host_path, sizeof(host_path), "host:%.*s", (int)(sizeof(host_path) - sizeof("host:")), host_next);
-				clear_mcTable(&info[hostcount].stats);
+				clearMcTable(&info[hostcount].stats);
 				if ((hfd = fileXioOpen(makeHostPath(Win_path, host_path), FIO_O_RDONLY, 0)) >= 0) {
 					fileXioClose(hfd);
 					info[hostcount].stats.AttrFile = MC_ATTR_norm_file;
@@ -1079,7 +1208,7 @@ int readHOST(const char *path, FILEINFO *info, int max)
 			time_valid = 1;
 			snprintf(Win_path, MAX_PATH - 1, "%s%s", host_path, hostcontent.name);
 			strcpy(info[hostcount].name, hostcontent.name);
-			clear_mcTable(&info[hostcount].stats);
+			clearMcTable(&info[hostcount].stats);
 
 			if (!(hostcontent.stat.mode & FIO_S_IFDIR))  //if not a directory
 				info[hostcount].stats.AttrFile = MC_ATTR_norm_file;

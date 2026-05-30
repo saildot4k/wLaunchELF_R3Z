@@ -13,6 +13,9 @@ u64 getFileSize(const char *path, const FILEINFO *file)
 	char dir[MAX_PATH], party[MAX_NAME];
 	int nfiles, i, ret;
 
+	if (!ensurePathDeviceStackReady(path))
+		return 0;
+
 	if (file->stats.AttrFile & sceMcFileAttrSubdir) {  //Folder object to size up
 		sprintf(dir, "%s%s/", path, file->name);
 		nfiles = getDir(dir, files);
@@ -140,6 +143,9 @@ int delete (const char *path, const FILEINFO *file)
 	char party[MAX_NAME], dir[MAX_PATH], hdddir[MAX_PATH];
 	int nfiles, i, ret;
 
+	if (!ensurePathDeviceStackReady(path))
+		return -1;
+
 	if (!strncmp(path, "hdd", 3)) {
 		if (getHddParty(path, file, party, hdddir) < 0)
 			return -1;
@@ -207,6 +213,9 @@ int Rename(const char *path, const FILEINFO *file, const char *name)
 {
 	char party[MAX_NAME], oldPath[MAX_PATH], newPath[MAX_PATH];
 	int test, ret = 0;
+
+	if (!ensurePathDeviceStackReady(path))
+		return -1;
 
 	if (!strncmp(path, "hdd", 3)) {
 		sprintf(party, "hdd0:%s", &path[6]);
@@ -282,6 +291,9 @@ int newdir(const char *path, const char *name)
 {
 	char party[MAX_NAME], dir[MAX_PATH];
 	int ret = 0;
+
+	if (!ensurePathDeviceStackReady(path))
+		return -1;
 
 	if (!strncmp(path, "hdd", 3)) {
 		getHddParty(path, NULL, party, dir);

@@ -170,3 +170,20 @@ int psu_restore_read_file_entry(int psu_fd, FILEINFO *file, int *psu_pad_size)
 
 	return 0;
 }
+
+int psu_restore_apply_entry_stats_to_mc(const char *out_dir, const sceMcTblGetDir *stats, int set_mode)
+{
+	char path[MAX_PATH];
+	int dummy;
+
+	if (strncmp(out_dir, "mc", 2))
+		return -1;
+	if (snprintf(path, sizeof(path), "%s%.32s", out_dir, (const char *)stats->EntryName) >= (int)sizeof(path))
+		return -1;
+
+	mcGetInfo(path[2] - '0', 0, &dummy, &dummy, &dummy);
+	mcSync(0, NULL, &dummy);
+	mcSetFileInfo(path[2] - '0', 0, &path[4], (sceMcTblGetDir *)stats, set_mode);
+	mcSync(0, NULL, &dummy);
+	return 0;
+}

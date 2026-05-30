@@ -243,7 +243,7 @@ int simPadKB(void)
 	int ret, command;
 	char KeyPress;
 
-	if ((!setting->usbkbd_used) || (!PS2KbdRead(&KeyPress)))
+	if (!setting->usbkbd_used || !ensureUsbKeyboardReady() || !PS2KbdRead(&KeyPress))
 		return 0;
 	if (KeyPress != PS2KBD_ESCAPE_KEY)
 		command = KeyPress;
