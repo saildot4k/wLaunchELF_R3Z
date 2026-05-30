@@ -55,7 +55,8 @@ jobs:
             pad_profile: "ds34"
             storage_profile: "all"
     runs-on: ubuntu-latest
-    container: ps2dev/ps2dev:latest
+    # Pinned to ps2dev/ps2dev:v2.0.0 (2026-05-17); latest moved and changed runtime behavior.
+    container: ps2dev/ps2dev@sha256:8e6dc4564598ecce94d078d3111b8c4803f88faa94a6f183ac60240a0ae010a1
     steps:
 
     - name: Install dependencies
