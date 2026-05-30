@@ -40,6 +40,7 @@ enum {
 	DEF_POPUP_OPAQUE = FALSE,
 	DEF_INIT_DELAY = 0,
 	DEF_USBKBD_USED = 1,
+	DEF_LANGUAGE = BUILTIN_LANGUAGE_ENGLISH,
 	DEF_STARTUP_RESET_IOP_ELFOAD = 0,
 	DEF_SHOW_TITLES = 1,
 	DEF_PATHPAD_LOCK = 0,
@@ -392,6 +393,7 @@ void saveConfig(char *mainMsg, char *CNF)
 	        "Menu_Show_Titles = %d\r\n"
 	        "PathPad_Lock = %d\r\n"
 	        "CNF_Path = %s\r\n"
+	        "language = %s\r\n"
 	        "LANG_FILE = %s\r\n"
 	        "FONT_FILE = %s\r\n"
 	        "PSU_HugeNames = %d\r\n"
@@ -414,6 +416,7 @@ void saveConfig(char *mainMsg, char *CNF)
 	        setting->Show_Titles,      //Menu_Show_Titles
 	        setting->PathPad_Lock,     //PathPad_Lock
 	        setting->CNF_Path,         //CNF_Path
+	        getBuiltinLanguageConfigName(setting->language),
 	        setting->lang_file,        //LANG_FILE
 	        setting->font_file,        //FONT_FILE
 	        setting->PSU_HugeNames,    //PSU_HugeNames
@@ -565,6 +568,7 @@ void initConfig(void)
 	setting->Popup_Opaque = DEF_POPUP_OPAQUE;
 	setting->Init_Delay = DEF_INIT_DELAY;
 	setting->usbkbd_used = DEF_USBKBD_USED;
+	setting->language = DEF_LANGUAGE;
 	setting->reboot_iop_elf_load = DEF_STARTUP_RESET_IOP_ELFOAD;
 	setting->Show_Titles = DEF_SHOW_TITLES;
 	setting->PathPad_Lock = DEF_PATHPAD_LOCK;
@@ -721,7 +725,10 @@ int loadConfig(char *mainMsg, char *CNF)
 			setting->PathPad_Lock = atoi(value);
 		else if (!strcmp(name, "CNF_Path"))
 			strcpy(setting->CNF_Path, value);
-		else if (!strcmp(name, "LANG_FILE"))
+		else if (!stricmp(name, "language")) {
+			int language = getBuiltinLanguageByConfigName(value);
+			setting->language = (language >= 0) ? language : DEF_LANGUAGE;
+		} else if (!strcmp(name, "LANG_FILE"))
 			strcpy(setting->lang_file, value);
 		else if (!strcmp(name, "FONT_FILE"))
 			strcpy(setting->font_file, value);
@@ -1153,7 +1160,8 @@ static void Config_Screen(void)
 //---------------------------------------------------------------------------
 enum CONFIG_STARTUP {
 	CONFIG_STARTUP_FIRST = 1,
-	CONFIG_STARTUP_SELECT_BTN = CONFIG_STARTUP_FIRST,
+	CONFIG_STARTUP_LANGUAGE = CONFIG_STARTUP_FIRST,
+	CONFIG_STARTUP_SELECT_BTN,
 	CONFIG_STARTUP_INIT_DELAY,
 	CONFIG_STARTUP_TIMEOUT,
 	CONFIG_STARTUP_RESET_IOP_ELFOAD,
@@ -1161,7 +1169,7 @@ enum CONFIG_STARTUP {
 	CONFIG_STARTUP_USBKBD,
 	CONFIG_STARTUP_KBDMAP,
 	CONFIG_STARTUP_CNF,
-	CONFIG_STARTUP_LANG,
+	CONFIG_STARTUP_LANG_FILE,
 	CONFIG_STARTUP_FONT,
 	CONFIG_STARTUP_ESR,
 	CONFIG_STARTUP_OSDSYS,
@@ -1228,7 +1236,10 @@ static void Config_Startup(void)
 						s = CONFIG_STARTUP_FIRST;
 				} else if ((!swapKeys && new_pad & PAD_CROSS) || (swapKeys && new_pad & PAD_CIRCLE)) {
 					event |= 2;  //event |= valid pad command
-					if (s == CONFIG_STARTUP_INIT_DELAY && setting->Init_Delay > 0)
+					if (s == CONFIG_STARTUP_LANGUAGE) {
+						setting->lang_file[0] = '\0';
+						Set_Language(setting->language - 1);
+					} else if (s == CONFIG_STARTUP_INIT_DELAY && setting->Init_Delay > 0)
 						setting->Init_Delay--;
 					else if (s == CONFIG_STARTUP_TIMEOUT && setting->timeout > 0)
 						setting->timeout--;
@@ -1238,7 +1249,7 @@ static void Config_Startup(void)
 						setting->kbdmap_file[0] = '\0';
 					else if (s == CONFIG_STARTUP_CNF)
 						setting->CNF_Path[0] = '\0';
-					else if (s == CONFIG_STARTUP_LANG) {
+					else if (s == CONFIG_STARTUP_LANG_FILE) {
 						setting->lang_file[0] = '\0';
 						Load_External_Language();
 					} else if (s == CONFIG_STARTUP_FONT) {
@@ -1253,7 +1264,10 @@ static void Config_Startup(void)
 					}
 				} else if ((swapKeys && new_pad & PAD_CROSS) || (!swapKeys && new_pad & PAD_CIRCLE)) {
 					event |= 2;  //event |= valid pad command
-					if (s == CONFIG_STARTUP_SELECT_BTN)
+					if (s == CONFIG_STARTUP_LANGUAGE) {
+						setting->lang_file[0] = '\0';
+						Set_Language(setting->language + 1);
+					} else if (s == CONFIG_STARTUP_SELECT_BTN)
 						setting->swapKeys = !setting->swapKeys;
 					else if (s == CONFIG_STARTUP_INIT_DELAY)
 						setting->Init_Delay++;
@@ -1272,7 +1286,7 @@ static void Config_Startup(void)
 						getFilePath(setting->CNF_Path, CNF_PATH_CNF);
 						if ((tmp = strrchr(setting->CNF_Path, '/')))
 							tmp[1] = '\0';
-					} else if (s == CONFIG_STARTUP_LANG) {
+					} else if (s == CONFIG_STARTUP_LANG_FILE) {
 						getFilePath(setting->lang_file, LANG_CNF);
 						Load_External_Language();
 					} else if (s == CONFIG_STARTUP_FONT) {
@@ -1315,6 +1329,10 @@ static void Config_Startup(void)
 			y += FONT_HEIGHT;
 			y += FONT_HEIGHT / 2;
 
+			formatLabelValue(c, sizeof(c), LNG(Language), getBuiltinLanguageNativeName(setting->language));
+			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
+			y += FONT_HEIGHT;
+
 			if (setting->swapKeys)
 				sprintf(c, "  %s: \xFF"
 				           "1:%s \xFF"
@@ -1340,7 +1358,7 @@ static void Config_Startup(void)
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 			y += FONT_HEIGHT / 2;
-			
+
 			sprintf(c, "  %s: %s", LNG(USB_Keyboard_Used), (setting->usbkbd_used) ? LNG(ON): LNG(OFF));
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
@@ -1394,7 +1412,7 @@ static void Config_Startup(void)
 					len = sprintf(c, "\xFF"
 					                 "0:%s",
 					              LNG(Change));
-			} else if ((s == CONFIG_STARTUP_INIT_DELAY) || (s == CONFIG_STARTUP_TIMEOUT)) {  //Init_Delay || timeout
+			} else if ((s == CONFIG_STARTUP_LANGUAGE) || (s == CONFIG_STARTUP_INIT_DELAY) || (s == CONFIG_STARTUP_TIMEOUT)) {  //language || Init_Delay || timeout
 				if (swapKeys)
 					len = sprintf(c, "\xFF"
 					                 "1:%s \xFF"
@@ -1408,7 +1426,7 @@ static void Config_Startup(void)
 			} else if ((s == CONFIG_STARTUP_USBKBD) || (s == CONFIG_STARTUP_KBDMAP) || (s == CONFIG_STARTUP_CNF)
 			           //usbkbd_file||kbdmap_file||CNF_Path
 			           //Language||Fontfile||ESR_elf||OSDSYS_kelf
-			           || (s == CONFIG_STARTUP_LANG) || (s == CONFIG_STARTUP_FONT) || (s == CONFIG_STARTUP_ESR) || (s == CONFIG_STARTUP_OSDSYS)) {
+			           || (s == CONFIG_STARTUP_LANG_FILE) || (s == CONFIG_STARTUP_FONT) || (s == CONFIG_STARTUP_ESR) || (s == CONFIG_STARTUP_OSDSYS)) {
 				if (swapKeys)
 					len = sprintf(c, "\xFF"
 					                 "1:%s \xFF"
@@ -1830,13 +1848,13 @@ static void Config_Advanced(void)
 	char c[MAX_PATH];
 	int bool_label_width;
 	const char *hostwrite_label;
-	const char *app_gameid_label = "RetroGem Game ID";
-	const char *cdrom_gameid_label = "Disable RetroGem Game ID for Discs";
-	const char *psu_huge_label = "Create PSU with ID and Game Title";
-	const char *psu_date_label = "Create PSU with Date";
-	const char *psu_nooverwrite_label = "Create New PSU if filename exists";
-	const char *pathpad_lock_label = "Lock Main LaunchKey/PathPad Paths";
-	const char *fb_noicons_label = "Disable Icons in File Browser";
+	const char *app_gameid_label = LNG(RetroGem_Game_ID);
+	const char *cdrom_gameid_label = LNG(Disable_RetroGem_Game_ID_for_Discs);
+	const char *psu_huge_label = LNG(Create_PSU_with_ID_and_Game_Title);
+	const char *psu_date_label = LNG(Create_PSU_with_Date);
+	const char *psu_nooverwrite_label = LNG(Create_New_PSU_if_filename_exists);
+	const char *pathpad_lock_label = LNG(Lock_Main_LaunchKey_PathPad_Paths);
+	const char *fb_noicons_label = LNG(Disable_Icons_in_File_Browser);
 
 	event = 1;
 	s = CONFIG_ADVANCED_FIRST;
@@ -1917,7 +1935,7 @@ static void Config_Advanced(void)
 			if ((int)strlen(hostwrite_label) > bool_label_width)
 				bool_label_width = (int)strlen(hostwrite_label);
 
-			printXY("ADVANCED SETTINGS", x, y, setting->color[COLOR_TEXT], TRUE, 0);
+			printXY(LNG(Advanced_Settings), x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 			y += FONT_HEIGHT / 2;
 

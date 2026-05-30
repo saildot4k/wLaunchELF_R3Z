@@ -5,6 +5,7 @@
 #include "gui_texteditor.h"
 #include "filer_actions.h"
 #include "filer_shared.h"
+#include "init.h"
 
 static const char *getRootDeviceLabel(const char *name)
 {
@@ -129,6 +130,18 @@ static int isTitleCfgPathEligible(const char *path, int menu_disabled)
 	        (!strncmp(path, "hdd0:/", 6) && !menu_disabled));
 }
 
+static int canReloadUdpfsFromMenu(const char *path, const FILEINFO *file)
+{
+#ifdef UDPFS
+	if ((path == NULL || path[0] == '\0') && file != NULL && !strcmp(file->name, "udpfs:"))
+		return TRUE;
+#else
+	(void)path;
+	(void)file;
+#endif
+	return FALSE;
+}
+
 enum {
 	PSU_ACTION_NONE = 0,
 	PSU_ACTION_CREATE,
@@ -181,12 +194,14 @@ static int menu(const char *path, FILEINFO *file)
 	int menu_disabled = 0;
 	int write_disabled = 0;
 	int psu_action;
+	int can_reload_udpfs;
 
 	psu_action = classifyPsuAction(path);
+	can_reload_udpfs = canReloadUdpfsFromMenu(path, file);
 	if (psu_action == PSU_ACTION_EXTRACT)
-		psu_action_label = "Extract PSU";
+		psu_action_label = LNG(Extract_PSU);
 	else if (psu_action == PSU_ACTION_CREATE)
-		psu_action_label = "Create PSU";
+		psu_action_label = LNG(Create_PSU);
 	else
 		psu_action_label = LNG(psuAction);
 
@@ -200,8 +215,9 @@ static int menu(const char *path, FILEINFO *file)
 	menu_len = strlen(LNG(Get_Size)) > menu_len ? strlen(LNG(Get_Size)) : menu_len;
 	menu_len = strlen(LNG(TextEditor)) > menu_len ? strlen(LNG(TextEditor)) : menu_len;
 	menu_len = strlen(psu_action_label) > menu_len ? strlen(psu_action_label) : menu_len;
-    menu_len = strlen(LNG(time_manip)) > menu_len ? strlen(LNG(time_manip)) : menu_len;
-    menu_len = strlen(LNG(title_cfg)) > menu_len ? strlen(LNG(title_cfg)) : menu_len;
+	menu_len = strlen(LNG(time_manip)) > menu_len ? strlen(LNG(time_manip)) : menu_len;
+	menu_len = strlen(LNG(title_cfg)) > menu_len ? strlen(LNG(title_cfg)) : menu_len;
+	menu_len = strlen(LNG(Reload_UDPFS)) > menu_len ? strlen(LNG(Reload_UDPFS)) : menu_len;
 	menu_len = (strlen(LNG(Mount)) + 6) > menu_len ? (strlen(LNG(Mount)) + 6) : menu_len;
 	
 
@@ -213,6 +229,7 @@ static int menu(const char *path, FILEINFO *file)
 	int mSprite_Y2 = mSprite_Y1 + (menu_ch_h + 1) * FONT_HEIGHT;  //Bottom edge of sprite
 
 	memset(enable, TRUE, NUM_MENU);  //Assume that all menu items are legal by default
+	enable[RELOAD_UDPFS] = can_reload_udpfs;
 
 	//identify cases where write access is illegal, and disable menu items accordingly
 	if ((!strncmp(path, "cdfs", 4))  //Writing is always illegal for CDVD drive
@@ -365,6 +382,8 @@ static int menu(const char *path, FILEINFO *file)
 					strcpy(tmp, LNG(TextEditor));
 				else if (i == TITLE_CFG)
 					strcpy(tmp, LNG(title_cfg));
+				else if (i == RELOAD_UDPFS)
+					strcpy(tmp, LNG(Reload_UDPFS));
 #ifdef TMANIP
 				else if (i == TIMEMANIP)
 					strcpy(tmp, LNG(time_manip));
@@ -1145,14 +1164,24 @@ int getFilePath(char *out, int cnfmode)
 						}
 					}
 //#endif //TMANIP
-					
-					else if (ret == TITLE_CFG)
-					{
+
+					else if (ret == TITLE_CFG) {
 						make_title_cfg(path, &files[browser_sel], msg0);
 						browser_pushed = FALSE;
 						browser_repos = TRUE;  // TEST
 						browser_cd = TRUE;     //TEST
 					}
+#ifdef UDPFS
+					else if (ret == RELOAD_UDPFS) {
+						if (reloadUdpfsModules())
+							strcpy(msg0, LNG(Reload_UDPFS));
+						else
+							snprintf(msg0, sizeof(msg0), "%s %s", LNG(Reload_UDPFS), LNG(Failed));
+						browser_pushed = FALSE;
+						browser_repos = TRUE;
+						browser_cd = TRUE;
+					}
+#endif
 
 					   //R1 menu handling is completed above
 				} else if ((!swapKeys && new_pad & PAD_CROSS) || (swapKeys && new_pad & PAD_CIRCLE)) {

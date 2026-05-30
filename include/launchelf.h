@@ -128,10 +128,10 @@ static inline size_t wle_strnlen(const char *s, size_t maxlen)
 
 #ifdef SIO_DEBUG //EE SIO will be printed separated. no need for diferentiation
 		#define DPRINTF(format, args...) \
-	    	sio_printf(format, ##args)
+			sio_printf(format, ##args)
 #elif defined(POWERPC_UART) || defined(COMMON_PRINTF) || defined(UDPTTY) //printf has to travel to IOP, add color escape to make up the diff
 	#define DPRINTF(format, args...) \
-    	printf("\033[1;94;40m"format"\033[m", ##args)
+		printf("\033[1;94;40m"format"\033[m", ##args)
 #else
 	#define DPRINTF(format, args...)// strip away printf from consumer builds
 #endif
@@ -258,6 +258,7 @@ typedef struct
 	int Popup_Opaque;
 	int Init_Delay;
 	int usbkbd_used;
+	int language;
 	int reboot_iop_elf_load;
 	int Show_Titles;
 	int PathPad_Lock;
@@ -493,6 +494,17 @@ typedef struct Language
 	char *String;
 } Language;
 
+enum BuiltinLanguage {
+	BUILTIN_LANGUAGE_ENGLISH,
+	BUILTIN_LANGUAGE_ITALIAN,
+	BUILTIN_LANGUAGE_SPANISH,
+	BUILTIN_LANGUAGE_GERMAN,
+	BUILTIN_LANGUAGE_PORTUGUESE,
+	BUILTIN_LANGUAGE_BRAZILIAN,
+	BUILTIN_LANGUAGE_POLISH,
+	BUILTIN_LANGUAGE_COUNT
+};
+
 enum {
 #define lang(id, name, value) LANG_##name,
 #include "lang.h"
@@ -509,6 +521,11 @@ extern void *External_Lang_Buffer;
 
 void Init_Default_Language(void);
 void Load_External_Language(void);
+void Set_Language(int language);
+int normalizeBuiltinLanguage(int language);
+int getBuiltinLanguageByConfigName(const char *name);
+const char *getBuiltinLanguageConfigName(int language);
+const char *getBuiltinLanguageNativeName(int language);
 
 /* font_uLE.c */
 

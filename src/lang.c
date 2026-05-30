@@ -3,13 +3,45 @@
 //---------------------------------------------------------------------------
 #include "launchelf.h"
 
-#define lang(id, name, value) char Str_##name[] = value;
-#include "lang.h"
-#undef lang
-
 Language Lang_Default[] = {
-#define lang(id, name, value) {Str_##name},
-#include "lang.h"
+#define lang(id, name, value) {value},
+#include "../Lang/ENG.LNG"
+#undef lang
+    {NULL}};
+
+static Language Lang_Italian[] = {
+#define lang(id, name, value) {value},
+#include "../Lang/ITA.LNG"
+#undef lang
+    {NULL}};
+
+static Language Lang_Spanish[] = {
+#define lang(id, name, value) {value},
+#include "../Lang/SPA.LNG"
+#undef lang
+    {NULL}};
+
+static Language Lang_German[] = {
+#define lang(id, name, value) {value},
+#include "../Lang/GER.LNG"
+#undef lang
+    {NULL}};
+
+static Language Lang_Portuguese[] = {
+#define lang(id, name, value) {value},
+#include "../Lang/POR.LNG"
+#undef lang
+    {NULL}};
+
+static Language Lang_Brazilian[] = {
+#define lang(id, name, value) {value},
+#include "../Lang/PTBR.LNG"
+#undef lang
+    {NULL}};
+
+static Language Lang_Polish[] = {
+#define lang(id, name, value) {value},
+#include "../Lang/POL.LNG"
 #undef lang
     {NULL}};
 
@@ -17,6 +49,98 @@ Language Lang_String[sizeof(Lang_Default) / sizeof(Lang_Default[0])];
 Language Lang_Extern[sizeof(Lang_Default) / sizeof(Lang_Default[0])];
 
 void *External_Lang_Buffer = NULL;
+
+static const char *builtin_language_config_names[BUILTIN_LANGUAGE_COUNT] = {
+    "english",
+    "italian",
+    "spanish",
+    "german",
+    "portuguese",
+    "brazilian",
+    "polish",
+};
+
+static const char *builtin_language_native_names[BUILTIN_LANGUAGE_COUNT] = {
+    "English",
+    "Italiano",
+    "Espanol",
+    "Deutsch",
+    "Portugues",
+    "Portugues (Brasil)",
+    "Polski",
+};
+
+int normalizeBuiltinLanguage(int language)
+{
+	while (language < 0)
+		language += BUILTIN_LANGUAGE_COUNT;
+	while (language >= BUILTIN_LANGUAGE_COUNT)
+		language -= BUILTIN_LANGUAGE_COUNT;
+	return language;
+}
+
+static Language *getBuiltinLanguageTable(int language)
+{
+	switch (normalizeBuiltinLanguage(language)) {
+		case BUILTIN_LANGUAGE_ITALIAN:
+			return Lang_Italian;
+		case BUILTIN_LANGUAGE_SPANISH:
+			return Lang_Spanish;
+		case BUILTIN_LANGUAGE_GERMAN:
+			return Lang_German;
+		case BUILTIN_LANGUAGE_PORTUGUESE:
+			return Lang_Portuguese;
+		case BUILTIN_LANGUAGE_BRAZILIAN:
+			return Lang_Brazilian;
+		case BUILTIN_LANGUAGE_POLISH:
+			return Lang_Polish;
+		case BUILTIN_LANGUAGE_ENGLISH:
+		default:
+			return Lang_Default;
+	}
+}
+
+const char *getBuiltinLanguageConfigName(int language)
+{
+	return builtin_language_config_names[normalizeBuiltinLanguage(language)];
+}
+
+const char *getBuiltinLanguageNativeName(int language)
+{
+	return builtin_language_native_names[normalizeBuiltinLanguage(language)];
+}
+
+int getBuiltinLanguageByConfigName(const char *name)
+{
+	if (name == NULL || name[0] == '\0')
+		return -1;
+	if (!stricmp(name, "0") || !stricmp(name, "english") || !stricmp(name, "eng") || !stricmp(name, "en"))
+		return BUILTIN_LANGUAGE_ENGLISH;
+	if (!stricmp(name, "1") || !stricmp(name, "italian") || !stricmp(name, "ita") || !stricmp(name, "it") || !stricmp(name, "italiano"))
+		return BUILTIN_LANGUAGE_ITALIAN;
+	if (!stricmp(name, "2") || !stricmp(name, "spanish") || !stricmp(name, "spa") || !stricmp(name, "es") || !stricmp(name, "espanol"))
+		return BUILTIN_LANGUAGE_SPANISH;
+	if (!stricmp(name, "3") || !stricmp(name, "german") || !stricmp(name, "ger") || !stricmp(name, "deu") || !stricmp(name, "de") || !stricmp(name, "deutsch"))
+		return BUILTIN_LANGUAGE_GERMAN;
+	if (!stricmp(name, "4") || !stricmp(name, "portuguese") || !stricmp(name, "por") || !stricmp(name, "pt") || !stricmp(name, "portugues"))
+		return BUILTIN_LANGUAGE_PORTUGUESE;
+	if (!stricmp(name, "5") || !stricmp(name, "brazilian") || !stricmp(name, "brazil") || !stricmp(name, "br") ||
+	    !stricmp(name, "ptbr") || !stricmp(name, "pt-br") || !stricmp(name, "portuguese-br") ||
+	    !stricmp(name, "brazilian_portuguese"))
+		return BUILTIN_LANGUAGE_BRAZILIAN;
+	if (!stricmp(name, "6") || !stricmp(name, "polish") || !stricmp(name, "pol") || !stricmp(name, "pl") ||
+	    !stricmp(name, "polski"))
+		return BUILTIN_LANGUAGE_POLISH;
+	return -1;
+}
+
+static void releaseExternalLanguageBuffer(void)
+{
+	if (External_Lang_Buffer != NULL) {
+		free(External_Lang_Buffer);
+		External_Lang_Buffer = NULL;
+	}
+}
 
 //---------------------------------------------------------------------------
 // get_LANG_string is the main parser called for each language dependent
@@ -165,11 +289,83 @@ exit:
 }
 //Ends get_LANG_string
 //---------------------------------------------------------------------------
+static void updateLocalizedMiscPaths(void)
+{
+	int i;
+	char *tmp;
+
+	if (setting == NULL)
+		return;
+
+	if (strlen(setting->Misc) > 0) {
+		for (i = 0; i < 16; i++) {  //Loop to rename the ELF paths with new language for launch keys
+			if ((i < 12) || (setting->LK_Flag[i] != 0)) {
+				if (!strncmp(setting->LK_Path[i], setting->Misc, strlen(setting->Misc))) {
+					tmp = strrchr(setting->LK_Path[i], '/');
+					if (tmp == NULL)
+						continue;
+					if (!strcmp(tmp + 1, setting->Misc_PS2Disc + strlen(setting->Misc)))
+						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(PS2Disc));
+					else if (!strcmp(tmp + 1, setting->Misc_FileBrowser + strlen(setting->Misc)))
+						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(FileBrowser));
+					else if (!strcmp(tmp + 1, setting->Misc_PS2Browser + strlen(setting->Misc)))
+						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(PS2Browser));
+					else if (!strcmp(tmp + 1, setting->Misc_PS2Net + strlen(setting->Misc)))
+						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(PS2Net));
+					else if (!strcmp(tmp + 1, setting->Misc_PS2PowerOff + strlen(setting->Misc)))
+						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(PS2PowerOff));
+					else if (!strcmp(tmp + 1, setting->Misc_HddManager + strlen(setting->Misc)))
+						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(HddManager));
+					else if (!strcmp(tmp + 1, setting->Misc_TextEditor + strlen(setting->Misc)))
+						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(TextEditor));
+					else if (!strcmp(tmp + 1, setting->Misc_Configure + strlen(setting->Misc)))
+						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(Configure));
+					else if (!strcmp(tmp + 1, setting->Misc_ShowFont + strlen(setting->Misc)))
+						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(ShowFont));
+					else if (!strcmp(tmp + 1, setting->Misc_Debug_Info + strlen(setting->Misc)))
+						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(Debug_Info));
+					else if (!strcmp(tmp + 1, setting->Misc_About_uLE + strlen(setting->Misc)))
+						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(About_uLE));
+					else if (!strcmp(tmp + 1, setting->Misc_Show_Build_Info + strlen(setting->Misc)))
+						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(Build_Info));
+					else if (!strcmp(tmp + 1, setting->Misc_OSDSYS + strlen(setting->Misc)))
+						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(OSDSYS));
+				}  // end if Misc
+			}      // end if LK assigned
+		}          // end for
+	}              // end if Misc Initialized
+
+	sprintf(setting->Misc, "%s/", LNG(MISC));
+	sprintf(setting->Misc_PS2Disc, "%s/%s", LNG(MISC), LNG(PS2Disc));
+	sprintf(setting->Misc_FileBrowser, "%s/%s", LNG(MISC), LNG(FileBrowser));
+	sprintf(setting->Misc_PS2Browser, "%s/%s", LNG(MISC), LNG(PS2Browser));
+	sprintf(setting->Misc_PS2Net, "%s/%s", LNG(MISC), LNG(PS2Net));
+	sprintf(setting->Misc_PS2PowerOff, "%s/%s", LNG(MISC), LNG(PS2PowerOff));
+	sprintf(setting->Misc_HddManager, "%s/%s", LNG(MISC), LNG(HddManager));
+	sprintf(setting->Misc_TextEditor, "%s/%s", LNG(MISC), LNG(TextEditor));
+	sprintf(setting->Misc_Configure, "%s/%s", LNG(MISC), LNG(Configure));
+	sprintf(setting->Misc_ShowFont, "%s/%s", LNG(MISC), LNG(ShowFont));
+	sprintf(setting->Misc_Debug_Info, "%s/%s", LNG(MISC), LNG(Debug_Info));
+	sprintf(setting->Misc_About_uLE, "%s/%s", LNG(MISC), LNG(About_uLE));
+	sprintf(setting->Misc_Show_Build_Info, "%s/%s", LNG(MISC), LNG(Build_Info));
+	sprintf(setting->Misc_OSDSYS, "%s/%s", LNG(MISC), LNG(OSDSYS));
+}
+//---------------------------------------------------------------------------
 void Init_Default_Language(void)
 {
 	memcpy(Lang_String, Lang_Default, sizeof(Lang_String));
 }
 //Ends Init_Default_Language
+//---------------------------------------------------------------------------
+void Set_Language(int language)
+{
+	releaseExternalLanguageBuffer();
+	if (setting != NULL)
+		setting->language = normalizeBuiltinLanguage(language);
+	memcpy(Lang_String, getBuiltinLanguageTable(language), sizeof(Lang_String));
+	updateLocalizedMiscPaths();
+}
+//Ends Set_Language
 //---------------------------------------------------------------------------
 void Load_External_Language(void)
 {
@@ -181,16 +377,14 @@ void Load_External_Language(void)
 	char *id_p, *value_p;
 	int lang_size = 0;
 	int fd;
+	Language *Lang;
 
-	if (External_Lang_Buffer != NULL) {  //if an external buffer was allocated before
-		free(External_Lang_Buffer);      //release that buffer before the new attempt
-		External_Lang_Buffer = NULL;
-	}
+	releaseExternalLanguageBuffer();
 
-	Language *Lang = Lang_Default;
+	Lang = getBuiltinLanguageTable(setting != NULL ? setting->language : BUILTIN_LANGUAGE_ENGLISH);
 	memcpy(Lang_String, Lang, sizeof(Lang_String));
 
-	if (strlen(setting->lang_file) != 0) {  //if language file string set
+	if (setting != NULL && strlen(setting->lang_file) != 0) {  //if language file string set
 
 		error_id = -2;
 		genFixPath(setting->lang_file, filePath);
@@ -288,60 +482,7 @@ void Load_External_Language(void)
 	}
 
 	memcpy(Lang_String, Lang, sizeof(Lang_String));
-
-	int i;
-	char *tmp;
-
-	if (strlen(setting->Misc) > 0) {
-		for (i = 0; i < 16; i++) {  //Loop to rename the ELF paths with new language for launch keys
-			if ((i < 12) || (setting->LK_Flag[i] != 0)) {
-				if (!strncmp(setting->LK_Path[i], setting->Misc, strlen(setting->Misc))) {
-					tmp = strrchr(setting->LK_Path[i], '/');
-					if (!strcmp(tmp + 1, setting->Misc_PS2Disc + strlen(setting->Misc)))
-						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(PS2Disc));
-					else if (!strcmp(tmp + 1, setting->Misc_FileBrowser + strlen(setting->Misc)))
-						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(FileBrowser));
-					else if (!strcmp(tmp + 1, setting->Misc_PS2Browser + strlen(setting->Misc)))
-						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(PS2Browser));
-					else if (!strcmp(tmp + 1, setting->Misc_PS2Net + strlen(setting->Misc)))
-						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(PS2Net));
-					else if (!strcmp(tmp + 1, setting->Misc_PS2PowerOff + strlen(setting->Misc)))
-						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(PS2PowerOff));
-					else if (!strcmp(tmp + 1, setting->Misc_HddManager + strlen(setting->Misc)))
-						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(HddManager));
-					else if (!strcmp(tmp + 1, setting->Misc_TextEditor + strlen(setting->Misc)))
-						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(TextEditor));
-					else if (!strcmp(tmp + 1, setting->Misc_Configure + strlen(setting->Misc)))
-						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(Configure));
-					else if (!strcmp(tmp + 1, setting->Misc_ShowFont + strlen(setting->Misc)))
-						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(ShowFont));
-					else if (!strcmp(tmp + 1, setting->Misc_Debug_Info + strlen(setting->Misc)))
-						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(Debug_Info));
-					else if (!strcmp(tmp + 1, setting->Misc_About_uLE + strlen(setting->Misc)))
-						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(About_uLE));
-					else if (!strcmp(tmp + 1, setting->Misc_Show_Build_Info + strlen(setting->Misc)))
-						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(Build_Info));
-					else if (!strcmp(tmp + 1, setting->Misc_OSDSYS + strlen(setting->Misc)))
-						sprintf(setting->LK_Path[i], "%s/%s", LNG(MISC), LNG(OSDSYS));
-				}  // end if Misc
-			}      // end if LK assigned
-		}          // end for
-	}              // end if Misc Initialized
-
-	sprintf(setting->Misc, "%s/", LNG(MISC));
-	sprintf(setting->Misc_PS2Disc, "%s/%s", LNG(MISC), LNG(PS2Disc));
-	sprintf(setting->Misc_FileBrowser, "%s/%s", LNG(MISC), LNG(FileBrowser));
-	sprintf(setting->Misc_PS2Browser, "%s/%s", LNG(MISC), LNG(PS2Browser));
-	sprintf(setting->Misc_PS2Net, "%s/%s", LNG(MISC), LNG(PS2Net));
-	sprintf(setting->Misc_PS2PowerOff, "%s/%s", LNG(MISC), LNG(PS2PowerOff));
-	sprintf(setting->Misc_HddManager, "%s/%s", LNG(MISC), LNG(HddManager));
-	sprintf(setting->Misc_TextEditor, "%s/%s", LNG(MISC), LNG(TextEditor));
-	sprintf(setting->Misc_Configure, "%s/%s", LNG(MISC), LNG(Configure));
-	sprintf(setting->Misc_ShowFont, "%s/%s", LNG(MISC), LNG(ShowFont));
-	sprintf(setting->Misc_Debug_Info, "%s/%s", LNG(MISC), LNG(Debug_Info));
-	sprintf(setting->Misc_About_uLE, "%s/%s", LNG(MISC), LNG(About_uLE));
-	sprintf(setting->Misc_Show_Build_Info, "%s/%s", LNG(MISC), LNG(Build_Info));
-	sprintf(setting->Misc_OSDSYS, "%s/%s", LNG(MISC), LNG(OSDSYS));
+	updateLocalizedMiscPaths();
 }
 //Ends Load_External_Language
 //---------------------------------------------------------------------------

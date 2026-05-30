@@ -18,5 +18,8 @@ void ensureCoreIoStackReady(void);
 #ifdef ETH
 void loadNetModules(void);
 #endif
+#ifdef UDPFS
+int reloadUdpfsModules(void);
+#endif
 
 #endif
