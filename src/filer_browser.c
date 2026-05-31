@@ -1096,42 +1096,43 @@ int getFilePath(char *out, int cnfmode)
 					}                       //ends NEWICON
 					else if ((ret == MOUNTVMC0) || (ret == MOUNTVMC1)) {
 						i = ret - MOUNTVMC0;
-						load_vmc_fs();
 						sprintf(tmp, "vmc%d:", i);
-							if (vmcMounted[i]) {
-								if ((j = vmc_PartyIndex[i]) >= 0) {
-									vmc_PartyIndex[i] = -1;
-									if (j != vmc_PartyIndex[1 ^ i])
-										Party_vmcIndex[j] = -1;
-								}
-								fileXioUmount(tmp);
-								vmcMounted[i] = 0;
+						if (vmcMounted[i]) {
+							if ((j = vmc_PartyIndex[i]) >= 0) {
+								vmc_PartyIndex[i] = -1;
+								if (j != vmc_PartyIndex[1 ^ i])
+									Party_vmcIndex[j] = -1;
 							}
-							j = genFixPath(path, tmp1);
-							if (j < 0) {
-								sprintf(msg1, "\n'%s vmc%d:' for \"%s\"\nResult=%d",
-								        LNG(Mount), i, path, j);
-								(void)ynDialog(msg1);
-								browser_pushed = FALSE;
-								continue;
-							}
-							strcpy(tmp2, tmp1);
+							fileXioUmount(tmp);
+							vmcMounted[i] = 0;
+						}
+						j = genFixPath(path, tmp1);
+						if (j < 0) {
+							sprintf(msg1, "\n'%s vmc%d:' for \"%s\"\nResult=%d",
+							        LNG(Mount), i, path, j);
+							(void)ynDialog(msg1);
+							browser_pushed = FALSE;
+							continue;
+						}
+						strcpy(tmp2, tmp1);
 #if defined(ETH) || defined(UDPFS)
 						if (!strncmp(path, "host:", 5) || !strncmp(path, "udpfs:", 6)) {
 							makeHostPath(tmp2, tmp1);
 						}
 #endif
 						strcat(tmp2, files[browser_sel].name);
-							if ((x = fileXioMount(tmp, tmp2, FIO_MT_RDWR)) >= 0) {
+						/* genFixPath may reset the IOP while lazy-loading storage stacks. */
+						load_vmc_fs();
+						if ((x = fileXioMount(tmp, tmp2, FIO_MT_RDWR)) >= 0) {
 							if ((j >= 0) && (j < MOUNT_LIMIT)) {
 								vmc_PartyIndex[i] = j;
 								Party_vmcIndex[j] = i;
 							}
-								vmcMounted[i] = 1;
-								snprintf(path, sizeof(path), "%.*s/", (int)sizeof(path) - 2, tmp);
-								browser_cd = TRUE;
-								cnfmode = NON_CNF;
-								strcpy(ext, cnfmode_extL[cnfmode]);
+							vmcMounted[i] = 1;
+							snprintf(path, sizeof(path), "%.*s/", (int)sizeof(path) - 2, tmp);
+							browser_cd = TRUE;
+							cnfmode = NON_CNF;
+							strcpy(ext, cnfmode_extL[cnfmode]);
 						} else {
 							sprintf(msg1, "\n'%s vmc%d:' for \"%s\"\nResult=%d",
 							        LNG(Mount), i, tmp2, x);
