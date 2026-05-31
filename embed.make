@@ -411,8 +411,12 @@ $(VMCMAN_AUTOGEN): $(VMCMAN_PATCH_STAMP)
 		IOP_OBJS_DIR=$(abspath iop/__generated/vmcman_obj)/ \
 		IOP_BIN=vmcman.irx
 
-$(EE_ASM_DIR)vmcman_irx.s: $(VMCMAN_SOURCE) | $(EE_ASM_DIR)
-	$(BIN2S) $< $@ vmcman_irx
+$(EE_ASM_DIR)vmcman_irx.c: $(VMCMAN_SOURCE) scripts/bin2c-fallback.sh | $(EE_ASM_DIR)
+	sh scripts/bin2c-fallback.sh $< $@ vmcman_irx
+
+$(EE_OBJS_DIR)vmcman_irx.o: $(EE_ASM_DIR)vmcman_irx.c | $(EE_OBJS_DIR)
+	@echo -e "\033[1m CC  - $@\033[0m"
+	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
 
 $(EE_ASM_DIR)ps2dev9_irx.s: $(PS2SDK)/iop/irx/ps2dev9.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ps2dev9_irx
