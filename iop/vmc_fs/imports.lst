@@ -27,8 +27,8 @@ I_close
 I_read
 I_write
 I_lseek
-I_iomanX_AddDrv
-I_iomanX_DelDrv
+DECLARE_IMPORT(20, iomanX_AddDrv)
+DECLARE_IMPORT(21, iomanX_DelDrv)
 iomanX_IMPORTS_end
 
 sysmem_IMPORTS_start

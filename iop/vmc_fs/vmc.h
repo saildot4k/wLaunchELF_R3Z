@@ -7,6 +7,11 @@
 #include <sysclib.h>
 #include <sysmem.h>
 #include <intrman.h>
+/*
+ * Keep vmc_fs bound to the same explicit iomanX symbols used by fileXio.
+ * Without this, iomanX.h maps iomanX_AddDrv back to legacy AddDrv.
+ */
+#define IOMANX_OLD_NAME_ADDDELDRV 0
 #include <iomanX.h>
 #include <sys/fcntl.h>
 #include <cdvdman.h>
