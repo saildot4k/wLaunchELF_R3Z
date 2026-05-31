@@ -16,13 +16,6 @@
 
 #include "irx.h"
 
-/*
- * vmc_fs registers with the explicit iomanX symbols.  PS2SDK defaults to
- * old AddDrv/DelDrv compatibility on IOP builds, so disable that before
- * importing iomanX.h or the generated import stubs won't match vmc_fs.c.
- */
-#define IOMANX_OLD_NAME_ADDDELDRV 0
-
 /* Please keep these in alphabetical order!  */
 #include "cdvdman.h"
 #include "intrman.h"
