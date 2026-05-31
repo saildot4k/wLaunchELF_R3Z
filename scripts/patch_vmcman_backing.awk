@@ -23,6 +23,19 @@ BEGIN {
 }
 
 {
+	if (in_mount && $0 ~ /^\tcardinfo->cardsize = cardsize;/) {
+		print "\t/* cardinfo->cardsize is total pages; set after superblock validation. */"
+		next
+	}
+
+	if (in_mount && $0 ~ /^\t\ttotal_pages = superblock.pages_per_cluster \* superblock.blocksize;/) {
+		print "\t\ttotal_pages = superblock.pages_per_cluster * superblock.clusters_per_card;"
+		print "\t\tprintf(\"vmcman: geometry pagesize=%d pages_per_cluster=%u blocksize=%u clusters_per_card=%u total_pages=%d cardsize=%d flags=0x%02x\\n\","
+		print "\t\t       superblock.pagesize, superblock.pages_per_cluster, superblock.blocksize,"
+		print "\t\t       superblock.clusters_per_card, total_pages, cardsize, superblock.cardflags);"
+		next
+	}
+
 	print
 
 	if (in_mount && $0 ~ /^\t\(void\)port;/) {
@@ -73,12 +86,6 @@ BEGIN {
 		print "\t\t\tprintf(\"vmcman: reject cardtype=%u expected=%u\\n\", superblock.cardtype, sceMcTypePS2);"
 	}
 
-	if (in_mount && $0 ~ /^\t\ttotal_pages = superblock.pages_per_cluster \* superblock.blocksize;/) {
-		print "\t\tprintf(\"vmcman: geometry pagesize=%d pages_per_cluster=%u blocksize=%u total_pages=%d cardsize=%d flags=0x%02x\\n\","
-		print "\t\t       superblock.pagesize, superblock.pages_per_cluster, superblock.blocksize,"
-		print "\t\t       total_pages, cardsize, superblock.cardflags);"
-	}
-
 	if (in_mount && $0 ~ /^\t\telse \{/) {
 		print "\t\t\tprintf(\"vmcman: reject size actual=%d no_ecc=%d ecc=%d\\n\","
 		print "\t\t\t       cardsize, superblock.pagesize * total_pages,"
@@ -90,8 +97,9 @@ BEGIN {
 	}
 
 	if (in_mount && $0 ~ /^[[:space:]]*cardinfo->flags = superblock.cardflags;/) {
+		print "\t\t\tcardinfo->cardsize = total_pages;"
 		print "\t\t\tcardinfo->mounted = 1;"
-		print "\t\t\tprintf(\"vmcman: validated has_ecc=%d pagesize=%d blocksize=%u cardsize=%d\\n\","
+		print "\t\t\tprintf(\"vmcman: validated has_ecc=%d pagesize=%d blocksize=%u total_pages=%d\\n\","
 		print "\t\t\t       cardinfo->has_ecc, cardinfo->pagesize, cardinfo->blocksize, cardinfo->cardsize);"
 	}
 

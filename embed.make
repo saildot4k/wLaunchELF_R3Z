@@ -402,6 +402,7 @@ $(VMCMAN_PATCH_STAMP): scripts/patch_vmcman_backing.awk | iop/__generated
 	mv $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c.tmp $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c
 	grep -q 'cardinfo->mounted = 1;' $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c
 	grep -q 'vmcman: mount request' $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c
+	grep -q 'superblock.pages_per_cluster \* superblock.clusters_per_card' $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c
 	touch $@
 
 $(VMCMAN_AUTOGEN): $(VMCMAN_PATCH_STAMP)

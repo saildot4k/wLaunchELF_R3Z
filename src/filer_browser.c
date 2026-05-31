@@ -183,14 +183,14 @@ static void debugVmcBackingFile(const char *backing)
 	clusters_per_card = vmcDbgRead32(superblock + 48);
 	cardtype = superblock[336];
 	cardflags = superblock[337];
-	total_pages = pages_per_cluster * blocksize;
+	total_pages = pages_per_cluster * clusters_per_card;
 	expected_no_ecc = (unsigned int)pagesize * total_pages;
 	expected_ecc = (unsigned int)(pagesize + 0x10) * total_pages;
 	magic_ok = (strncmp(magic, VMC_DBG_SUPERBLOCK_MAGIC, 28) == 0);
 
 	printf("[VMC] backing magic='%s' magic_ok=%d version='%s'\n", magic, magic_ok, version);
-	printf("[VMC] backing pagesize=%d pages_per_cluster=%u blocksize=%u total_pages=%u\n",
-	       pagesize, pages_per_cluster, blocksize, total_pages);
+	printf("[VMC] backing pagesize=%d pages_per_cluster=%u blocksize=%u clusters_per_card=%u total_pages=%u\n",
+	       pagesize, pages_per_cluster, blocksize, clusters_per_card, total_pages);
 	printf("[VMC] backing clusters_per_card=%u cardtype=%u cardflags=0x%02x\n",
 	       clusters_per_card, cardtype, cardflags);
 	printf("[VMC] backing expected_no_ecc=%u expected_ecc=%u actual=%d\n",
