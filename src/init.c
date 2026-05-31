@@ -658,7 +658,6 @@ static void loadBasicModules(void)
 	DPRINTF(" [rom0:PADMAN]: id=%d\n", id);
 #endif
 
-	load_vmc_fs_module();
 	have_basic_modules = 1;
 }
 //------------------------------
@@ -667,6 +666,7 @@ static void loadBasicModules(void)
 void ensureCoreIoStackReady(void)
 {
 	loadBasicModules();
+	loadCdModules();
 
 	if (!have_filexio_ready) {
 		fileXioInit();
@@ -702,6 +702,8 @@ void ensureCoreIoStackReady(void)
 #endif
 		have_mc_rpc_ready = 1;
 	}
+
+	load_vmc_fs_module();
 }
 //------------------------------
 //endfunc ensureCoreIoStackReady
