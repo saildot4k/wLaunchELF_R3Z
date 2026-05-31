@@ -481,6 +481,15 @@ int load_udpfs(void)
 //------------------------------
 //endfunc load_udpfs
 //---------------------------------------------------------------------------
+int reloadUdpfsModules(void)
+{
+	resetRuntimeDeviceState();
+	load_udpfs_stack();
+	return have_udpfs_ioman;
+}
+//------------------------------
+//endfunc reloadUdpfsModules
+//---------------------------------------------------------------------------
 #endif
 #ifdef DVRP
 static void load_ps2dvr(void)

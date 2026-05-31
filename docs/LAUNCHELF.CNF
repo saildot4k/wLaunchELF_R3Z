@@ -256,11 +256,16 @@ CNF_Path =
 # ----------------------------------------------------------------------
 USBMASS_FILE =
 # ----------------------------------------------------------------------
-# From v3.95 a language definition file may be used to set the strings
-# for most menus and dialogs in uLaunchELF, and that file choice is
-# stored here. The default value is just an empty string, causing the
-# internal defaults to be used for everything. These defaults are also
-# identical to the contents of the file "English.lng" that we released.
+# language selects the built-in language used by the GUI. Valid values
+# are english, italian, spanish, german, portuguese, brazilian, and polish.
+# If this setting is omitted, blank, or invalid, English is used.
+# This can be changed live in the 'STARTUP SETTINGS' screen.
+# ----------------------------------------------------------------------
+language = english
+# ----------------------------------------------------------------------
+# LANG_FILE is optional. If set, an external language definition file is
+# loaded over the built-in language selected above. Strings missing from
+# the external file fall back to the selected built-in language.
 # ----------------------------------------------------------------------
 LANG_FILE =
 # ----------------------------------------------------------------------
