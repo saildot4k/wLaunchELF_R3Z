@@ -531,16 +531,22 @@ static int vmcFsDeviceRegistered(void)
 	return (fd != -ENODEV);
 }
 
-int load_vmc_fs(void)
+static int load_vmc_fs_module(void)
 {
 	int ret, ID __attribute__((unused));
 
 	if (!have_vmc_fs) {
-		ensureCoreIoStackReady();
 		ID = SifExecModuleBuffer(vmc_fs_irx, size_vmc_fs_irx, 0, NULL, &ret);
 		DPRINTF(" [VMC_FS]: ID=%d, ret=%d\n", ID, ret);
 		have_vmc_fs = (ID >= 0 && ret >= 0);
 	}
+	return have_vmc_fs;
+}
+
+int load_vmc_fs(void)
+{
+	ensureCoreIoStackReady();
+	load_vmc_fs_module();
 	if (have_vmc_fs && !vmcFsDeviceRegistered())
 		have_vmc_fs = 0;
 	return have_vmc_fs;
@@ -605,6 +611,7 @@ static void loadBasicModules(void)
 	DPRINTF(" [IOMANX]: id=%d ret=%d\n", id, ret);
 	id = SifExecModuleBuffer(filexio_irx, size_filexio_irx, 0, NULL, &ret);
 	DPRINTF(" [FILEXIO]: id=%d ret=%d\n", id, ret);
+	load_vmc_fs_module();
 
 	id = SifExecModuleBuffer(allowdvdv_irx, size_allowdvdv_irx, 0, NULL, &ret);  //unlocks cdvd for reading on psx dvr
 	DPRINTF(" [ALLOWDVD]: id=%d ret=%d\n", id, ret);

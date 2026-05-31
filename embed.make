@@ -528,8 +528,10 @@ $(EE_ASM_DIR)ds34bt.s: iop/ds34bt.irx | $(EE_ASM_DIR)
 $(EE_ASM_DIR)padman.s: $(PADMAN_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ padman_irx
 
-iop/vmc_fs.irx: iop/vmc_fs
-	$(MAKE) -C $<
+VMC_FS_SOURCES := $(wildcard iop/vmc_fs/*.[ch] iop/vmc_fs/*.lst iop/vmc_fs/Makefile)
+
+iop/vmc_fs.irx: $(VMC_FS_SOURCES)
+	$(MAKE) -C iop/vmc_fs
 
 $(EE_ASM_DIR)vmc_fs_irx.s: iop/vmc_fs.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ vmc_fs_irx
