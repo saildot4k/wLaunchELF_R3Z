@@ -955,9 +955,19 @@ int getFilePath(char *out, int cnfmode)
 						strcpy(clipPath, path);
 						if (nmarks > 0) {
 							for (i = nclipFiles = 0; i < browser_nfiles; i++)
-								if (marks[i])
+								if (marks[i] && strcmp(files[i].name, ".") && strcmp(files[i].name, ".."))
 									clipFiles[nclipFiles++] = files[i];
+							if (nclipFiles == 0) {
+								strcpy(msg0, LNG(Failed));
+								browser_pushed = FALSE;
+								continue;
+							}
 						} else {
+							if (!strcmp(files[browser_sel].name, ".") || !strcmp(files[browser_sel].name, "..")) {
+								strcpy(msg0, LNG(Failed));
+								browser_pushed = FALSE;
+								continue;
+							}
 							clipFiles[0] = files[browser_sel];
 							nclipFiles = 1;
 						}
@@ -1191,7 +1201,7 @@ int getFilePath(char *out, int cnfmode)
 
 					   //R1 menu handling is completed above
 				} else if ((!swapKeys && new_pad & PAD_CROSS) || (swapKeys && new_pad & PAD_CIRCLE)) {
-					if (browser_sel != 0 && path[0] != 0 && (strcmp(path, "hdd0:/") && strcmp(path, "dvr_hdd0:/"))) {
+					if (browser_sel != 0 && strcmp(files[browser_sel].name, ".") && strcmp(files[browser_sel].name, "..") && path[0] != 0 && (strcmp(path, "hdd0:/") && strcmp(path, "dvr_hdd0:/"))) {
 						if (marks[browser_sel]) {
 							marks[browser_sel] = FALSE;
 							nmarks--;
@@ -1672,21 +1682,28 @@ static void submenu_func_GetSize(char *mess, char *path, FILEINFO *files)
 static void subfunc_Paste(char *mess, char *path)
 {
 	char tmp[MAX_PATH], tmp1[MAX_PATH];
-	int i, ret = -1;
+	int i, ret = -1, trace_vmc_paste;
 
 	written_size = 0;
 	PasteTime = Timer();  //Note initial pasting time
 	if (!strcmp(path, clipPath))
 		goto finished;
+	trace_vmc_paste = (!strncmp(clipPath, "vmc", 3) || !strncmp(path, "vmc", 3));
 	ret = prepareTransferDeviceStacks(clipPath, path);
 	if (ret == TRANSFER_STACK_INCOMPATIBLE) {
+		printf("[PASTE] incompatible stacks ret=%d src='%s' dst='%s'\n", ret, clipPath, path);
 		ynDialog("Incompatible drivers to perform action");
 		browser_pushed = FALSE;
 		return;
 	}
-	if (ret < 0)
+	if (ret < 0) {
+		printf("[PASTE] prepare stacks failed ret=%d src='%s' dst='%s'\n", ret, clipPath, path);
 		goto finished;
+	}
 	drawMsg(LNG(Pasting));
+	if (trace_vmc_paste)
+		printf("[PASTE] start src='%s' dst='%s' items=%d mode=%d cut=%d\n",
+		       clipPath, path, nclipFiles, PasteMode, browser_cut);
 
 	for (i = 0; i < nclipFiles; i++) {
 		strcpy(tmp, clipFiles[i].name);
@@ -1697,9 +1714,16 @@ static void subfunc_Paste(char *mess, char *path)
 		drawMsg(tmp);
 		PM_flag[0] = PM_NORMAL;  //Always use normal mode at top level
 		PM_file[0] = -1;         //Thus no attribute file is used here
+		if (trace_vmc_paste)
+			printf("[PASTE] item src='%s' dst='%s' name='%s' index=%d/%d attr=0x%x size=%u:%u\n",
+			       clipPath, path, clipFiles[i].name, i + 1, nclipFiles,
+			       clipFiles[i].stats.AttrFile, clipFiles[i].stats.Reserve2, clipFiles[i].stats.FileSizeByte);
 		ret = copy(path, clipPath, clipFiles[i], 0);
-		if (ret < 0)
+		if (ret < 0) {
+			printf("[PASTE] copy failed ret=%d src='%s' dst='%s' item='%s' index=%d/%d mode=%d cut=%d\n",
+			       ret, clipPath, path, clipFiles[i].name, i + 1, nclipFiles, PasteMode, browser_cut);
 			break;
+		}
 	}
 	if ((ret >= 0) && browser_cut) {
 		for (i = 0; i < nclipFiles; i++) {
@@ -1713,6 +1737,8 @@ static void subfunc_Paste(char *mess, char *path)
 
 finished:
 	if (ret < 0) {
+		printf("[PASTE] failed ret=%d src='%s' dst='%s' mode=%d cut=%d\n",
+		       ret, clipPath, path, PasteMode, browser_cut);
 		strcpy(mess, LNG(Paste_Failed));
 		browser_pushed = FALSE;
 	} else if (browser_cut)
