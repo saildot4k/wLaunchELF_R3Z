@@ -1123,7 +1123,7 @@ int getFilePath(char *out, int cnfmode)
 						strcat(tmp2, files[browser_sel].name);
 						/* genFixPath may reset the IOP while lazy-loading storage stacks. */
 						if (!load_vmc_fs()) {
-							x = -19;
+							x = get_vmc_fs_last_error();
 							sprintf(msg1, "\n'%s vmc%d:' for \"%s\"\nvmc_fs not registered\nResult=%d",
 							        LNG(Mount), i, tmp2, x);
 							(void)ynDialog(msg1);

@@ -304,6 +304,7 @@ extern u8 mx4sio_driver_running;
 #endif
 
 int load_vmc_fs(void);
+int get_vmc_fs_last_error(void);
 #ifdef ETH
 void load_ps2host(void);
 #endif

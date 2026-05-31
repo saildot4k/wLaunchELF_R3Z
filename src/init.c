@@ -121,6 +121,7 @@ static u8 have_ps2dev9 = 0;
 static u8 have_ps2hdd = 0;
 static u8 have_ps2fs = 0;
 static u8 have_vmc_fs = 0;
+static int vmc_fs_last_error = 0;
 #ifdef EXFAT
 static u8 have_bdm = 0;
 static u8 have_bdmfs = 0;
@@ -523,12 +524,18 @@ static int vmcFsDeviceRegistered(void)
 	fd = fileXioDopen("vmc0:");
 	if (fd >= 0) {
 		fileXioDclose(fd);
+		vmc_fs_last_error = 0;
 		return TRUE;
 	}
 
 	/* An unmounted but registered vmc device returns NOT_MOUNT, not ENODEV. */
 	DPRINTF(" [VMC_FS]: device probe ret=%d\n", fd);
-	return (fd != -ENODEV);
+	if (fd != -ENODEV) {
+		vmc_fs_last_error = 0;
+		return TRUE;
+	}
+	vmc_fs_last_error = fd;
+	return FALSE;
 }
 
 static int load_vmc_fs_module(void)
@@ -539,6 +546,7 @@ static int load_vmc_fs_module(void)
 		ID = SifExecModuleBuffer(vmc_fs_irx, size_vmc_fs_irx, 0, NULL, &ret);
 		DPRINTF(" [VMC_FS]: ID=%d, ret=%d\n", ID, ret);
 		have_vmc_fs = (ID >= 0 && ret >= 0);
+		vmc_fs_last_error = (ID < 0) ? ID : ret;
 	}
 	return have_vmc_fs;
 }
@@ -550,6 +558,11 @@ int load_vmc_fs(void)
 	if (have_vmc_fs && !vmcFsDeviceRegistered())
 		have_vmc_fs = 0;
 	return have_vmc_fs;
+}
+
+int get_vmc_fs_last_error(void)
+{
+	return vmc_fs_last_error;
 }
 //------------------------------
 //endfunc load_vmc_fs
@@ -611,7 +624,6 @@ static void loadBasicModules(void)
 	DPRINTF(" [IOMANX]: id=%d ret=%d\n", id, ret);
 	id = SifExecModuleBuffer(filexio_irx, size_filexio_irx, 0, NULL, &ret);
 	DPRINTF(" [FILEXIO]: id=%d ret=%d\n", id, ret);
-	load_vmc_fs_module();
 
 	id = SifExecModuleBuffer(allowdvdv_irx, size_allowdvdv_irx, 0, NULL, &ret);  //unlocks cdvd for reading on psx dvr
 	DPRINTF(" [ALLOWDVD]: id=%d ret=%d\n", id, ret);
@@ -646,6 +658,7 @@ static void loadBasicModules(void)
 	DPRINTF(" [rom0:PADMAN]: id=%d\n", id);
 #endif
 
+	load_vmc_fs_module();
 	have_basic_modules = 1;
 }
 //------------------------------
