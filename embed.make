@@ -388,7 +388,7 @@ $(EE_ASM_DIR)filexio_irx.s: $(FILEXIO_SOURCE) | $(EE_ASM_DIR)
 iop/__generated:
 	mkdir -p $@
 
-$(VMCMAN_PATCH_STAMP): scripts/patch_vmcman_backing.awk | iop/__generated
+$(VMCMAN_PATCH_STAMP): scripts/patch_vmcman_backing.awk scripts/patch_vmcman_detect.awk | iop/__generated
 	rm -rf $(VMCMAN_PATCH_DIR)
 	mkdir -p $(VMCMAN_PATCH_SRC_DIR) $(VMCMAN_PATCH_INC_DIR)
 	cp -R $(VMCMAN_SDK_ROOT)/iop/memorycard/mcman/src/. $(VMCMAN_PATCH_SRC_DIR)/
@@ -396,10 +396,14 @@ $(VMCMAN_PATCH_STAMP): scripts/patch_vmcman_backing.awk | iop/__generated
 	awk -f scripts/patch_vmcman_backing.awk \
 		$(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c > $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c.tmp
 	mv $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c.tmp $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c
+	awk -f scripts/patch_vmcman_detect.awk \
+		$(VMCMAN_PATCH_SRC_DIR)/main.c > $(VMCMAN_PATCH_SRC_DIR)/main.c.tmp
+	mv $(VMCMAN_PATCH_SRC_DIR)/main.c.tmp $(VMCMAN_PATCH_SRC_DIR)/main.c
 	grep -q 'cardinfo->mounted = 1;' $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c
 	grep -q 'cardinfo->cardsize = total_pages;' $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c
 	grep -q 'superblock.pages_per_cluster \* superblock.clusters_per_card' $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c
 	grep -q 'vmcman: page write failed' $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c
+	grep -q 'VMC media cannot physically change while mounted' $(VMCMAN_PATCH_SRC_DIR)/main.c
 	touch $@
 
 $(VMCMAN_AUTOGEN): $(VMCMAN_PATCH_STAMP)

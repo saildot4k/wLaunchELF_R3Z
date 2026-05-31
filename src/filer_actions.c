@@ -317,11 +317,15 @@ int newdir(const char *path, const char *name)
 		strcpy(dir, path);
 		strcat(dir, name);
 		genLimObjName(dir, 0);
+		printf("[VMC_NEWDIR] request path='%s' name='%s' dir='%s'\n", path, name, dir);
 		if ((ret = fileXioDopen(dir)) >= 0) {
+			printf("[VMC_NEWDIR] exists dir='%s' fd=%d\n", dir, ret);
 			fileXioDclose(ret);
 			ret = -EEXIST;  //return fileXio error code for pre-existing folder
 		} else {
+			printf("[VMC_NEWDIR] dopen failed dir='%s' ret=%d; trying mkdir\n", dir, ret);
 			ret = fileXioMkdir(dir, fileMode);
+			printf("[VMC_NEWDIR] mkdir dir='%s' ret=%d\n", dir, ret);
 		}
 	} else if (!strncmp(path, "mc", 2)) {
 		sprintf(dir, "%s%s", path + 4, name);
