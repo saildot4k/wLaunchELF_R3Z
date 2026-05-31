@@ -303,7 +303,7 @@ extern char ROMVER_data[16];
 extern u8 mx4sio_driver_running;
 #endif
 
-void load_vmc_fs(void);
+int load_vmc_fs(void);
 #ifdef ETH
 void load_ps2host(void);
 #endif

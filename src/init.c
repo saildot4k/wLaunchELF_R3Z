@@ -515,15 +515,17 @@ static void load_ps2dvr(void)
 //endfunc load_ps2dvr
 //---------------------------------------------------------------------------
 #endif
-void load_vmc_fs(void)
+int load_vmc_fs(void)
 {
 	int ret, ID __attribute__((unused));
 
 	if (!have_vmc_fs) {
+		ensureCoreIoStackReady();
 		ID = SifExecModuleBuffer(vmc_fs_irx, size_vmc_fs_irx, 0, NULL, &ret);
 		DPRINTF(" [VMC_FS]: ID=%d, ret=%d\n", ID, ret);
-		have_vmc_fs = 1;
+		have_vmc_fs = (ID >= 0 && ret >= 0);
 	}
+	return have_vmc_fs;
 }
 //------------------------------
 //endfunc load_vmc_fs

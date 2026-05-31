@@ -1122,8 +1122,12 @@ int getFilePath(char *out, int cnfmode)
 #endif
 						strcat(tmp2, files[browser_sel].name);
 						/* genFixPath may reset the IOP while lazy-loading storage stacks. */
-						load_vmc_fs();
-						if ((x = fileXioMount(tmp, tmp2, FIO_MT_RDWR)) >= 0) {
+						if (!load_vmc_fs()) {
+							x = -19;
+							sprintf(msg1, "\n'%s vmc%d:' for \"%s\"\nResult=%d",
+							        LNG(Mount), i, tmp2, x);
+							(void)ynDialog(msg1);
+						} else if ((x = fileXioMount(tmp, tmp2, FIO_MT_RDWR)) >= 0) {
 							if ((j >= 0) && (j < MOUNT_LIMIT)) {
 								vmc_PartyIndex[i] = j;
 								Party_vmcIndex[j] = i;
