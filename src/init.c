@@ -521,10 +521,12 @@ static int vmcFsDeviceRegistered(void)
 {
 	int fd;
 
+	DPRINTF(" [VMC_FS]: probing vmc0:\n");
 	fd = fileXioDopen("vmc0:");
 	if (fd >= 0) {
 		fileXioDclose(fd);
 		vmc_fs_last_error = 0;
+		DPRINTF(" [VMC_FS]: vmc0: registered fd=%d\n", fd);
 		return TRUE;
 	}
 
@@ -532,21 +534,30 @@ static int vmcFsDeviceRegistered(void)
 	DPRINTF(" [VMC_FS]: device probe ret=%d\n", fd);
 	if (fd != -ENODEV) {
 		vmc_fs_last_error = 0;
+		DPRINTF(" [VMC_FS]: vmc0: registered via ret=%d\n", fd);
 		return TRUE;
 	}
 	vmc_fs_last_error = fd;
+	DPRINTF(" [VMC_FS]: vmc0: not registered ret=%d\n", fd);
 	return FALSE;
 }
 
 static int load_vmc_fs_module(void)
 {
-	int ret, ID __attribute__((unused));
+	int ret = 0, ID __attribute__((unused));
 
 	if (!have_vmc_fs) {
+		DPRINTF(" [VMC_FS]: loading size=%d\n", size_vmc_fs_irx);
 		ID = SifExecModuleBuffer(vmc_fs_irx, size_vmc_fs_irx, 0, NULL, &ret);
 		DPRINTF(" [VMC_FS]: ID=%d, ret=%d\n", ID, ret);
-		have_vmc_fs = (ID >= 0 && ret >= 0);
-		vmc_fs_last_error = (ID < 0) ? ID : ret;
+		if (ID < 0) {
+			vmc_fs_last_error = ID;
+			return 0;
+		}
+		have_vmc_fs = 1;
+		vmc_fs_last_error = 0;
+		if (ret < 0)
+			DPRINTF(" [VMC_FS]: start ret=%d; probing vmc: anyway\n", ret);
 	}
 	return have_vmc_fs;
 }
@@ -554,9 +565,14 @@ static int load_vmc_fs_module(void)
 int load_vmc_fs(void)
 {
 	ensureCoreIoStackReady();
-	load_vmc_fs_module();
-	if (have_vmc_fs && !vmcFsDeviceRegistered())
+	if (!load_vmc_fs_module()) {
+		DPRINTF(" [VMC_FS]: module load failed err=%d\n", vmc_fs_last_error);
+		return 0;
+	}
+	if (!vmcFsDeviceRegistered()) {
+		DPRINTF(" [VMC_FS]: probe failed err=%d\n", vmc_fs_last_error);
 		have_vmc_fs = 0;
+	}
 	return have_vmc_fs;
 }
 

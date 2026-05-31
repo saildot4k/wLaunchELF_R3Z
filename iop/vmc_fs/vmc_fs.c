@@ -114,6 +114,7 @@ int _start(int argc, char **argv)
 	DelDrv(s_Vmc_Driver.name);
 	g_Vmc_Initialized = FALSE;
 	adddrv_ret = AddDrv(&s_Vmc_Driver);
+	DEBUGPRINT(1, " AddDrv returned %d for %s\n", adddrv_ret, s_Vmc_Driver.name);
 	if (adddrv_ret < 0) {
 		printf("vmc_fs: AddDrv returned %d for %s\n", adddrv_ret, s_Vmc_Driver.name);
 	}
