@@ -409,7 +409,8 @@ $(VMCMAN_AUTOGEN): $(VMCMAN_PATCH_STAMP)
 		IOP_INC_DIR=$(abspath $(VMCMAN_PATCH_INC_DIR))/ \
 		IOP_BIN_DIR=$(abspath iop/__generated)/ \
 		IOP_OBJS_DIR=$(abspath iop/__generated/vmcman_obj)/ \
-		IOP_BIN=vmcman.irx
+		IOP_BIN=$(abspath $@)
+	test -s $@
 
 $(EE_ASM_DIR)vmcman_irx.c: $(VMCMAN_SOURCE) scripts/bin2c-fallback.sh | $(EE_ASM_DIR)
 	sh scripts/bin2c-fallback.sh $< $@ vmcman_irx

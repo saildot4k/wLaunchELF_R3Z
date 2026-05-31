@@ -10,6 +10,11 @@ input="$1"
 output="$2"
 symbol="$3"
 
+if [ ! -s "$input" ]; then
+	echo "bin2c-fallback: input is missing or empty: $input" >&2
+	exit 1
+fi
+
 size="$(wc -c < "$input" | tr -d '[:space:]')"
 tmp="${output}.tmp"
 
