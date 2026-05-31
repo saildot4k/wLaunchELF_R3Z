@@ -68,19 +68,19 @@ LaunchELF v4.41a (2010.06.03)
 
 LaunchELF v4.41 (2010.05.30)
 -Updated ps2sdk and existing source files to SVN rev 1682.
--Fixed some compiler warnings with the vmcfs driver due to changes in the latest ps2sdk revision.
+-Fixed some compiler warnings with the legacy VMC driver due to changes in the latest ps2sdk revision.
 -Removed the modified screen update delay methods, restoring previous functionality.
 
 LaunchELF v4.40j (2010.05.29)
 -Added libcdvd_orig folder to CSD folder, so as to provide original libcvd source now that it is no longer available for download at ps2dev.org, and edited setup.sh accordingly so as to use the local copy.
--Edited VMC sources to correct hundreds of incorrect references to "vmcfs" module which is in fact named "vmc_fs". This was mainly in 'DEBUGPRINT' error messages. This also required some editing of the main uLE source files.
--Changed vmc_fs from being an 'uncheckable' module to being 'checkable' (changes in "main.c" and "iopmod_name.h")
+-Edited VMC sources to correct hundreds of incorrect legacy module references. This was mainly in 'DEBUGPRINT' error messages. This also required some editing of the main uLE source files.
+-Changed the legacy VMC driver from being an 'uncheckable' module to being 'checkable' (changes in "main.c" and "iopmod_name.h")
 -Started work on merging smbman by jimmikaelkael into uLE
 -SMB routines now allow successful server connection, using a test menu inside the subprogram "MISC/Debug Info". Note that the SMB functionality requires a suitable "SMB.CNF" file stored as "mc0:/SYS-CONF/SMB.CNF"
 
 LaunchELF v4.40i (2010.04.09)
 -Updated ps2sdk and existing source files to SVN rev 1678 and removed a previous source file as it's no longer needed.
--Updated the vmcfs driver with Polo35's changes to vmc_io.c in order to possibly fix virtual memorycard corruptions.
+-Updated the legacy VMC driver with Polo35's changes in order to possibly fix virtual memorycard corruptions.
 ps2ftpd new additions and changes:
 -Added a fix to better resolve the hard drive compatibility issue with later ps2sdk updates.
 

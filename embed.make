@@ -45,6 +45,14 @@ USBMASS_BD_SDK_MODULE_DIR :=
 
 IOMANX_SOURCE := iop/__precompiled/iomanX.irx
 FILEXIO_SOURCE := iop/__precompiled/fileXio.irx
+VMCMAN_SOURCE :=
+VMCMAN_AUTOGEN := iop/__generated/vmcman.irx
+VMCMAN_SDK_ROOT :=
+VMCMAN_SDK_MODULE_DIR :=
+VMCMAN_PATCH_DIR := iop/__generated/vmcman_patched
+VMCMAN_PATCH_SRC_DIR := $(VMCMAN_PATCH_DIR)/src
+VMCMAN_PATCH_INC_DIR := $(VMCMAN_PATCH_DIR)/include
+VMCMAN_PATCH_STAMP := $(VMCMAN_PATCH_DIR)/.patched
 
 ifneq ($(wildcard $(PS2SDK)/iop/irx/bdm.irx),)
 BDM_SOURCE := $(PS2SDK)/iop/irx/bdm.irx
@@ -157,6 +165,32 @@ IOMANX_SOURCE := $(PS2SDK)/iop/irx/iomanX.irx
 endif
 ifneq ($(wildcard $(PS2SDK)/iop/irx/fileXio.irx),)
 FILEXIO_SOURCE := $(PS2SDK)/iop/irx/fileXio.irx
+endif
+
+ifneq ($(PS2SDKSRC),)
+ifneq ($(wildcard $(PS2SDKSRC)/iop/memorycard/vmcman/Makefile),)
+VMCMAN_SDK_ROOT := $(PS2SDKSRC)
+VMCMAN_SDK_MODULE_DIR := $(PS2SDKSRC)/iop/memorycard/vmcman
+endif
+endif
+
+ifeq ($(strip $(VMCMAN_SDK_MODULE_DIR)),)
+ifneq ($(wildcard $(PS2SDK)/iop/memorycard/vmcman/Makefile),)
+VMCMAN_SDK_ROOT := $(PS2SDK)
+VMCMAN_SDK_MODULE_DIR := $(PS2SDK)/iop/memorycard/vmcman
+endif
+endif
+
+ifneq ($(strip $(VMCMAN_SDK_MODULE_DIR)),)
+VMCMAN_SOURCE := $(VMCMAN_AUTOGEN)
+else ifneq ($(wildcard $(PS2SDK)/iop/irx/vmcman.irx),)
+VMCMAN_SOURCE := $(PS2SDK)/iop/irx/vmcman.irx
+else ifneq ($(wildcard iop/__precompiled/vmcman.irx),)
+VMCMAN_SOURCE := iop/__precompiled/vmcman.irx
+endif
+
+ifeq ($(strip $(VMCMAN_SOURCE)),)
+$(error Missing vmcman.irx. Update PS2SDK, add iop/__precompiled/vmcman.irx, or provide PS2SDKSRC with iop/memorycard/vmcman sources)
 endif
 
 
@@ -358,6 +392,30 @@ $(EE_ASM_DIR)filexio_irx.s: $(FILEXIO_SOURCE) | $(EE_ASM_DIR)
 iop/__generated:
 	mkdir -p $@
 
+$(VMCMAN_PATCH_STAMP): | iop/__generated
+	rm -rf $(VMCMAN_PATCH_DIR)
+	mkdir -p $(VMCMAN_PATCH_SRC_DIR) $(VMCMAN_PATCH_INC_DIR)
+	cp -R $(VMCMAN_SDK_ROOT)/iop/memorycard/mcman/src/. $(VMCMAN_PATCH_SRC_DIR)/
+	cp -R $(VMCMAN_SDK_ROOT)/iop/memorycard/mcman/include/. $(VMCMAN_PATCH_INC_DIR)/
+	awk '{ print; if ($$0 ~ /cardinfo->flags = superblock.cardflags;/) print "\t\t\tcardinfo->mounted = 1;"; }' \
+		$(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c > $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c.tmp
+	mv $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c.tmp $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c
+	grep -q 'cardinfo->mounted = 1;' $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c
+	touch $@
+
+$(VMCMAN_AUTOGEN): $(VMCMAN_PATCH_STAMP)
+	$(MAKE) -C $(VMCMAN_SDK_MODULE_DIR) \
+		PS2SDKSRC=$(VMCMAN_SDK_ROOT) \
+		PS2SDK=$(VMCMAN_SDK_ROOT) \
+		IOP_SRC_DIR=$(abspath $(VMCMAN_PATCH_SRC_DIR))/ \
+		IOP_INC_DIR=$(abspath $(VMCMAN_PATCH_INC_DIR))/ \
+		IOP_BIN_DIR=$(abspath iop/__generated)/ \
+		IOP_OBJS_DIR=$(abspath iop/__generated/vmcman_obj)/ \
+		IOP_BIN=vmcman.irx
+
+$(EE_ASM_DIR)vmcman_irx.s: $(VMCMAN_SOURCE) | $(EE_ASM_DIR)
+	$(BIN2S) $< $@ vmcman_irx
+
 $(EE_ASM_DIR)ps2dev9_irx.s: $(PS2SDK)/iop/irx/ps2dev9.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ps2dev9_irx
 
@@ -527,14 +585,6 @@ $(EE_ASM_DIR)ds34bt.s: iop/ds34bt.irx | $(EE_ASM_DIR)
 
 $(EE_ASM_DIR)padman.s: $(PADMAN_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ padman_irx
-
-VMC_FS_SOURCES := $(wildcard iop/vmc_fs/*.[ch] iop/vmc_fs/*.lst iop/vmc_fs/Makefile)
-
-iop/vmc_fs.irx: $(VMC_FS_SOURCES)
-	$(MAKE) -C iop/vmc_fs
-
-$(EE_ASM_DIR)vmc_fs_irx.s: iop/vmc_fs.irx | $(EE_ASM_DIR)
-	$(BIN2S) $< $@ vmc_fs_irx
 
 loader/loader.elf: loader
 	$(MAKE) -C $<

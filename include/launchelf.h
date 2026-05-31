@@ -303,8 +303,8 @@ extern char ROMVER_data[16];
 extern u8 mx4sio_driver_running;
 #endif
 
-int load_vmc_fs(void);
-int get_vmc_fs_last_error(void);
+int load_vmcman(void);
+int get_vmcman_last_error(void);
 #ifdef ETH
 void load_ps2host(void);
 #endif
@@ -557,23 +557,6 @@ enum {
 /* makeicon.c */
 int make_icon(char *icontext, char *filename);
 int make_iconsys(char *title, char *iconname, char *filename);
-
-
-//vmcfs definitions
-
-//  The devctl commands: 0x56 == V, 0x4D == M, 0x43 == C, 0x01, 0x02, ... == command number.
-#define DEVCTL_VMCFS_CLEAN 0x564D4301   //  Set as free all fat cluster corresponding to a none existing object. ( Object are just marked as none existing but not removed from fat table when rmdir or remove fonctions are call. This allow to recover a deleted file. )
-#define DEVCTL_VMCFS_CKFREE 0x564D4302  //  Check free space available on vmc.
-
-//  The ioctl commands: 0x56 == V, 0x4D == M, 0x43 == C, 0x01, 0x02, ... == command number.
-#define IOCTL_VMCFS_RECOVER 0x564D4303  //  Recover an object marked as none existing. ( data must be a valid path to an object in vmc file )
-
-//  Vmc format enum
-typedef enum {
-	FORMAT_FULL,
-	FORMAT_FAST
-} Vmc_Format_Enum;
-
 
 // chkesr_rpc.c
 extern int Check_ESR_Disc(void);

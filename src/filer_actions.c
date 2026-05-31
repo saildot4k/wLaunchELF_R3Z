@@ -186,7 +186,6 @@ int delete (const char *path, const FILEINFO *file)
 			ret = fileXioRmdir(hdddir);
 		} else if (!strncmp(path, "vmc", 3)) {
 			ret = fileXioRmdir(dir);
-			fileXioDevctl("vmc0:", DEVCTL_VMCFS_CLEAN, NULL, 0, NULL, 0);
 
 		} else {  //For all other devices
 			sprintf(dir, "%s%s", path, file->name);
@@ -201,7 +200,6 @@ int delete (const char *path, const FILEINFO *file)
 			ret = fileXioRemove(hdddir);
 		} else if (!strncmp(path, "vmc", 3)) {
 			ret = fileXioRemove(dir);
-			fileXioDevctl("vmc0:", DEVCTL_VMCFS_CLEAN, NULL, 0, NULL, 0);
 		} else {  //For all other devices
 			ret = fileXioRemove(dir);
 		}

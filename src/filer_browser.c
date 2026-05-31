@@ -1122,9 +1122,9 @@ int getFilePath(char *out, int cnfmode)
 #endif
 						strcat(tmp2, files[browser_sel].name);
 						/* genFixPath may reset the IOP while lazy-loading storage stacks. */
-						if (!load_vmc_fs()) {
-							x = get_vmc_fs_last_error();
-							sprintf(msg1, "\n'%s vmc%d:' for \"%s\"\nvmc_fs not registered\nResult=%d",
+						if (!load_vmcman()) {
+							x = get_vmcman_last_error();
+							sprintf(msg1, "\n'%s vmc%d:' for \"%s\"\nvmcman not registered\nResult=%d",
 							        LNG(Mount), i, tmp2, x);
 							(void)ynDialog(msg1);
 						} else if ((x = fileXioMount(tmp, tmp2, FIO_MT_RDWR)) >= 0) {
@@ -1242,11 +1242,6 @@ int getFilePath(char *out, int cnfmode)
 					mcGetInfo(path[2] - '0', 0, &mctype_PSx, &mcfreeSpace, NULL);
 					mcSync(0, NULL, &ret);
 					freeSpace = mcfreeSpace * ((mctype_PSx == 1) ? 8192 : 1024);
-					vfreeSpace = TRUE;
-				} else if (!strncmp(path, "vmc", 3)) {
-					strncpy(tmp, path, 5);
-					tmp[5] = '\0';
-					freeSpace = fileXioDevctl(tmp, DEVCTL_VMCFS_CKFREE, NULL, 0, NULL, 0);
 					vfreeSpace = TRUE;
 				} else if (!strncmp(path, "hdd", 3) && strcmp(path, "hdd0:/")) {
 					u64 ZoneFree, ZoneSize;

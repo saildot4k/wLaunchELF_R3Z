@@ -177,8 +177,6 @@ int genRmdir(char *path)
 	t0 = Timer();
 	ret = fileXioRmdir(path);
 	t1 = Timer();
-	if (!strncmp(path, "vmc", 3))
-		fileXioDevctl("vmc0:", DEVCTL_VMCFS_CLEAN, NULL, 0, NULL, 0);
 #if FILEOP_TRACE
 	printf("[FILEOP] rmdir path=%s ret=%d dt=%llu ms\n",
 	       path, ret, (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
@@ -206,8 +204,6 @@ int genRemove(char *path)
 	t0 = Timer();
 	ret = fileXioRemove(path);
 	t1 = Timer();
-	if (!strncmp(path, "vmc", 3))
-		fileXioDevctl("vmc0:", DEVCTL_VMCFS_CLEAN, NULL, 0, NULL, 0);
 #if FILEOP_TRACE
 	printf("[FILEOP] remove path=%s ret=%d dt=%llu ms\n",
 	       path, ret, (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
