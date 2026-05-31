@@ -397,7 +397,7 @@ $(VMCMAN_PATCH_STAMP): scripts/patch_vmcman_backing.awk | iop/__generated
 		$(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c > $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c.tmp
 	mv $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c.tmp $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c
 	grep -q 'cardinfo->mounted = 1;' $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c
-	grep -q 'vmcman: mount request' $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c
+	grep -q 'cardinfo->cardsize = total_pages;' $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c
 	grep -q 'superblock.pages_per_cluster \* superblock.clusters_per_card' $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c
 	touch $@
 
@@ -409,7 +409,8 @@ $(VMCMAN_AUTOGEN): $(VMCMAN_PATCH_STAMP)
 		IOP_INC_DIR=$(abspath $(VMCMAN_PATCH_INC_DIR))/ \
 		IOP_BIN_DIR=$(abspath iop/__generated)/ \
 		IOP_OBJS_DIR=$(abspath iop/__generated/vmcman_obj)/ \
-		IOP_BIN=$(abspath $@)
+		IOP_BIN=$(abspath $@) \
+		DEBUG=0
 	test -s $@
 
 $(EE_ASM_DIR)vmcman_irx.c: $(VMCMAN_SOURCE) scripts/bin2c-fallback.sh | $(EE_ASM_DIR)

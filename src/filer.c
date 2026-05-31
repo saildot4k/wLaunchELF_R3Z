@@ -792,9 +792,7 @@ int readVMC(const char *path, FILEINFO *info, int max)
 		return 0;
 
 	while (fileXioDread(fd, &dirbuf) > 0) {
-		//		if(dirbuf.stat.mode & FIO_S_IFDIR &&  //NB: normal usage (non-mc-compatible VMC)
-		if (dirbuf.stat.mode & sceMcFileAttrSubdir &&  //NB: vmcman uses memory-card mode bits
-		    (!strcmp(dirbuf.name, ".") || !strcmp(dirbuf.name, "..")))
+		if (!strcmp(dirbuf.name, ".") || !strcmp(dirbuf.name, ".."))
 			continue;  //Skip pseudopaths "." and ".."
 
 		strcpy(info[i].name, dirbuf.name);

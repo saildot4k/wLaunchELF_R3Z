@@ -116,96 +116,6 @@ static void formatBrowserPathForDisplay(const char *path, char *display_path)
 	snprintf(display_path, MAX_PATH, "%s", path);
 }
 
-#define VMC_DBG_SUPERBLOCK_MAGIC "Sony PS2 Memory Card Format "
-
-static u16 vmcDbgRead16(const unsigned char *p)
-{
-	return (u16)p[0] | ((u16)p[1] << 8);
-}
-
-static u32 vmcDbgRead32(const unsigned char *p)
-{
-	return (u32)p[0] | ((u32)p[1] << 8) | ((u32)p[2] << 16) | ((u32)p[3] << 24);
-}
-
-static void debugVmcBackingFile(const char *backing)
-{
-	unsigned char superblock[384];
-	char magic[29];
-	char version[13];
-	int fd;
-	int size;
-	int read_result;
-	int pagesize;
-	unsigned int pages_per_cluster;
-	unsigned int blocksize;
-	unsigned int total_pages;
-	unsigned int expected_no_ecc;
-	unsigned int expected_ecc;
-	unsigned int clusters_per_card;
-	unsigned int cardtype;
-	unsigned int cardflags;
-	int magic_ok;
-
-	fd = fileXioOpen(backing, FIO_O_RDONLY, 0);
-	printf("[VMC] backing open path='%s' fd=%d\n", backing, fd);
-	if (fd < 0)
-		return;
-
-	size = fileXioLseek(fd, 0, SEEK_END);
-	printf("[VMC] backing size=%d\n", size);
-	if (fileXioLseek(fd, 0, SEEK_SET) < 0)
-		printf("[VMC] backing rewind failed\n");
-
-	read_result = fileXioRead(fd, superblock, sizeof(superblock));
-	printf("[VMC] backing superblock read=%d expected=%u\n", read_result, (unsigned int)sizeof(superblock));
-	fileXioClose(fd);
-	if (read_result >= 16) {
-		printf("[VMC] backing first16=%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
-		       superblock[0], superblock[1], superblock[2], superblock[3],
-		       superblock[4], superblock[5], superblock[6], superblock[7],
-		       superblock[8], superblock[9], superblock[10], superblock[11],
-		       superblock[12], superblock[13], superblock[14], superblock[15]);
-	}
-	if (read_result != (int)sizeof(superblock)) {
-		if (read_result >= 0)
-			printf("[VMC] reject-hint: vmcman requires a full 384-byte superblock read\n");
-		return;
-	}
-
-	memcpy(magic, superblock, 28);
-	magic[28] = '\0';
-	memcpy(version, superblock + 28, 12);
-	version[12] = '\0';
-	pagesize = (s16)vmcDbgRead16(superblock + 40);
-	pages_per_cluster = vmcDbgRead16(superblock + 42);
-	blocksize = vmcDbgRead16(superblock + 44);
-	clusters_per_card = vmcDbgRead32(superblock + 48);
-	cardtype = superblock[336];
-	cardflags = superblock[337];
-	total_pages = pages_per_cluster * clusters_per_card;
-	expected_no_ecc = (unsigned int)pagesize * total_pages;
-	expected_ecc = (unsigned int)(pagesize + 0x10) * total_pages;
-	magic_ok = (strncmp(magic, VMC_DBG_SUPERBLOCK_MAGIC, 28) == 0);
-
-	printf("[VMC] backing magic='%s' magic_ok=%d version='%s'\n", magic, magic_ok, version);
-	printf("[VMC] backing pagesize=%d pages_per_cluster=%u blocksize=%u clusters_per_card=%u total_pages=%u\n",
-	       pagesize, pages_per_cluster, blocksize, clusters_per_card, total_pages);
-	printf("[VMC] backing clusters_per_card=%u cardtype=%u cardflags=0x%02x\n",
-	       clusters_per_card, cardtype, cardflags);
-	printf("[VMC] backing expected_no_ecc=%u expected_ecc=%u actual=%d\n",
-	       expected_no_ecc, expected_ecc, size);
-
-	if (!magic_ok)
-		printf("[VMC] reject-hint: superblock magic does not match vmcman expectation\n");
-	if (cardtype != 2)
-		printf("[VMC] reject-hint: cardtype must be 2 for a PS2 memory card image\n");
-	if (pagesize != 512 && pagesize != 528)
-		printf("[VMC] reject-hint: vmcman only accepts page sizes 512 or 528\n");
-	if (size >= 0 && size != (int)expected_no_ecc && size != (int)expected_ecc)
-		printf("[VMC] reject-hint: file size does not match vmcman no-ECC or ECC geometry\n");
-}
-
 static int isTitleCfgPathEligible(const char *path, int menu_disabled)
 {
 	return ((!strncmp(path, "mass", 4)) ||
@@ -1188,18 +1098,15 @@ int getFilePath(char *out, int cnfmode)
 						i = ret - MOUNTVMC0;
 						sprintf(tmp, "vmc%d:", i);
 						if (vmcMounted[i]) {
-							printf("[VMC] unmount request mount='%s' slot=%d party=%d\n", tmp, i, vmc_PartyIndex[i]);
 							if ((j = vmc_PartyIndex[i]) >= 0) {
 								vmc_PartyIndex[i] = -1;
 								if (j != vmc_PartyIndex[1 ^ i])
 									Party_vmcIndex[j] = -1;
 							}
-							x = fileXioUmount(tmp);
-							printf("[VMC] unmount result mount='%s' ret=%d\n", tmp, x);
+							fileXioUmount(tmp);
 							vmcMounted[i] = 0;
 						}
 						j = genFixPath(path, tmp1);
-						printf("[VMC] genFixPath path='%s' fixed='%s' party=%d\n", path, (j < 0) ? "" : tmp1, j);
 						if (j < 0) {
 							sprintf(msg1, "\n'%s vmc%d:' for \"%s\"\nResult=%d",
 							        LNG(Mount), i, path, j);
@@ -1214,19 +1121,14 @@ int getFilePath(char *out, int cnfmode)
 						}
 #endif
 						strcat(tmp2, files[browser_sel].name);
-						printf("[VMC] mount request mount='%s' backing='%s' entry='%s'\n",
-						       tmp, tmp2, files[browser_sel].name);
-						debugVmcBackingFile(tmp2);
 						/* genFixPath may reset the IOP while lazy-loading storage stacks. */
 						x = load_vmcman();
-						printf("[VMC] load_vmcman ret=%d last_error=%d\n", x, x ? 0 : get_vmcman_last_error());
 						if (!x) {
 							x = get_vmcman_last_error();
 							sprintf(msg1, "\n'%s vmc%d:' for \"%s\"\nvmcman not registered\nResult=%d",
 							        LNG(Mount), i, tmp2, x);
 							(void)ynDialog(msg1);
 						} else if ((x = fileXioMount(tmp, tmp2, FIO_MT_RDWR)) >= 0) {
-							printf("[VMC] mount result mount='%s' backing='%s' ret=%d\n", tmp, tmp2, x);
 							if ((j >= 0) && (j < MOUNT_LIMIT)) {
 								vmc_PartyIndex[i] = j;
 								Party_vmcIndex[j] = i;
@@ -1237,7 +1139,6 @@ int getFilePath(char *out, int cnfmode)
 							cnfmode = NON_CNF;
 							strcpy(ext, cnfmode_extL[cnfmode]);
 						} else {
-							printf("[VMC] mount result mount='%s' backing='%s' ret=%d\n", tmp, tmp2, x);
 							sprintf(msg1, "\n'%s vmc%d:' for \"%s\"\nResult=%d",
 							        LNG(Mount), i, tmp2, x);
 							(void)ynDialog(msg1);
