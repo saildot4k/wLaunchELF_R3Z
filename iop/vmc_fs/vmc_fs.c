@@ -64,13 +64,13 @@ int Vmc_Deinitialize(iop_device_t *driver)
 // Entry point of the driver.
 int _start(int argc, char **argv)
 {
+	int adddrv_ret;
 
 	printf("\tVMC FS Created by ubergeek42\n");
 	printf("\t... Improved by Polo35.\n");
 	printf("\tVersion %d.%d\n", MODMAJOR, MODMINOR);
 	printf("\tcompiled on %s %s\n", __DATE__, __TIME__);
 
-	g_Vmc_Initialized = FALSE;
 	g_Vmc_Remove_Flag = FALSE;
 
 	s_Vmc_Driver.type = (IOP_DT_FS | IOP_DT_FSEXT);
@@ -112,7 +112,12 @@ int _start(int argc, char **argv)
 
 	//  Add the Driver using the ioman export
 	DelDrv(s_Vmc_Driver.name);
-	AddDrv(&s_Vmc_Driver);
+	g_Vmc_Initialized = FALSE;
+	adddrv_ret = AddDrv(&s_Vmc_Driver);
+	if (adddrv_ret < 0) {
+		printf("vmc_fs: failed to add driver %s: %d\n", s_Vmc_Driver.name, adddrv_ret);
+		return adddrv_ret;
+	}
 
 	//  And we are done!
 	DEBUGPRINT(1, " Filesystem Driver %s added!\n", s_Vmc_Driver.name);

@@ -515,6 +515,22 @@ static void load_ps2dvr(void)
 //endfunc load_ps2dvr
 //---------------------------------------------------------------------------
 #endif
+
+static int vmcFsDeviceRegistered(void)
+{
+	int fd;
+
+	fd = fileXioDopen("vmc0:");
+	if (fd >= 0) {
+		fileXioDclose(fd);
+		return TRUE;
+	}
+
+	/* An unmounted but registered vmc device returns NOT_MOUNT, not ENODEV. */
+	DPRINTF(" [VMC_FS]: device probe ret=%d\n", fd);
+	return (fd != -ENODEV);
+}
+
 int load_vmc_fs(void)
 {
 	int ret, ID __attribute__((unused));
@@ -525,6 +541,8 @@ int load_vmc_fs(void)
 		DPRINTF(" [VMC_FS]: ID=%d, ret=%d\n", ID, ret);
 		have_vmc_fs = (ID >= 0 && ret >= 0);
 	}
+	if (have_vmc_fs && !vmcFsDeviceRegistered())
+		have_vmc_fs = 0;
 	return have_vmc_fs;
 }
 //------------------------------

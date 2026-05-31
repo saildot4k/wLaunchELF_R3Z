@@ -1124,7 +1124,7 @@ int getFilePath(char *out, int cnfmode)
 						/* genFixPath may reset the IOP while lazy-loading storage stacks. */
 						if (!load_vmc_fs()) {
 							x = -19;
-							sprintf(msg1, "\n'%s vmc%d:' for \"%s\"\nResult=%d",
+							sprintf(msg1, "\n'%s vmc%d:' for \"%s\"\nvmc_fs not registered\nResult=%d",
 							        LNG(Mount), i, tmp2, x);
 							(void)ynDialog(msg1);
 						} else if ((x = fileXioMount(tmp, tmp2, FIO_MT_RDWR)) >= 0) {
