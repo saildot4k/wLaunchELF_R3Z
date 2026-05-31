@@ -392,15 +392,16 @@ $(EE_ASM_DIR)filexio_irx.s: $(FILEXIO_SOURCE) | $(EE_ASM_DIR)
 iop/__generated:
 	mkdir -p $@
 
-$(VMCMAN_PATCH_STAMP): | iop/__generated
+$(VMCMAN_PATCH_STAMP): scripts/patch_vmcman_backing.awk | iop/__generated
 	rm -rf $(VMCMAN_PATCH_DIR)
 	mkdir -p $(VMCMAN_PATCH_SRC_DIR) $(VMCMAN_PATCH_INC_DIR)
 	cp -R $(VMCMAN_SDK_ROOT)/iop/memorycard/mcman/src/. $(VMCMAN_PATCH_SRC_DIR)/
 	cp -R $(VMCMAN_SDK_ROOT)/iop/memorycard/mcman/include/. $(VMCMAN_PATCH_INC_DIR)/
-	awk '{ print; if ($$0 ~ /cardinfo->flags = superblock.cardflags;/) print "\t\t\tcardinfo->mounted = 1;"; }' \
+	awk -f scripts/patch_vmcman_backing.awk \
 		$(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c > $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c.tmp
 	mv $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c.tmp $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c
 	grep -q 'cardinfo->mounted = 1;' $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c
+	grep -q 'vmcman: mount request' $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c
 	touch $@
 
 $(VMCMAN_AUTOGEN): $(VMCMAN_PATCH_STAMP)
