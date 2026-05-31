@@ -83,6 +83,20 @@ jobs:
     - run: |
         git config --global --add safe.directory "$GITHUB_WORKSPACE"
         git fetch --prune --unshallow
+    - name: Prepare PS2SDK source for patched vmcman
+      run: |
+        if [ -n "${PS2SDKSRC:-}" ] && [ -f "$PS2SDKSRC/iop/memorycard/vmcman/Makefile" ]; then
+          echo "Using PS2SDKSRC=$PS2SDKSRC"
+          exit 0
+        fi
+        if [ -n "${PS2SDK:-}" ] && [ -f "$PS2SDK/iop/memorycard/vmcman/Makefile" ]; then
+          echo "Using PS2SDK source tree at $PS2SDK"
+          echo "PS2SDKSRC=$PS2SDK" >> "$GITHUB_ENV"
+          exit 0
+        fi
+        ps2sdk_src_dir="${RUNNER_TEMP:-/tmp}/ps2sdk-src"
+        git clone --depth 1 https://github.com/ps2dev/ps2sdk.git "$ps2sdk_src_dir"
+        echo "PS2SDKSRC=$ps2sdk_src_dir" >> "$GITHUB_ENV"
     - name: Ensure scripts are executable
       run: |
         chmod +x scripts/stale_code_audit.sh scripts/ci/resolve_make_args.sh

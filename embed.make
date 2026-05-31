@@ -183,14 +183,10 @@ endif
 
 ifneq ($(strip $(VMCMAN_SDK_MODULE_DIR)),)
 VMCMAN_SOURCE := $(VMCMAN_AUTOGEN)
-else ifneq ($(wildcard $(PS2SDK)/iop/irx/vmcman.irx),)
-VMCMAN_SOURCE := $(PS2SDK)/iop/irx/vmcman.irx
-else ifneq ($(wildcard iop/__precompiled/vmcman.irx),)
-VMCMAN_SOURCE := iop/__precompiled/vmcman.irx
 endif
 
 ifeq ($(strip $(VMCMAN_SOURCE)),)
-$(error Missing vmcman.irx. Update PS2SDK, add iop/__precompiled/vmcman.irx, or provide PS2SDKSRC with iop/memorycard/vmcman sources)
+$(error Missing vmcman sources. Set PS2SDKSRC to a ps2sdk checkout with iop/memorycard/vmcman; prebuilt vmcman.irx is not supported because wLaunchELF patches its backing geometry)
 endif
 
 
