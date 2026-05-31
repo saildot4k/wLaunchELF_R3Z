@@ -115,8 +115,7 @@ int _start(int argc, char **argv)
 	g_Vmc_Initialized = FALSE;
 	adddrv_ret = AddDrv(&s_Vmc_Driver);
 	if (adddrv_ret < 0) {
-		printf("vmc_fs: failed to add driver %s: %d\n", s_Vmc_Driver.name, adddrv_ret);
-		return adddrv_ret;
+		printf("vmc_fs: AddDrv returned %d for %s\n", adddrv_ret, s_Vmc_Driver.name);
 	}
 
 	//  And we are done!
