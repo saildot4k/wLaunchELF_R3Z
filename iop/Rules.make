@@ -83,7 +83,9 @@ else
 IOP_LDFLAGS := -nostdlib $(IOP_LDFLAGS_USER)
 ifneq ($(IOP_CC_VERSION),3.2.2)
 ifneq ($(IOP_CC_VERSION),3.2.3)
-$(error Modern IOP compiler detected, but srxfixup/linkfile was not found. Set PS2SDKSRC or install srxfixup to build loadable IRX modules)
+ifneq ($(filter clean,$(MAKECMDGOALS)),clean)
+$(warning Modern IOP compiler detected, but srxfixup/linkfile was not found; falling back to legacy IRX link rule)
+endif
 endif
 endif
 endif
