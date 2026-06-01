@@ -602,6 +602,28 @@ int mc_chstat(MC_IO_FIL_T *f, const char *filename, MC_IO_STA_T *stat, unsigned 
 	if (r >= -1) {
 		register int flags;
 
+#if defined(BUILDING_VMCMAN)
+		if (statmask == MCMAN_ULE_FULL_INFO) {
+			memset(&mctbl, 0, sizeof(mctbl));
+			mctbl.AttrFile = stat->private_0;
+			mctbl.Reserve1 = stat->private_1;
+			mctbl.Reserve2 = stat->private_2;
+			mctbl.FileSizeByte = stat->size;
+			memcpy(&mctbl._Create, stat->ctime, sizeof(sceMcStDateTime));
+			memcpy(&mctbl._Modify, stat->mtime, sizeof(sceMcStDateTime));
+			DPRINTF("full chstat filename=%s attr=%x reserve1=%x reserve2=%x size=%u "
+				"ctime=%04d-%02d-%02d %02d:%02d:%02d mtime=%04d-%02d-%02d %02d:%02d:%02d\n",
+				filename, mctbl.AttrFile, mctbl.Reserve1, mctbl.Reserve2, mctbl.FileSizeByte,
+				mctbl._Create.Year, mctbl._Create.Month, mctbl._Create.Day,
+				mctbl._Create.Hour, mctbl._Create.Min, mctbl._Create.Sec,
+				mctbl._Modify.Year, mctbl._Modify.Month, mctbl._Modify.Day,
+				mctbl._Modify.Hour, mctbl._Modify.Min, mctbl._Modify.Sec);
+			r = McSetFileInfo(mcman_mc_port, mcman_mc_slot, filename, &mctbl, MCMAN_ULE_FULL_INFO);
+			SignalSema(mcman_io_sema);
+			return mcman_ioerrcode(r);
+		}
+#endif
+
 		flags = 0x000;
 
 		if (statmask & MC_IO_CST_ATTR) {

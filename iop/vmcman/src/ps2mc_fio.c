@@ -304,6 +304,9 @@ int mcman_dread2(int fd, MC_IO_DRE_T *dirent)
 
 	dirent->stat.attr = fse->attr;
 	dirent->stat.size = fse->length;
+	dirent->stat.private_0 = fse->mode;
+	dirent->stat.private_1 = fse->unused;
+	dirent->stat.private_2 = fse->attr;
 	memcpy(dirent->stat.ctime, &fse->created, sizeof(sceMcStDateTime));
 	memcpy(dirent->stat.mtime, &fse->modified, sizeof(sceMcStDateTime));
 
@@ -344,6 +347,9 @@ int mcman_getstat2(int port, int slot, const char *filename, MC_IO_STA_T *stat)
 		stat->mode |= MC_IO_S_FL;
 
 	stat->attr = fse->attr;
+	stat->private_0 = fse->mode;
+	stat->private_1 = fse->unused;
+	stat->private_2 = fse->attr;
 
 	if (!(fse->mode & sceMcFileAttrSubdir))
 		stat->size = fse->length;
@@ -430,9 +436,10 @@ int mcman_setinfo2(int port, int slot, const char *filename, sceMcTblGetDir *inf
 	//This allows writing most entries that can be read by mcGetDir
 	//and without usual restrictions. This flags value should cause no conflict
 	//as Sony code never uses it, and the value is changed after its use here.
-	if(flags == 0xFEED){
+	if(flags == MCMAN_ULE_FULL_INFO){
 		fse->mode = info->AttrFile;
-		//fse->unused = info->Reserve1;
+		fse->unused = info->Reserve1;
+		fse->attr = info->Reserve2;
 		//fse->length = info->FileSizeByte;
 		flags = sceMcFileAttrReadable|sceMcFileAttrWriteable;
 		//The changed flags value allows more entries to be copied below

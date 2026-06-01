@@ -110,6 +110,9 @@ typedef struct _MCCacheDir {
 #define MCMAN_CLUSTERSIZE 			1024
 #define MCMAN_CLUSTERFATENTRIES		256
 
+// uLaunchELF-compatible full metadata restore through chstat/McSetFileInfo.
+#define MCMAN_ULE_FULL_INFO 0xFEED
+
 typedef struct _McFatCluster {
 	int entry[MCMAN_CLUSTERFATENTRIES];
 } McFatCluster;

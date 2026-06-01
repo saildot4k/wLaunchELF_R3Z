@@ -21,6 +21,83 @@
 #define FILEOP_TRACE 1
 #endif
 
+static int isMemoryCardLikePath(const char *path)
+{
+	return (!strncmp(path, "mc", 2) || !strncmp(path, "vmc", 3));
+}
+
+static int applyMcInfoToMcPath(const char *path, const sceMcTblGetDir *info)
+{
+	int dummy, mctype, ret = 0;
+
+	if (strncmp(path, "mc", 2))
+		return -1;
+
+	mcGetInfo(path[2] - '0', 0, &mctype, &dummy, &dummy);
+	mcSync(0, NULL, &dummy);
+	mcSetFileInfo(path[2] - '0', 0, &path[4], info, MC_SFI);
+	mcSync(0, NULL, &ret);
+#if FILEOP_TRACE
+	printf("[MC_STAT] setinfo path='%s' attr=0x%x reserve1=0x%x reserve2=0x%x size=%u "
+	       "ctime=%04d-%02d-%02d %02d:%02d:%02d mtime=%04d-%02d-%02d %02d:%02d:%02d ret=%d mctype=%d\n",
+	       path, info->AttrFile, info->Reserve1, info->Reserve2, info->FileSizeByte,
+	       info->_Create.Year, info->_Create.Month, info->_Create.Day,
+	       info->_Create.Hour, info->_Create.Min, info->_Create.Sec,
+	       info->_Modify.Year, info->_Modify.Month, info->_Modify.Day,
+	       info->_Modify.Hour, info->_Modify.Min, info->_Modify.Sec, ret, mctype);
+#endif
+	return ret;
+}
+
+static void fillVmcStatFromMcInfo(iox_stat_t *stat, const sceMcTblGetDir *info)
+{
+	memset(stat, 0, sizeof(*stat));
+	if (info->AttrFile & sceMcFileAttrSubdir)
+		stat->mode = FIO_S_IFDIR;
+	else
+		stat->mode = FIO_S_IFREG;
+	if (info->AttrFile & sceMcFileAttrReadable)
+		stat->mode |= FIO_S_IRUSR | FIO_S_IRGRP | FIO_S_IROTH;
+	if (info->AttrFile & sceMcFileAttrWriteable)
+		stat->mode |= FIO_S_IWUSR | FIO_S_IWGRP | FIO_S_IWOTH;
+	if (info->AttrFile & sceMcFileAttrExecutable)
+		stat->mode |= FIO_S_IXUSR | FIO_S_IXGRP | FIO_S_IXOTH;
+
+	stat->size = info->FileSizeByte;
+	stat->attr = info->Reserve2;
+	stat->private_0 = info->AttrFile;
+	stat->private_1 = info->Reserve1;
+	stat->private_2 = info->Reserve2;
+	memcpy(stat->ctime, (void *)&info->_Create, 8);
+	memcpy(stat->mtime, (void *)&info->_Modify, 8);
+	memcpy(stat->atime, stat->mtime, 8);
+}
+
+static int applyMcInfoToVmcPath(const char *path, const sceMcTblGetDir *info)
+{
+	iox_stat_t stat;
+	char fixed_path[MAX_PATH];
+	int len, ret;
+
+	snprintf(fixed_path, sizeof(fixed_path), "%s", path);
+	len = strlen(fixed_path);
+	if (len > 6 && fixed_path[len - 1] == '/')
+		fixed_path[len - 1] = '\0';
+
+	fillVmcStatFromMcInfo(&stat, info);
+	ret = fileXioChStat(fixed_path, &stat, MC_SFI);
+#if FILEOP_TRACE
+	printf("[VMC_STAT] chstat path='%s' attr=0x%x reserve1=0x%x reserve2=0x%x size=%u "
+	       "ctime=%04d-%02d-%02d %02d:%02d:%02d mtime=%04d-%02d-%02d %02d:%02d:%02d ret=%d\n",
+	       fixed_path, info->AttrFile, info->Reserve1, info->Reserve2, info->FileSizeByte,
+	       info->_Create.Year, info->_Create.Month, info->_Create.Day,
+	       info->_Create.Hour, info->_Create.Min, info->_Create.Sec,
+	       info->_Modify.Year, info->_Modify.Month, info->_Modify.Day,
+	       info->_Modify.Hour, info->_Modify.Min, info->_Modify.Sec, ret);
+#endif
+	return ret;
+}
+
 // getGameTitle below is used to extract the real save title of
 // an MC gamesave folder. Normally this is held in the icon.sys
 // file of a PS2 game save, but that is not the case for saves
@@ -403,9 +480,8 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 					genLseek(PM_file[recurses + 1], psu_pad_size, SEEK_CUR);
 				//finally, we must adjust attributes of the new file copy, to ensure
 				//correct timestamps and attributes (requires MC-specific functions)
-				if (!strncmp(out, "mc", 2)) {
+				if (!strncmp(out, "mc", 2))
 					psu_restore_apply_entry_stats_to_mc(out, &files[0].stats, MC_SFI);
-				}
 			}                                 //ends main for loop of valid PM_PSU_RESTORE mode
 			genClose(PM_file[recurses + 1]);  //Close the PSU file
 			                                  //Finally fix the stats of the containing folder
@@ -439,27 +515,33 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 				return -1;
 		} else if (PM_flag[recurses + 1] == PM_NORMAL) {             //Normal mode folder paste closure
 			if (!strncmp(out, "mc", 2)) {                            //Handle folder copied to MC
-				mcGetInfo(out[2] - '0', 0, &dummy, &dummy, &dummy);  //Wakeup call
-				mcSync(0, NULL, &dummy);
 				ret = MC_SFI;                                   //default request for changing entire mcTable
-				if (strncmp(in, "mc", 2)) {                     //Handle file copied from non-MC to MC
+				if (!isMemoryCardLikePath(in)) {                //Handle folder copied from non-MC/non-VMC to MC
 					file.stats.AttrFile = MC_ATTR_norm_folder;  //normalize MC folder attribute
 #if defined(ETH) || defined(UDPFS)
 					if (!strncmp(in, "host", 4) || !strncmp(in, "udpfs", 5)) {  //Handle folder copied from host/udpfs to MC
 						ret = 4;                                //request change only of main attribute for host:
 					}                                           //ends host: source clause
 #endif
-				}                                               //ends non-MC source clause
-				mcSetFileInfo(out[2] - '0', 0, &out[4], &file.stats, ret);
-				mcSync(0, NULL, &dummy);
-				} else {                                    //Handle folder copied to non-MC
-					if (!strncmp(out, "host", 4) || !strncmp(out, "udpfs", 5)) {  //for files copied to host/udpfs: we skip Chstat
-					} else if (!strncmp(out, "mass", 4)) {  //for files copied to mass: we skip Chstat
+				}                                               //ends non-MC/non-VMC source clause
+				if (ret == MC_SFI)
+					applyMcInfoToMcPath(out, &file.stats);
+				else {
+					mcGetInfo(out[2] - '0', 0, &dummy, &dummy, &dummy);  //Wakeup call
+					mcSync(0, NULL, &dummy);
+					mcSetFileInfo(out[2] - '0', 0, &out[4], &file.stats, ret);
+					mcSync(0, NULL, &dummy);
+				}
+			} else if (!strncmp(out, "vmc", 3)) {               //Handle folder copied to VMC
+				applyMcInfoToVmcPath(out, &file.stats);
+			} else {                                            //Handle folder copied to non-MC
+				if (!strncmp(out, "host", 4) || !strncmp(out, "udpfs", 5)) {  //for files copied to host/udpfs: we skip Chstat
+				} else if (!strncmp(out, "mass", 4)) {  //for files copied to mass: we skip Chstat
 #ifdef MX4SIO
-					} else if (!strncmp(out, "mx4sio", 6)) {  //for files copied to mx4sio: we skip Chstat
+				} else if (!strncmp(out, "mx4sio", 6)) {  //for files copied to mx4sio: we skip Chstat
 #endif
-					} else if (!strncmp(out, "ata", 3)) {  //for files copied to ata: we skip Chstat
-					} else {                                //for other devices we use fileXio_ stuff
+				} else if (!strncmp(out, "ata", 3)) {  //for files copied to ata: we skip Chstat
+				} else {                                //for other devices we use fileXio_ stuff
 					memcpy(iox_stat.ctime, (void *)&file.stats._Create, 8);
 					memcpy(iox_stat.mtime, (void *)&file.stats._Modify, 8);
 					memcpy(iox_stat.atime, iox_stat.mtime, 8);
@@ -476,10 +558,9 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 		if ((PM_flag[recurses + 1] == PM_PSU_RESTORE) && !strncmp(out, "mc", 2)) {
 			//Finally fix the stats of the containing folder
 			//It has to be done last, as timestamps would change when fixing files
-			mcGetInfo(out[2] - '0', 0, &dummy, &dummy, &dummy);  //Wakeup call
-			mcSync(0, NULL, &dummy);
-			mcSetFileInfo(out[2] - '0', 0, &out[4], &file.stats, MC_SFI);  //Fix folder stats
-			mcSync(0, NULL, &dummy);
+			applyMcInfoToMcPath(out, &file.stats);
+		} else if ((PM_flag[recurses + 1] == PM_PSU_RESTORE) && !strncmp(out, "vmc", 3)) {
+			applyMcInfoToVmcPath(out, &file.stats);
 		}
 		//the return code below is used if there were no errors copying a folder
 		return 0;
@@ -790,24 +871,30 @@ copy_file_data_done:
 	}
 
 	if (!strncmp(out, "mc", 2)) {                                 //Handle file copied to MC
-		mcGetInfo(out[2] - '0', 0, &mctype_PSx, &dummy, &dummy);  //Wakeup call & MC type check
-		mcSync(0, NULL, &dummy);
 		ret = MC_SFI;                                 //default request for changing entire mcTable
-		if (strncmp(in, "mc", 2)) {                   //Handle file copied from non-MC to MC
+		if (!isMemoryCardLikePath(in)) {              //Handle file copied from non-MC/non-VMC to MC
 			file.stats.AttrFile = MC_ATTR_norm_file;  //normalize MC file attribute
 #if defined(ETH) || defined(UDPFS)
 			if (!strncmp(in, "host", 4) || !strncmp(in, "udpfs", 5)) {  //Handle folder copied from host/udpfs to MC
 				ret = 4;                              //request change only of main attribute for host:
 			}                                         //ends host: source clause
 #endif
-		}                                             //ends non-MC source clause
-		if (mctype_PSx == 2) {                        //if copying to a PS2 MC
-			mcSetFileInfo(out[2] - '0', 0, &out[4], &file.stats, ret);
+		}                                             //ends non-MC/non-VMC source clause
+		if (ret == MC_SFI)
+			applyMcInfoToMcPath(out, &file.stats);
+		else {
+			mcGetInfo(out[2] - '0', 0, &mctype_PSx, &dummy, &dummy);  //Wakeup call & MC type check
 			mcSync(0, NULL, &dummy);
+			if (mctype_PSx == 2) {                        //if copying to a PS2 MC
+				mcSetFileInfo(out[2] - '0', 0, &out[4], &file.stats, ret);
+				mcSync(0, NULL, &dummy);
+			}
 		}
-		} else {                                    //Handle file copied to non-MC
-			if (!strncmp(out, "host", 4) || !strncmp(out, "udpfs", 5)) {  //for files copied to host/udpfs: we skip Chstat
-			} else if (!strncmp(out, "mass", 4)) {  //for files copied to mass: we skip Chstat
+	} else if (!strncmp(out, "vmc", 3)) {             //Handle file copied to VMC
+		applyMcInfoToVmcPath(out, &file.stats);
+	} else {                                          //Handle file copied to non-MC
+		if (!strncmp(out, "host", 4) || !strncmp(out, "udpfs", 5)) {  //for files copied to host/udpfs: we skip Chstat
+		} else if (!strncmp(out, "mass", 4)) {  //for files copied to mass: we skip Chstat
 #ifdef MX4SIO
 			} else if (!strncmp(out, "mx4sio", 6)) {  //for files copied to mx4sio: we skip Chstat
 #endif

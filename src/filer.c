@@ -792,26 +792,29 @@ int readVMC(const char *path, FILEINFO *info, int max)
 		return 0;
 
 	while (fileXioDread(fd, &dirbuf) > 0) {
+		unsigned int vmc_mc_mode = dirbuf.stat.private_0;
+
 		if (!strcmp(dirbuf.name, ".") || !strcmp(dirbuf.name, ".."))
 			continue;  //Skip pseudopaths "." and ".."
 
 		strcpy(info[i].name, dirbuf.name);
 		clearMcTable(&info[i].stats);
-		//		if(dirbuf.stat.mode & FIO_S_IFDIR){  //NB: normal usage (non-mc-compatible VMC)
-		//			info[i].stats.attrFile = MC_ATTR_norm_folder;
-		//		}
-		if (dirbuf.stat.mode & sceMcFileAttrSubdir) {  //NB: vmcman usage
+		if (vmc_mc_mode & sceMcFileAttrExists) {
+			info[i].stats.AttrFile = vmc_mc_mode;
+			info[i].stats.Reserve1 = (u16)dirbuf.stat.private_1;
+			info[i].stats.Reserve2 = dirbuf.stat.private_2;
+			if (!(vmc_mc_mode & sceMcFileAttrSubdir))
+				info[i].stats.FileSizeByte = dirbuf.stat.size;
+		} else if (FIO_S_ISDIR(dirbuf.stat.mode)) {
+			info[i].stats.AttrFile = MC_ATTR_norm_folder;
+		} else if (FIO_S_ISREG(dirbuf.stat.mode)) {
+			info[i].stats.AttrFile = MC_ATTR_norm_file;
+			info[i].stats.FileSizeByte = dirbuf.stat.size;
+		} else if (dirbuf.stat.mode & sceMcFileAttrSubdir) {
 			info[i].stats.AttrFile = dirbuf.stat.mode;
-		}
-		//		else if(dirbuf.stat.mode & FIO_S_IFREG){  //NB: normal usage (non-mc-compatible VMC)
-		//			info[i].stats.attrFile = MC_ATTR_norm_file;
-		//			info[i].stats.fileSizeByte = dirbuf.stat.size;
-		//			info[i].stats.unknown4[0] = dirbuf.stat.hisize;
-		//		}
-		else if (dirbuf.stat.mode & sceMcFileAttrFile) {  //NB: vmcman usage
+		} else if (dirbuf.stat.mode & sceMcFileAttrFile) {
 			info[i].stats.AttrFile = dirbuf.stat.mode;
 			info[i].stats.FileSizeByte = dirbuf.stat.size;
-			info[i].stats.Reserve2 = dirbuf.stat.hisize;
 		} else
 			continue;  //Skip entry which is neither a file nor a folder
 		snprintf((char *)info[i].stats.EntryName, 32, "%.31s", info[i].name);
