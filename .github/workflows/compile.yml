@@ -107,7 +107,7 @@ jobs:
           "${{ matrix.psx_profile }}" \
           "${{ matrix.pad_profile }}" \
           "${{ matrix.storage_profile }}" \
-          1 1)"
+          0 0)"
         echo "Resolved make flags: $FLAGS"
         make rebuild ${{ github.event.inputs.make_args }} $FLAGS
 
