@@ -45,14 +45,11 @@ USBMASS_BD_SDK_MODULE_DIR :=
 
 IOMANX_SOURCE := iop/__precompiled/iomanX.irx
 FILEXIO_SOURCE := iop/__precompiled/fileXio.irx
-VMCMAN_SOURCE :=
 VMCMAN_AUTOGEN := iop/__generated/vmcman.irx
+VMCMAN_SOURCE := $(VMCMAN_AUTOGEN)
+VMCMAN_LOCAL_DIR := iop/vmcman
+VMCMAN_LOCAL_SOURCES := $(wildcard $(VMCMAN_LOCAL_DIR)/Makefile $(VMCMAN_LOCAL_DIR)/src/* $(VMCMAN_LOCAL_DIR)/include/*)
 VMCMAN_SDK_ROOT :=
-VMCMAN_SDK_MODULE_DIR :=
-VMCMAN_PATCH_DIR := iop/__generated/vmcman_patched
-VMCMAN_PATCH_SRC_DIR := $(VMCMAN_PATCH_DIR)/src
-VMCMAN_PATCH_INC_DIR := $(VMCMAN_PATCH_DIR)/include
-VMCMAN_PATCH_STAMP := $(VMCMAN_PATCH_DIR)/.patched
 
 ifneq ($(wildcard $(PS2SDK)/iop/irx/bdm.irx),)
 BDM_SOURCE := $(PS2SDK)/iop/irx/bdm.irx
@@ -168,25 +165,19 @@ FILEXIO_SOURCE := $(PS2SDK)/iop/irx/fileXio.irx
 endif
 
 ifneq ($(PS2SDKSRC),)
-ifneq ($(wildcard $(PS2SDKSRC)/iop/memorycard/vmcman/Makefile),)
+ifneq ($(wildcard $(PS2SDKSRC)/Defs.make),)
 VMCMAN_SDK_ROOT := $(PS2SDKSRC)
-VMCMAN_SDK_MODULE_DIR := $(PS2SDKSRC)/iop/memorycard/vmcman
 endif
 endif
 
-ifeq ($(strip $(VMCMAN_SDK_MODULE_DIR)),)
-ifneq ($(wildcard $(PS2SDK)/iop/memorycard/vmcman/Makefile),)
+ifeq ($(strip $(VMCMAN_SDK_ROOT)),)
+ifneq ($(wildcard $(PS2SDK)/Defs.make),)
 VMCMAN_SDK_ROOT := $(PS2SDK)
-VMCMAN_SDK_MODULE_DIR := $(PS2SDK)/iop/memorycard/vmcman
 endif
 endif
 
-ifneq ($(strip $(VMCMAN_SDK_MODULE_DIR)),)
-VMCMAN_SOURCE := $(VMCMAN_AUTOGEN)
-endif
-
-ifeq ($(strip $(VMCMAN_SOURCE)),)
-$(error Missing vmcman sources. Set PS2SDKSRC to a ps2sdk checkout with iop/memorycard/vmcman; prebuilt vmcman.irx is not supported because wLaunchELF patches its backing geometry)
+ifeq ($(strip $(VMCMAN_SDK_ROOT)),)
+$(error Missing PS2SDK source tree for local vmcman build. Set PS2SDKSRC to a ps2sdk checkout)
 endif
 
 
@@ -388,39 +379,14 @@ $(EE_ASM_DIR)filexio_irx.s: $(FILEXIO_SOURCE) | $(EE_ASM_DIR)
 iop/__generated:
 	mkdir -p $@
 
-$(VMCMAN_PATCH_STAMP): scripts/patch_vmcman_backing.awk scripts/patch_vmcman_detect.awk scripts/patch_vmcman_mcdev.awk | iop/__generated
-	rm -rf $(VMCMAN_PATCH_DIR)
-	mkdir -p $(VMCMAN_PATCH_SRC_DIR) $(VMCMAN_PATCH_INC_DIR)
-	cp -R $(VMCMAN_SDK_ROOT)/iop/memorycard/mcman/src/. $(VMCMAN_PATCH_SRC_DIR)/
-	cp -R $(VMCMAN_SDK_ROOT)/iop/memorycard/mcman/include/. $(VMCMAN_PATCH_INC_DIR)/
-	awk -f scripts/patch_vmcman_backing.awk \
-		$(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c > $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c.tmp
-	mv $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c.tmp $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c
-	awk -f scripts/patch_vmcman_detect.awk \
-		$(VMCMAN_PATCH_SRC_DIR)/main.c > $(VMCMAN_PATCH_SRC_DIR)/main.c.tmp
-	mv $(VMCMAN_PATCH_SRC_DIR)/main.c.tmp $(VMCMAN_PATCH_SRC_DIR)/main.c
-	awk -f scripts/patch_vmcman_mcdev.awk \
-		$(VMCMAN_PATCH_SRC_DIR)/mcdev.c > $(VMCMAN_PATCH_SRC_DIR)/mcdev.c.tmp
-	mv $(VMCMAN_PATCH_SRC_DIR)/mcdev.c.tmp $(VMCMAN_PATCH_SRC_DIR)/mcdev.c
-	grep -q 'cardinfo->mounted = 1;' $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c
-	grep -q 'cardinfo->cardsize = total_pages;' $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c
-	grep -q 'superblock.pages_per_cluster \* superblock.clusters_per_card' $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c
-	grep -q 'vmcman: page write failed' $(VMCMAN_PATCH_SRC_DIR)/mciomanx_backing.c
-	grep -q 'VMC media cannot physically change while mounted' $(VMCMAN_PATCH_SRC_DIR)/main.c
-	grep -q 'vmcman: mc_mkdir detect ret' $(VMCMAN_PATCH_SRC_DIR)/mcdev.c
-	grep -q 'cardform == 1' $(VMCMAN_PATCH_SRC_DIR)/mcdev.c
-	touch $@
-
-$(VMCMAN_AUTOGEN): $(VMCMAN_PATCH_STAMP)
-	$(MAKE) -C $(VMCMAN_SDK_MODULE_DIR) \
+$(VMCMAN_AUTOGEN): $(VMCMAN_LOCAL_SOURCES) | iop/__generated
+	$(MAKE) -C $(VMCMAN_LOCAL_DIR) \
 		PS2SDKSRC=$(VMCMAN_SDK_ROOT) \
 		PS2SDK=$(VMCMAN_SDK_ROOT) \
-		IOP_SRC_DIR=$(abspath $(VMCMAN_PATCH_SRC_DIR))/ \
-		IOP_INC_DIR=$(abspath $(VMCMAN_PATCH_INC_DIR))/ \
 		IOP_BIN_DIR=$(abspath iop/__generated)/ \
 		IOP_OBJS_DIR=$(abspath iop/__generated/vmcman_obj)/ \
 		IOP_BIN=$(abspath $@) \
-		DEBUG=0
+		DEBUG=$(DEBUG)
 	test -s $@
 
 $(EE_ASM_DIR)vmcman_irx.c: $(VMCMAN_SOURCE) scripts/bin2c-fallback.sh | $(EE_ASM_DIR)
