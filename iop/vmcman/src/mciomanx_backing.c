@@ -223,7 +223,7 @@ int mcman_iomanx_backing_erase(int port, int slot, int page)
 	cardinfo = &mcman_vmc_cardinfo[slot];
 
 	{
-		char buf[528];
+		char buf[544];
 		int effective_page_size;
 
 		memset(buf, ((cardinfo->flags & CF_ERASE_ZEROES) != 0) ? 0x0 : 0xFF, sizeof(buf));

@@ -458,6 +458,9 @@ int mcman_eraseblock(int port, int slot, int block, void **pagebuf, void *eccbuf
 {
 	register int retries, size, ecc_offset;
 	int page;
+#if defined(BUILDING_VMCMAN)
+	int erase_page;
+#endif
     HAKAMA_WAITSEMA();
 #if !defined(BUILDING_XFROMMAN) && !defined(BUILDING_VMCMAN)
 	u8 *p = mcman_sio2packet.out_dma.addr;
@@ -485,7 +488,13 @@ int mcman_eraseblock(int port, int slot, int block, void **pagebuf, void *eccbuf
 		if (p[0x93] == p[8])
 			break;
 #elif defined(BUILDING_VMCMAN)
-		if (!mcman_iomanx_backing_erase(port, slot, page))
+		for (erase_page = 0; erase_page < mcdi->blocksize; erase_page++) {
+			if (mcman_iomanx_backing_erase(port, slot, page + erase_page)) {
+				printf("vmcman: erase block failed block=%d page=%d\n", block, page + erase_page);
+				break;
+			}
+		}
+		if (erase_page == mcdi->blocksize)
 			break;
 #elif defined(BUILDING_XFROMMAN)
 		if (!flash_page_erase(&dev9_flash_info, page))
@@ -517,6 +526,11 @@ int mcman_eraseblock(int port, int slot, int block, void **pagebuf, void *eccbuf
 			page++;
 		}
 	}
+
+#if defined(BUILDING_VMCMAN)
+    HAKAMA_SIGNALSEMA();
+	return sceMcResSucceed;
+#endif
 
 #if !defined(BUILDING_XFROMMAN) && !defined(BUILDING_VMCMAN)
 	sio2packet_add(port, slot, 0xffffffff, NULL);
@@ -1323,5 +1337,4 @@ int McReadPS1PDACard(int port, int slot, int page, void *buf) // Export #29
 
 	return sceMcResSucceed;
 }
-
 
