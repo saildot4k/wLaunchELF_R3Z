@@ -121,6 +121,43 @@ static int classifyExecByExtension(const char *path)
 	return -1;
 }
 
+static const char *normalizeExecArg0Path(const char *path, char *buffer, size_t buffer_size)
+{
+	const char *suffix;
+	int unit = 0;
+
+	if (path == NULL || path[0] == '\0' || buffer == NULL || buffer_size == 0)
+		return path;
+
+	if (strncmp(path, "usb", 3))
+		return path;
+
+	if (path[3] == ':')
+		suffix = path + 4;
+	else if (path[3] >= '0' && path[3] <= '9' && path[4] == ':') {
+		unit = path[3] - '0';
+		suffix = path + 5;
+	} else
+		return path;
+
+	if (*suffix == '\0')
+		suffix = "/";
+
+	if (*suffix != '/') {
+		if (unit == 0)
+			snprintf(buffer, buffer_size, "mass:/%s", suffix);
+		else
+			snprintf(buffer, buffer_size, "mass%d:/%s", unit, suffix);
+	} else {
+		if (unit == 0)
+			snprintf(buffer, buffer_size, "mass:%s", suffix);
+		else
+			snprintf(buffer, buffer_size, "mass%d:%s", unit, suffix);
+	}
+
+	return buffer;
+}
+
 static int tryCheckExecPath(const char *path, int *opened_any)
 {
 	u8 header[256];
@@ -241,10 +278,11 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 	int i;
 	char *argv[ELFLOAD_ARGC], bootpath[256];
 	static char exec_target[MAX_PATH];
+	static char exec_arg0[MAX_PATH];
 	const char *handoff_path = NULL;
 
 	if (selected_path != NULL && selected_path[0] != '\0')
-		handoff_path = selected_path;
+		handoff_path = normalizeExecArg0Path(selected_path, exec_arg0, sizeof(exec_arg0));
 	snprintf(exec_target, sizeof(exec_target), "%s", filename);
 	DPRINTF("RunLoaderElf: exec_kind=%d reboot_iop=%d target='%s' handoff='%s' party='%s'\n",
 	        exec_kind, reboot_iop_elf_load, filename,

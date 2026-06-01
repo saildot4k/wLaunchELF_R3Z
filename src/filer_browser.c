@@ -15,6 +15,8 @@ static const char *getRootDeviceLabel(const char *name)
 		return "mc1:/";
 	if (!strcmp(name, "mass:"))
 		return "usb:/";
+	if (!strcmp(name, "usb:"))
+		return "usb:/";
 #ifdef MMCE
 	if (!strcmp(name, "mmce0:"))
 		return "mmce0:/";
