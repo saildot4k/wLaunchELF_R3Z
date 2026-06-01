@@ -21,6 +21,83 @@
 #define FILEOP_TRACE 1
 #endif
 
+static int isMemoryCardLikePath(const char *path)
+{
+	return (!strncmp(path, "mc", 2) || !strncmp(path, "vmc", 3));
+}
+
+static int applyMcInfoToMcPath(const char *path, const sceMcTblGetDir *info)
+{
+	int dummy, mctype, ret = 0;
+
+	if (strncmp(path, "mc", 2))
+		return -1;
+
+	mcGetInfo(path[2] - '0', 0, &mctype, &dummy, &dummy);
+	mcSync(0, NULL, &dummy);
+	mcSetFileInfo(path[2] - '0', 0, &path[4], info, MC_SFI);
+	mcSync(0, NULL, &ret);
+#if FILEOP_TRACE
+	printf("[MC_STAT] setinfo path='%s' attr=0x%x reserve1=0x%x reserve2=0x%x size=%u "
+	       "ctime=%04d-%02d-%02d %02d:%02d:%02d mtime=%04d-%02d-%02d %02d:%02d:%02d ret=%d mctype=%d\n",
+	       path, info->AttrFile, info->Reserve1, info->Reserve2, info->FileSizeByte,
+	       info->_Create.Year, info->_Create.Month, info->_Create.Day,
+	       info->_Create.Hour, info->_Create.Min, info->_Create.Sec,
+	       info->_Modify.Year, info->_Modify.Month, info->_Modify.Day,
+	       info->_Modify.Hour, info->_Modify.Min, info->_Modify.Sec, ret, mctype);
+#endif
+	return ret;
+}
+
+static void fillVmcStatFromMcInfo(iox_stat_t *stat, const sceMcTblGetDir *info)
+{
+	memset(stat, 0, sizeof(*stat));
+	if (info->AttrFile & sceMcFileAttrSubdir)
+		stat->mode = FIO_S_IFDIR;
+	else
+		stat->mode = FIO_S_IFREG;
+	if (info->AttrFile & sceMcFileAttrReadable)
+		stat->mode |= FIO_S_IRUSR | FIO_S_IRGRP | FIO_S_IROTH;
+	if (info->AttrFile & sceMcFileAttrWriteable)
+		stat->mode |= FIO_S_IWUSR | FIO_S_IWGRP | FIO_S_IWOTH;
+	if (info->AttrFile & sceMcFileAttrExecutable)
+		stat->mode |= FIO_S_IXUSR | FIO_S_IXGRP | FIO_S_IXOTH;
+
+	stat->size = info->FileSizeByte;
+	stat->attr = info->Reserve2;
+	stat->private_0 = info->AttrFile;
+	stat->private_1 = info->Reserve1;
+	stat->private_2 = info->Reserve2;
+	memcpy(stat->ctime, (void *)&info->_Create, 8);
+	memcpy(stat->mtime, (void *)&info->_Modify, 8);
+	memcpy(stat->atime, stat->mtime, 8);
+}
+
+static int applyMcInfoToVmcPath(const char *path, const sceMcTblGetDir *info)
+{
+	iox_stat_t stat;
+	char fixed_path[MAX_PATH];
+	int len, ret;
+
+	snprintf(fixed_path, sizeof(fixed_path), "%s", path);
+	len = strlen(fixed_path);
+	if (len > 6 && fixed_path[len - 1] == '/')
+		fixed_path[len - 1] = '\0';
+
+	fillVmcStatFromMcInfo(&stat, info);
+	ret = fileXioChStat(fixed_path, &stat, MC_SFI);
+#if FILEOP_TRACE
+	printf("[VMC_STAT] chstat path='%s' attr=0x%x reserve1=0x%x reserve2=0x%x size=%u "
+	       "ctime=%04d-%02d-%02d %02d:%02d:%02d mtime=%04d-%02d-%02d %02d:%02d:%02d ret=%d\n",
+	       fixed_path, info->AttrFile, info->Reserve1, info->Reserve2, info->FileSizeByte,
+	       info->_Create.Year, info->_Create.Month, info->_Create.Day,
+	       info->_Create.Hour, info->_Create.Min, info->_Create.Sec,
+	       info->_Modify.Year, info->_Modify.Month, info->_Modify.Day,
+	       info->_Modify.Hour, info->_Modify.Min, info->_Modify.Sec, ret);
+#endif
+	return ret;
+}
+
 // getGameTitle below is used to extract the real save title of
 // an MC gamesave folder. Normally this is held in the icon.sys
 // file of a PS2 game save, but that is not the case for saves
@@ -164,14 +241,25 @@ int copy(char *outPath, const char *inPath, FILEINFO file, int recurses)
 	int psu_pad_size = 0, PSU_restart_f = 0;
 	char *cp, *np;
 	int trace_net_copy = 0;
+	int trace_vmc_copy = 0;
 	unsigned int trace_chunk_index = 0;
 	u64 chunk_remaining_before = 0;
 
 	if (recurses + 1 >= MAX_RECURSE)
 		return -1;
 
-	if (!ensurePathDeviceStackReady(inPath) || !ensurePathDeviceStackReady(outPath))
+#if FILEOP_TRACE
+	trace_vmc_copy = (!strncmp(inPath, "vmc", 3) || !strncmp(outPath, "vmc", 3));
+#endif
+
+	if (!ensurePathDeviceStackReady(inPath) || !ensurePathDeviceStackReady(outPath)) {
+#if FILEOP_TRACE
+		if (trace_vmc_copy)
+			printf("[VMC_COPY] stack-ready failed inPath='%s' outPath='%s' name='%s' recurse=%d\n",
+			       inPath, outPath, file.name, recurses);
+#endif
 		return -1;
+	}
 
 	PM_flag[recurses + 1] = PM_NORMAL;  //assume normal mode for next level
 	PM_file[recurses + 1] = -1;         //assume that no special file is needed
@@ -233,6 +321,12 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 #if FILEOP_TRACE
 	trace_net_copy = (!strncmp(in, "host", 4) || !strncmp(in, "udpfs", 5)
 	                  || !strncmp(out, "host", 4) || !strncmp(out, "udpfs", 5));
+	trace_vmc_copy = (trace_vmc_copy || !strncmp(in, "vmc", 3) || !strncmp(out, "vmc", 3));
+	if (trace_vmc_copy) {
+		printf("[VMC_COPY] start recurse=%d mode=%d inPath='%s' outPath='%s' in='%s' out='%s' name='%s' attr=0x%x size=%u:%u\n",
+		       recurses, PM_flag[recurses], inPath, outPath, in, out, file.name,
+		       file.stats.AttrFile, file.stats.Reserve2, file.stats.FileSizeByte);
+	}
 #endif
 
 	//Here 'in' and 'out' are complete pathnames for the object to copy
@@ -333,6 +427,11 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 				}
 				drawMsg(LNG(Pasting));
 			} else if (ret < 0) {
+#if FILEOP_TRACE
+				if (trace_vmc_copy)
+					printf("[VMC_COPY] mkdir failed outPath='%s' name='%s' out='%s' ret=%d recurse=%d\n",
+					       outPath, newfile.name, out, ret, recurses);
+#endif
 				return -1;  //return error for failure to create destination folder
 			}
 
@@ -368,16 +467,21 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 					break;
 				}
 				//Finally we can make the recursive call
-				if ((ret = copy(out, in, files[0], recurses + 1)) < 0)
+				if ((ret = copy(out, in, files[0], recurses + 1)) < 0) {
+#if FILEOP_TRACE
+					if (trace_vmc_copy)
+						printf("[VMC_COPY] psu child failed parent_in='%s' parent_out='%s' child='%s' ret=%d recurse=%d\n",
+						       in, out, files[0].name, ret, recurses);
+#endif
 					break;
+				}
 				//We must also step past any file padding, for next header
 				if (psu_pad_size)
 					genLseek(PM_file[recurses + 1], psu_pad_size, SEEK_CUR);
 				//finally, we must adjust attributes of the new file copy, to ensure
 				//correct timestamps and attributes (requires MC-specific functions)
-				if (!strncmp(out, "mc", 2)) {
+				if (!strncmp(out, "mc", 2))
 					psu_restore_apply_entry_stats_to_mc(out, &files[0].stats, MC_SFI);
-				}
 			}                                 //ends main for loop of valid PM_PSU_RESTORE mode
 			genClose(PM_file[recurses + 1]);  //Close the PSU file
 			                                  //Finally fix the stats of the containing folder
@@ -386,8 +490,14 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 		} else {                              //Any other mode than a valid PM_PSU_RESTORE
 			nfiles = getDir(in, files);
 			for (i = 0; i < nfiles; i++) {
-				if ((ret = copy(out, in, files[i], recurses + 1)) < 0)
+				if ((ret = copy(out, in, files[i], recurses + 1)) < 0) {
+#if FILEOP_TRACE
+					if (trace_vmc_copy)
+						printf("[VMC_COPY] child failed parent_in='%s' parent_out='%s' child='%s' ret=%d recurse=%d\n",
+						       in, out, files[i].name, ret, recurses);
+#endif
 					break;
+				}
 			}  //ends main for loop for all modes other than valid PM_PSU_RESTORE
 		}
 		//folder contents are copied by the recursive call above, with error handling below
@@ -405,27 +515,33 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 				return -1;
 		} else if (PM_flag[recurses + 1] == PM_NORMAL) {             //Normal mode folder paste closure
 			if (!strncmp(out, "mc", 2)) {                            //Handle folder copied to MC
-				mcGetInfo(out[2] - '0', 0, &dummy, &dummy, &dummy);  //Wakeup call
-				mcSync(0, NULL, &dummy);
 				ret = MC_SFI;                                   //default request for changing entire mcTable
-				if (strncmp(in, "mc", 2)) {                     //Handle file copied from non-MC to MC
+				if (!isMemoryCardLikePath(in)) {                //Handle folder copied from non-MC/non-VMC to MC
 					file.stats.AttrFile = MC_ATTR_norm_folder;  //normalize MC folder attribute
 #if defined(ETH) || defined(UDPFS)
 					if (!strncmp(in, "host", 4) || !strncmp(in, "udpfs", 5)) {  //Handle folder copied from host/udpfs to MC
 						ret = 4;                                //request change only of main attribute for host:
 					}                                           //ends host: source clause
 #endif
-				}                                               //ends non-MC source clause
-				mcSetFileInfo(out[2] - '0', 0, &out[4], &file.stats, ret);
-				mcSync(0, NULL, &dummy);
-				} else {                                    //Handle folder copied to non-MC
-					if (!strncmp(out, "host", 4) || !strncmp(out, "udpfs", 5)) {  //for files copied to host/udpfs: we skip Chstat
-					} else if (!strncmp(out, "mass", 4)) {  //for files copied to mass: we skip Chstat
+				}                                               //ends non-MC/non-VMC source clause
+				if (ret == MC_SFI)
+					applyMcInfoToMcPath(out, &file.stats);
+				else {
+					mcGetInfo(out[2] - '0', 0, &dummy, &dummy, &dummy);  //Wakeup call
+					mcSync(0, NULL, &dummy);
+					mcSetFileInfo(out[2] - '0', 0, &out[4], &file.stats, ret);
+					mcSync(0, NULL, &dummy);
+				}
+			} else if (!strncmp(out, "vmc", 3)) {               //Handle folder copied to VMC
+				applyMcInfoToVmcPath(out, &file.stats);
+			} else {                                            //Handle folder copied to non-MC
+				if (!strncmp(out, "host", 4) || !strncmp(out, "udpfs", 5)) {  //for files copied to host/udpfs: we skip Chstat
+				} else if (!strncmp(out, "mass", 4)) {  //for files copied to mass: we skip Chstat
 #ifdef MX4SIO
-					} else if (!strncmp(out, "mx4sio", 6)) {  //for files copied to mx4sio: we skip Chstat
+				} else if (!strncmp(out, "mx4sio", 6)) {  //for files copied to mx4sio: we skip Chstat
 #endif
-					} else if (!strncmp(out, "ata", 3)) {  //for files copied to ata: we skip Chstat
-					} else {                                //for other devices we use fileXio_ stuff
+				} else if (!strncmp(out, "ata", 3)) {  //for files copied to ata: we skip Chstat
+				} else {                                //for other devices we use fileXio_ stuff
 					memcpy(iox_stat.ctime, (void *)&file.stats._Create, 8);
 					memcpy(iox_stat.mtime, (void *)&file.stats._Modify, 8);
 					memcpy(iox_stat.atime, iox_stat.mtime, 8);
@@ -442,10 +558,9 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 		if ((PM_flag[recurses + 1] == PM_PSU_RESTORE) && !strncmp(out, "mc", 2)) {
 			//Finally fix the stats of the containing folder
 			//It has to be done last, as timestamps would change when fixing files
-			mcGetInfo(out[2] - '0', 0, &dummy, &dummy, &dummy);  //Wakeup call
-			mcSync(0, NULL, &dummy);
-			mcSetFileInfo(out[2] - '0', 0, &out[4], &file.stats, MC_SFI);  //Fix folder stats
-			mcSync(0, NULL, &dummy);
+			applyMcInfoToMcPath(out, &file.stats);
+		} else if ((PM_flag[recurses + 1] == PM_PSU_RESTORE) && !strncmp(out, "vmc", 3)) {
+			applyMcInfoToVmcPath(out, &file.stats);
 		}
 		//the return code below is used if there were no errors copying a folder
 		return 0;
@@ -478,12 +593,25 @@ non_PSU_RESTORE_init:
 				makeHostPath(in, in);
 #endif
 			in_fd = genOpen(in, FIO_O_RDONLY);
-			if (in_fd < 0)
+			if (in_fd < 0) {
+				ret = in_fd;
+#if FILEOP_TRACE
+				if (trace_vmc_copy)
+					printf("[VMC_COPY] input open failed in='%s' ret=%d recurse=%d\n", in, ret, recurses);
+#endif
 				goto copy_file_exit;
+			}
 			{
 				s64 in_size = genLseek(in_fd, 0, SEEK_END);
-				if (in_size < 0)
+				if (in_size < 0) {
+					ret = (int)in_size;
+#if FILEOP_TRACE
+					if (trace_vmc_copy)
+						printf("[VMC_COPY] input size failed in='%s' fd=%d ret=%d recurse=%d\n",
+						       in, in_fd, ret, recurses);
+#endif
 					goto copy_file_exit;
+				}
 				size = (u64)in_size;
 			}
 			genLseek(in_fd, 0, SEEK_SET);
@@ -504,10 +632,20 @@ non_PSU_RESTORE_init:
 			makeHostPath(out, out);
 #endif
 		genLimObjName(out, 0);                                //Limit dest file name
-		genRemove(out);                                       //Remove old file if present
+		dummy = genRemove(out);                               //Remove old file if present
+#if FILEOP_TRACE
+		if (trace_vmc_copy)
+			printf("[VMC_COPY] remove existing out='%s' ret=%d recurse=%d\n", out, dummy, recurses);
+#endif
 		out_fd = genOpen(out, FIO_O_WRONLY | FIO_O_TRUNC | FIO_O_CREAT);  //Create new file
-		if (out_fd < 0)
+		if (out_fd < 0) {
+			ret = out_fd;
+#if FILEOP_TRACE
+			if (trace_vmc_copy)
+				printf("[VMC_COPY] output open failed out='%s' ret=%d recurse=%d\n", out, ret, recurses);
+#endif
 			goto copy_file_exit;
+		}
 	}
 
 	//Here the output file has been opened, indicated by 'out_fd'
@@ -540,6 +678,17 @@ non_PSU_RESTORE_init:
 	if (size < (u64)buffSize)
 		buffSize = (int)size;
 
+	if (buffSize == 0) {
+#if FILEOP_TRACE
+		if (trace_net_copy || trace_vmc_copy) {
+			printf("[FILEOP] copy-empty in=%s out=%s mode=%d recurse=%d\n",
+			       in, out, PM_flag[recurses], recurses);
+		}
+#endif
+		ret = 0;
+		goto copy_file_data_done;
+	}
+
 	buff = (char *)memalign(64, buffSize);  //Attempt buffer allocation
 	if (buff == NULL) {                     //if allocation fails
 		ret = -ENOMEM;
@@ -553,7 +702,7 @@ non_PSU_RESTORE_init:
 	old_size = written_size;  //Note initial progress data pos
 	OldTime = Timer();        //Note initial progress time
 #if FILEOP_TRACE
-	if (trace_net_copy) {
+	if (trace_net_copy || trace_vmc_copy) {
 		printf("[FILEOP] copy-start in=%s out=%s size=%llu buff=%d mode=%d recurse=%d\n",
 		       in, out, (unsigned long long)size, buffSize, PM_flag[recurses], recurses);
 	}
@@ -658,7 +807,7 @@ non_PSU_RESTORE_init:
 			bytesWritten = (bytesRead == buffSize) ? genWrite(out_fd, buff, buffSize) : 0;
 #if FILEOP_TRACE
 			chunk_remaining_before = size;
-			if (trace_net_copy) {
+			if (trace_net_copy || trace_vmc_copy) {
 				printf("[FILEOP] copy-chunk in=%s out=%s idx=%u req=%d read=%d write=%d remain_before=%llu\n",
 				       in, out, trace_chunk_index, buffSize, bytesRead, bytesWritten,
 				       (unsigned long long)chunk_remaining_before);
@@ -681,7 +830,7 @@ non_PSU_RESTORE_init:
 			written_size += buffSize;
 #if FILEOP_TRACE
 			trace_chunk_index++;
-			if (trace_net_copy) {
+			if (trace_net_copy || trace_vmc_copy) {
 				printf("[FILEOP] copy-chunk-ok in=%s out=%s idx=%u wrote=%d remain_after=%llu\n",
 				       in, out, trace_chunk_index, bytesWritten,
 				       (unsigned long long)size);
@@ -690,11 +839,12 @@ non_PSU_RESTORE_init:
 		}  // ends while(size>0), ----- The main copying loop ends here -----
 	ret = 0;
 #if FILEOP_TRACE
-	if (trace_net_copy) {
+	if (trace_net_copy || trace_vmc_copy) {
 		printf("[FILEOP] copy-complete in=%s out=%s chunks=%u total_written=%llu\n",
 		       in, out, trace_chunk_index, (unsigned long long)written_size);
 	}
 #endif
+copy_file_data_done:
 	//Here the file has been copied. without error, as indicated by 'ret' above
 	//but we also need to copy attributes and timestamps (as yet only for MC)
 	//For PSU backup output padding may be needed, but not output file closure
@@ -708,29 +858,43 @@ non_PSU_RESTORE_init:
 	}
 
 	if (out_fd >= 0) {
-		genClose(out_fd);
+		dummy = genClose(out_fd);
+#if FILEOP_TRACE
+		if (trace_vmc_copy)
+			printf("[VMC_COPY] output close ret=%d out='%s' recurse=%d\n", dummy, out, recurses);
+#endif
+		if (dummy < 0)
+			ret = dummy;
 		out_fd = -1;  //prevent dual closure attempt
+		if (ret < 0)
+			goto copy_file_exit;
 	}
 
 	if (!strncmp(out, "mc", 2)) {                                 //Handle file copied to MC
-		mcGetInfo(out[2] - '0', 0, &mctype_PSx, &dummy, &dummy);  //Wakeup call & MC type check
-		mcSync(0, NULL, &dummy);
 		ret = MC_SFI;                                 //default request for changing entire mcTable
-		if (strncmp(in, "mc", 2)) {                   //Handle file copied from non-MC to MC
+		if (!isMemoryCardLikePath(in)) {              //Handle file copied from non-MC/non-VMC to MC
 			file.stats.AttrFile = MC_ATTR_norm_file;  //normalize MC file attribute
 #if defined(ETH) || defined(UDPFS)
 			if (!strncmp(in, "host", 4) || !strncmp(in, "udpfs", 5)) {  //Handle folder copied from host/udpfs to MC
 				ret = 4;                              //request change only of main attribute for host:
 			}                                         //ends host: source clause
 #endif
-		}                                             //ends non-MC source clause
-		if (mctype_PSx == 2) {                        //if copying to a PS2 MC
-			mcSetFileInfo(out[2] - '0', 0, &out[4], &file.stats, ret);
+		}                                             //ends non-MC/non-VMC source clause
+		if (ret == MC_SFI)
+			applyMcInfoToMcPath(out, &file.stats);
+		else {
+			mcGetInfo(out[2] - '0', 0, &mctype_PSx, &dummy, &dummy);  //Wakeup call & MC type check
 			mcSync(0, NULL, &dummy);
+			if (mctype_PSx == 2) {                        //if copying to a PS2 MC
+				mcSetFileInfo(out[2] - '0', 0, &out[4], &file.stats, ret);
+				mcSync(0, NULL, &dummy);
+			}
 		}
-		} else {                                    //Handle file copied to non-MC
-			if (!strncmp(out, "host", 4) || !strncmp(out, "udpfs", 5)) {  //for files copied to host/udpfs: we skip Chstat
-			} else if (!strncmp(out, "mass", 4)) {  //for files copied to mass: we skip Chstat
+	} else if (!strncmp(out, "vmc", 3)) {             //Handle file copied to VMC
+		applyMcInfoToVmcPath(out, &file.stats);
+	} else {                                          //Handle file copied to non-MC
+		if (!strncmp(out, "host", 4) || !strncmp(out, "udpfs", 5)) {  //for files copied to host/udpfs: we skip Chstat
+		} else if (!strncmp(out, "mass", 4)) {  //for files copied to mass: we skip Chstat
 #ifdef MX4SIO
 			} else if (!strncmp(out, "mx4sio", 6)) {  //for files copied to mx4sio: we skip Chstat
 #endif
@@ -754,6 +918,12 @@ non_PSU_RESTORE_init:
 copy_file_exit:
 	free(buff);
 copy_file_exit_mem_err:
+#if FILEOP_TRACE
+	if (trace_vmc_copy && ret < 0) {
+		printf("[VMC_COPY] exit-error ret=%d recurse=%d in='%s' out='%s' in_fd=%d out_fd=%d remaining=%llu chunks=%u\n",
+		       ret, recurses, in, out, in_fd, out_fd, (unsigned long long)size, trace_chunk_index);
+	}
+#endif
 	if (PM_flag[recurses] != PM_PSU_RESTORE) {  //Avoid closing PSU file here for PSU Restore
 		if (in_fd >= 0) {
 			genClose(in_fd);

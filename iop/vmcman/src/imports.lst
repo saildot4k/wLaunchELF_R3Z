@@ -1,0 +1,136 @@
+//---------------------------------------------------------------------------
+// File name:   imports.lst
+// Description: Used to generate code for IRX function imports
+//---------------------------------------------------------------------------
+
+#ifdef SIO_DEBUG
+sior_IMPORTS_start
+I_sio_init
+I_sio_printf
+sior_IMPORTS_end
+#endif
+
+#if !defined(BUILDING_XFROMMAN) && !defined(BUILDING_VMCMAN)
+#ifndef BUILDING_XFROMMAN
+#ifdef BUILDING_XMCMAN
+#ifndef SIO2MAN_V2
+xsio2man_IMPORTS_start
+#else
+rsio2man_IMPORTS_start
+#endif
+I_sio2_mc_transfer_init
+I_sio2_transfer
+I_sio2_transfer_reset
+I_sio2_mtap_change_slot
+#ifndef SIO2MAN_V2
+xsio2man_IMPORTS_end
+#else
+rsio2man_IMPORTS_end
+#endif
+#else
+sio2man_IMPORTS_start
+I_sio2_mc_transfer_init
+I_sio2_transfer
+sio2man_IMPORTS_end
+#endif
+#endif
+#endif
+
+loadcore_IMPORTS_start
+I_RegisterLibraryEntries
+I_ReleaseLibraryEntries
+I_GetLoadcoreInternalData
+loadcore_IMPORTS_end
+
+intrman_IMPORTS_start
+I_CpuEnableIntr
+I_CpuSuspendIntr
+I_CpuResumeIntr
+intrman_IMPORTS_end
+
+sysclib_IMPORTS_start
+I_memcpy
+I_memset
+I_strcat
+I_strcmp
+I_strcpy
+I_strlen
+I_strncmp
+I_strncpy
+sysclib_IMPORTS_end
+
+thbase_IMPORTS_start
+I_DelayThread
+thbase_IMPORTS_end
+
+thsemap_IMPORTS_start
+I_CreateSema
+I_DeleteSema
+I_SignalSema
+I_WaitSema
+thsemap_IMPORTS_end
+
+#if !defined(BUILDING_XFROMMAN) && !defined(BUILDING_VMCMAN)
+timrman_IMPORTS_start
+I_AllocHardTimer
+I_ReferHardTimer
+I_SetTimerMode
+I_GetTimerCounter
+timrman_IMPORTS_end
+#endif
+
+#if !defined(BUILDING_XFROMMAN) && !defined(BUILDING_VMCMAN)
+modload_IMPORTS_start
+I_SetCheckKelfPathCallback
+modload_IMPORTS_end
+#endif
+
+#if defined(BUILDING_VMCMAN)
+iomanX_IMPORTS_start
+I_iomanX_AddDrv
+I_iomanX_DelDrv
+I_iomanX_open
+I_iomanX_close
+I_iomanX_lseek
+I_iomanX_read
+I_iomanX_write
+iomanX_IMPORTS_end
+#else
+ioman_IMPORTS_start
+I_AddDrv
+I_DelDrv
+ioman_IMPORTS_end
+#endif
+
+#if !defined(BUILDING_XFROMMAN) && !defined(BUILDING_VMCMAN)
+secrman_IMPORTS_start
+I_SecrSetMcCommandHandler
+I_SecrSetMcDevIDHandler
+I_SecrAuthCard
+#ifdef BUILDING_DONGLEMAN
+I_SecrAuthDongle
+#endif
+secrman_IMPORTS_end
+#endif
+
+cdvdman_IMPORTS_start
+I_sceCdRC
+cdvdman_IMPORTS_end
+
+#ifdef BUILDING_XFROMMAN
+fls_IMPORTS_start
+I_flash_detect
+I_flash_get_info
+I_flash_page_erase
+I_flash_page_read
+I_flash_page_write
+fls_IMPORTS_end
+#endif
+
+stdio_IMPORTS_start
+I_printf
+stdio_IMPORTS_end
+
+//---------------------------------------------------------------------------
+// End of file: imports.lst
+//---------------------------------------------------------------------------

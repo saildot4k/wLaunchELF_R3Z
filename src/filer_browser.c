@@ -15,6 +15,8 @@ static const char *getRootDeviceLabel(const char *name)
 		return "mc1:/";
 	if (!strcmp(name, "mass:"))
 		return "usb:/";
+	if (!strcmp(name, "usb:"))
+		return "usb:/";
 #ifdef MMCE
 	if (!strcmp(name, "mmce0:"))
 		return "mmce0:/";
@@ -130,18 +132,6 @@ static int isTitleCfgPathEligible(const char *path, int menu_disabled)
 	        (!strncmp(path, "hdd0:/", 6) && !menu_disabled));
 }
 
-static int canReloadUdpfsFromMenu(const char *path, const FILEINFO *file)
-{
-#ifdef UDPFS
-	if ((path == NULL || path[0] == '\0') && file != NULL && !strcmp(file->name, "udpfs:"))
-		return TRUE;
-#else
-	(void)path;
-	(void)file;
-#endif
-	return FALSE;
-}
-
 enum {
 	PSU_ACTION_NONE = 0,
 	PSU_ACTION_CREATE,
@@ -194,10 +184,8 @@ static int menu(const char *path, FILEINFO *file)
 	int menu_disabled = 0;
 	int write_disabled = 0;
 	int psu_action;
-	int can_reload_udpfs;
 
 	psu_action = classifyPsuAction(path);
-	can_reload_udpfs = canReloadUdpfsFromMenu(path, file);
 	if (psu_action == PSU_ACTION_EXTRACT)
 		psu_action_label = LNG(Extract_PSU);
 	else if (psu_action == PSU_ACTION_CREATE)
@@ -217,7 +205,6 @@ static int menu(const char *path, FILEINFO *file)
 	menu_len = strlen(psu_action_label) > menu_len ? strlen(psu_action_label) : menu_len;
 	menu_len = strlen(LNG(time_manip)) > menu_len ? strlen(LNG(time_manip)) : menu_len;
 	menu_len = strlen(LNG(title_cfg)) > menu_len ? strlen(LNG(title_cfg)) : menu_len;
-	menu_len = strlen(LNG(Reload_UDPFS)) > menu_len ? strlen(LNG(Reload_UDPFS)) : menu_len;
 	menu_len = (strlen(LNG(Mount)) + 6) > menu_len ? (strlen(LNG(Mount)) + 6) : menu_len;
 	
 
@@ -229,7 +216,6 @@ static int menu(const char *path, FILEINFO *file)
 	int mSprite_Y2 = mSprite_Y1 + (menu_ch_h + 1) * FONT_HEIGHT;  //Bottom edge of sprite
 
 	memset(enable, TRUE, NUM_MENU);  //Assume that all menu items are legal by default
-	enable[RELOAD_UDPFS] = can_reload_udpfs;
 
 	//identify cases where write access is illegal, and disable menu items accordingly
 	if ((!strncmp(path, "cdfs", 4))  //Writing is always illegal for CDVD drive
@@ -382,8 +368,6 @@ static int menu(const char *path, FILEINFO *file)
 					strcpy(tmp, LNG(TextEditor));
 				else if (i == TITLE_CFG)
 					strcpy(tmp, LNG(title_cfg));
-				else if (i == RELOAD_UDPFS)
-					strcpy(tmp, LNG(Reload_UDPFS));
 #ifdef TMANIP
 				else if (i == TIMEMANIP)
 					strcpy(tmp, LNG(time_manip));
@@ -955,9 +939,19 @@ int getFilePath(char *out, int cnfmode)
 						strcpy(clipPath, path);
 						if (nmarks > 0) {
 							for (i = nclipFiles = 0; i < browser_nfiles; i++)
-								if (marks[i])
+								if (marks[i] && strcmp(files[i].name, ".") && strcmp(files[i].name, ".."))
 									clipFiles[nclipFiles++] = files[i];
+							if (nclipFiles == 0) {
+								strcpy(msg0, LNG(Failed));
+								browser_pushed = FALSE;
+								continue;
+							}
 						} else {
+							if (!strcmp(files[browser_sel].name, ".") || !strcmp(files[browser_sel].name, "..")) {
+								strcpy(msg0, LNG(Failed));
+								browser_pushed = FALSE;
+								continue;
+							}
 							clipFiles[0] = files[browser_sel];
 							nclipFiles = 1;
 						}
@@ -1096,42 +1090,48 @@ int getFilePath(char *out, int cnfmode)
 					}                       //ends NEWICON
 					else if ((ret == MOUNTVMC0) || (ret == MOUNTVMC1)) {
 						i = ret - MOUNTVMC0;
-						load_vmc_fs();
 						sprintf(tmp, "vmc%d:", i);
-							if (vmcMounted[i]) {
-								if ((j = vmc_PartyIndex[i]) >= 0) {
-									vmc_PartyIndex[i] = -1;
-									if (j != vmc_PartyIndex[1 ^ i])
-										Party_vmcIndex[j] = -1;
-								}
-								fileXioUmount(tmp);
-								vmcMounted[i] = 0;
+						if (vmcMounted[i]) {
+							if ((j = vmc_PartyIndex[i]) >= 0) {
+								vmc_PartyIndex[i] = -1;
+								if (j != vmc_PartyIndex[1 ^ i])
+									Party_vmcIndex[j] = -1;
 							}
-							j = genFixPath(path, tmp1);
-							if (j < 0) {
-								sprintf(msg1, "\n'%s vmc%d:' for \"%s\"\nResult=%d",
-								        LNG(Mount), i, path, j);
-								(void)ynDialog(msg1);
-								browser_pushed = FALSE;
-								continue;
-							}
-							strcpy(tmp2, tmp1);
+							fileXioUmount(tmp);
+							vmcMounted[i] = 0;
+						}
+						j = genFixPath(path, tmp1);
+						if (j < 0) {
+							sprintf(msg1, "\n'%s vmc%d:' for \"%s\"\nResult=%d",
+							        LNG(Mount), i, path, j);
+							(void)ynDialog(msg1);
+							browser_pushed = FALSE;
+							continue;
+						}
+						strcpy(tmp2, tmp1);
 #if defined(ETH) || defined(UDPFS)
 						if (!strncmp(path, "host:", 5) || !strncmp(path, "udpfs:", 6)) {
 							makeHostPath(tmp2, tmp1);
 						}
 #endif
 						strcat(tmp2, files[browser_sel].name);
-							if ((x = fileXioMount(tmp, tmp2, FIO_MT_RDWR)) >= 0) {
+						/* genFixPath may reset the IOP while lazy-loading storage stacks. */
+						x = load_vmcman();
+						if (!x) {
+							x = get_vmcman_last_error();
+							sprintf(msg1, "\n'%s vmc%d:' for \"%s\"\nvmcman not registered\nResult=%d",
+							        LNG(Mount), i, tmp2, x);
+							(void)ynDialog(msg1);
+						} else if ((x = fileXioMount(tmp, tmp2, FIO_MT_RDWR)) >= 0) {
 							if ((j >= 0) && (j < MOUNT_LIMIT)) {
 								vmc_PartyIndex[i] = j;
 								Party_vmcIndex[j] = i;
 							}
-								vmcMounted[i] = 1;
-								snprintf(path, sizeof(path), "%.*s/", (int)sizeof(path) - 2, tmp);
-								browser_cd = TRUE;
-								cnfmode = NON_CNF;
-								strcpy(ext, cnfmode_extL[cnfmode]);
+							vmcMounted[i] = 1;
+							snprintf(path, sizeof(path), "%.*s/", (int)sizeof(path) - 2, tmp);
+							browser_cd = TRUE;
+							cnfmode = NON_CNF;
+							strcpy(ext, cnfmode_extL[cnfmode]);
 						} else {
 							sprintf(msg1, "\n'%s vmc%d:' for \"%s\"\nResult=%d",
 							        LNG(Mount), i, tmp2, x);
@@ -1171,21 +1171,9 @@ int getFilePath(char *out, int cnfmode)
 						browser_repos = TRUE;  // TEST
 						browser_cd = TRUE;     //TEST
 					}
-#ifdef UDPFS
-					else if (ret == RELOAD_UDPFS) {
-						if (reloadUdpfsModules())
-							strcpy(msg0, LNG(Reload_UDPFS));
-						else
-							snprintf(msg0, sizeof(msg0), "%s %s", LNG(Reload_UDPFS), LNG(Failed));
-						browser_pushed = FALSE;
-						browser_repos = TRUE;
-						browser_cd = TRUE;
-					}
-#endif
-
 					   //R1 menu handling is completed above
 				} else if ((!swapKeys && new_pad & PAD_CROSS) || (swapKeys && new_pad & PAD_CIRCLE)) {
-					if (browser_sel != 0 && path[0] != 0 && (strcmp(path, "hdd0:/") && strcmp(path, "dvr_hdd0:/"))) {
+					if (browser_sel != 0 && strcmp(files[browser_sel].name, ".") && strcmp(files[browser_sel].name, "..") && path[0] != 0 && (strcmp(path, "hdd0:/") && strcmp(path, "dvr_hdd0:/"))) {
 						if (marks[browser_sel]) {
 							marks[browser_sel] = FALSE;
 							nmarks--;
@@ -1237,11 +1225,6 @@ int getFilePath(char *out, int cnfmode)
 					mcGetInfo(path[2] - '0', 0, &mctype_PSx, &mcfreeSpace, NULL);
 					mcSync(0, NULL, &ret);
 					freeSpace = mcfreeSpace * ((mctype_PSx == 1) ? 8192 : 1024);
-					vfreeSpace = TRUE;
-				} else if (!strncmp(path, "vmc", 3)) {
-					strncpy(tmp, path, 5);
-					tmp[5] = '\0';
-					freeSpace = fileXioDevctl(tmp, DEVCTL_VMCFS_CKFREE, NULL, 0, NULL, 0);
 					vfreeSpace = TRUE;
 				} else if (!strncmp(path, "hdd", 3) && strcmp(path, "hdd0:/")) {
 					u64 ZoneFree, ZoneSize;
@@ -1671,21 +1654,28 @@ static void submenu_func_GetSize(char *mess, char *path, FILEINFO *files)
 static void subfunc_Paste(char *mess, char *path)
 {
 	char tmp[MAX_PATH], tmp1[MAX_PATH];
-	int i, ret = -1;
+	int i, ret = -1, trace_vmc_paste;
 
 	written_size = 0;
 	PasteTime = Timer();  //Note initial pasting time
 	if (!strcmp(path, clipPath))
 		goto finished;
+	trace_vmc_paste = (!strncmp(clipPath, "vmc", 3) || !strncmp(path, "vmc", 3));
 	ret = prepareTransferDeviceStacks(clipPath, path);
 	if (ret == TRANSFER_STACK_INCOMPATIBLE) {
+		printf("[PASTE] incompatible stacks ret=%d src='%s' dst='%s'\n", ret, clipPath, path);
 		ynDialog("Incompatible drivers to perform action");
 		browser_pushed = FALSE;
 		return;
 	}
-	if (ret < 0)
+	if (ret < 0) {
+		printf("[PASTE] prepare stacks failed ret=%d src='%s' dst='%s'\n", ret, clipPath, path);
 		goto finished;
+	}
 	drawMsg(LNG(Pasting));
+	if (trace_vmc_paste)
+		printf("[PASTE] start src='%s' dst='%s' items=%d mode=%d cut=%d\n",
+		       clipPath, path, nclipFiles, PasteMode, browser_cut);
 
 	for (i = 0; i < nclipFiles; i++) {
 		strcpy(tmp, clipFiles[i].name);
@@ -1696,9 +1686,16 @@ static void subfunc_Paste(char *mess, char *path)
 		drawMsg(tmp);
 		PM_flag[0] = PM_NORMAL;  //Always use normal mode at top level
 		PM_file[0] = -1;         //Thus no attribute file is used here
+		if (trace_vmc_paste)
+			printf("[PASTE] item src='%s' dst='%s' name='%s' index=%d/%d attr=0x%x size=%u:%u\n",
+			       clipPath, path, clipFiles[i].name, i + 1, nclipFiles,
+			       clipFiles[i].stats.AttrFile, clipFiles[i].stats.Reserve2, clipFiles[i].stats.FileSizeByte);
 		ret = copy(path, clipPath, clipFiles[i], 0);
-		if (ret < 0)
+		if (ret < 0) {
+			printf("[PASTE] copy failed ret=%d src='%s' dst='%s' item='%s' index=%d/%d mode=%d cut=%d\n",
+			       ret, clipPath, path, clipFiles[i].name, i + 1, nclipFiles, PasteMode, browser_cut);
 			break;
+		}
 	}
 	if ((ret >= 0) && browser_cut) {
 		for (i = 0; i < nclipFiles; i++) {
@@ -1712,6 +1709,8 @@ static void subfunc_Paste(char *mess, char *path)
 
 finished:
 	if (ret < 0) {
+		printf("[PASTE] failed ret=%d src='%s' dst='%s' mode=%d cut=%d\n",
+		       ret, clipPath, path, PasteMode, browser_cut);
 		strcpy(mess, LNG(Paste_Failed));
 		browser_pushed = FALSE;
 	} else if (browser_cut)

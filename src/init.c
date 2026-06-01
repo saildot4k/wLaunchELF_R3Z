@@ -71,7 +71,7 @@ IMPORT_BIN2C(mmceman_irx);
 IMPORT_BIN2C(iomanx_irx);
 IMPORT_BIN2C(filexio_irx);
 IMPORT_BIN2C(ps2dev9_irx);
-IMPORT_BIN2C(vmc_fs_irx);
+IMPORT_BIN2C(vmcman_irx);
 IMPORT_BIN2C(ps2hdd_irx);
 IMPORT_BIN2C(ps2fs_irx);
 IMPORT_BIN2C(poweroff_irx);
@@ -120,7 +120,8 @@ static u8 have_poweroff = 0;
 static u8 have_ps2dev9 = 0;
 static u8 have_ps2hdd = 0;
 static u8 have_ps2fs = 0;
-static u8 have_vmc_fs = 0;
+static u8 have_vmcman = 0;
+static int vmcman_last_error = 0;
 #ifdef EXFAT
 static u8 have_bdm = 0;
 static u8 have_bdmfs = 0;
@@ -515,18 +516,72 @@ static void load_ps2dvr(void)
 //endfunc load_ps2dvr
 //---------------------------------------------------------------------------
 #endif
-void load_vmc_fs(void)
-{
-	int ret, ID __attribute__((unused));
 
-	if (!have_vmc_fs) {
-		ID = SifExecModuleBuffer(vmc_fs_irx, size_vmc_fs_irx, 0, NULL, &ret);
-		DPRINTF(" [VMC_FS]: ID=%d, ret=%d\n", ID, ret);
-		have_vmc_fs = 1;
+static int vmcmanDeviceRegistered(void)
+{
+	int fd;
+
+	DPRINTF(" [VMCMAN]: probing vmc0:\n");
+	fd = fileXioDopen("vmc0:");
+	if (fd >= 0) {
+		fileXioDclose(fd);
+		vmcman_last_error = 0;
+		DPRINTF(" [VMCMAN]: vmc0: registered fd=%d\n", fd);
+		return TRUE;
 	}
+
+	/* An unmounted but registered vmc device returns NOT_MOUNT, not ENODEV. */
+	DPRINTF(" [VMCMAN]: device probe ret=%d\n", fd);
+	if (fd != -ENODEV) {
+		vmcman_last_error = 0;
+		DPRINTF(" [VMCMAN]: vmc0: registered via ret=%d\n", fd);
+		return TRUE;
+	}
+	vmcman_last_error = fd;
+	DPRINTF(" [VMCMAN]: vmc0: not registered ret=%d\n", fd);
+	return FALSE;
+}
+
+static int load_vmcman_module(void)
+{
+	int ret = 0, ID __attribute__((unused));
+
+	if (!have_vmcman) {
+		DPRINTF(" [VMCMAN]: loading size=%d\n", size_vmcman_irx);
+		ID = SifExecModuleBuffer(vmcman_irx, size_vmcman_irx, 0, NULL, &ret);
+		DPRINTF(" [VMCMAN]: ID=%d, ret=%d\n", ID, ret);
+		if (ID < 0) {
+			vmcman_last_error = ID;
+			return 0;
+		}
+		have_vmcman = 1;
+		vmcman_last_error = 0;
+		if (ret < 0)
+			DPRINTF(" [VMCMAN]: start ret=%d; probing vmc: anyway\n", ret);
+	}
+	return have_vmcman;
+}
+
+int load_vmcman(void)
+{
+	ensureCoreIoStackReady();
+	if (!load_vmcman_module()) {
+		DPRINTF(" [VMCMAN]: module load failed err=%d\n", vmcman_last_error);
+		return 0;
+	}
+	if (!vmcmanDeviceRegistered()) {
+		DPRINTF(" [VMCMAN]: probe failed err=%d\n", vmcman_last_error);
+		have_vmcman = 0;
+	}
+	return have_vmcman;
+}
+
+int get_vmcman_last_error(void)
+{
+	return vmcman_last_error;
 }
 //------------------------------
-//endfunc load_vmc_fs
+//endfunc load_vmcman
 //---------------------------------------------------------------------------
 #ifdef ETH
 static void load_ps2ftpd(void)
@@ -627,6 +682,7 @@ static void loadBasicModules(void)
 void ensureCoreIoStackReady(void)
 {
 	loadBasicModules();
+	loadCdModules();
 
 	if (!have_filexio_ready) {
 		fileXioInit();
@@ -662,6 +718,8 @@ void ensureCoreIoStackReady(void)
 #endif
 		have_mc_rpc_ready = 1;
 	}
+
+	load_vmcman_module();
 }
 //------------------------------
 //endfunc ensureCoreIoStackReady
@@ -1067,6 +1125,11 @@ static void resetRuntimeDeviceState(void)
 	setupPad();
 	DPRINTF("Starting keyboard\n");
 	startKbd();
+}
+
+void rebootIopAndReloadCoreStack(void)
+{
+	resetRuntimeDeviceState();
 }
 
 static void switchStorageDriverStack(int target_mode)
@@ -1480,7 +1543,7 @@ void Reset()
 	have_udpfs_ministack = 0;
 	have_udpfs_ioman = 0;
 #endif
-	have_vmc_fs = 0;
+	have_vmcman = 0;
 	have_ps2ftpd = 0;
 	have_ps2kbd = 0;
 	have_hdl_info = 0;

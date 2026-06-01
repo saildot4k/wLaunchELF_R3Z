@@ -398,6 +398,11 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 	} else if (!stricmp(path, setting->Misc_Show_Build_Info)) {
 		Show_build_info();
 		return;
+	} else if (!stricmp(path, setting->Misc_Reboot_IOP)) {
+		ctx->main_msg[0] = 0;
+		rebootIopAndReloadCoreStack();
+		snprintf(ctx->main_msg, MAX_PATH, "%s", LNG(Reboot_IOP));
+		return;
 	} else if (!strncmp(path, "cdfs", 4)) {
 		loadCdModules();
 		LCDVD_FLUSHCACHE();

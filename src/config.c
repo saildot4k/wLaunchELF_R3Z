@@ -356,6 +356,7 @@ void saveConfig(char *mainMsg, char *CNF)
 	        "Misc_About_uLE = %s\r\n"
 	        "Misc_Show_Build_Info = %s\r\n"
 	        "Misc_OSDSYS = %s\r\n"
+	        "Misc_Reboot_IOP = %s\r\n"
 	        "%n",  // %n causes NO output, but only a measurement
 	        setting->Misc,
 	        setting->Misc_PS2Disc + i,
@@ -371,6 +372,7 @@ void saveConfig(char *mainMsg, char *CNF)
 	        setting->Misc_About_uLE + i,
 	        setting->Misc_Show_Build_Info + i,
 	        setting->Misc_OSDSYS + i,
+	        setting->Misc_Reboot_IOP + i,
 	        &CNF_step  // This variable measures the size of sprintf data
 	        );
 	CNF_size += CNF_step;
@@ -528,6 +530,7 @@ void initConfig(void)
 	sprintf(setting->Misc_About_uLE, "%s/%s", LNG_DEF(MISC), LNG_DEF(About_uLE));
 	sprintf(setting->Misc_Show_Build_Info, "%s/%s", LNG(MISC), LNG(Build_Info));
 	sprintf(setting->Misc_OSDSYS, "%s/%s", LNG_DEF(MISC), LNG_DEF(OSDSYS));
+	sprintf(setting->Misc_Reboot_IOP, "%s/%s", LNG_DEF(MISC), LNG_DEF(Reboot_IOP));
 
 	for (i = 0; i < SETTING_LK_COUNT; i++) {
 		setting->LK_Path[i][0] = 0;
@@ -690,6 +693,8 @@ int loadConfig(char *mainMsg, char *CNF)
 				sprintf(setting->Misc_Show_Build_Info, "%s%s", setting->Misc, value);
 			else if (!strcmp(name, "Misc_OSDSYS"))
 				sprintf(setting->Misc_OSDSYS, "%s%s", setting->Misc, value);
+			else if (!strcmp(name, "Misc_Reboot_IOP"))
+				sprintf(setting->Misc_Reboot_IOP, "%s%s", setting->Misc, value);
 			//----------
 			else if (!strcmp(name, "LK_auto_Timer"))
 				setting->timeout = atoi(value);
@@ -1893,11 +1898,15 @@ static void Config_Advanced(void)
 						setting->cdrom_disable_gameid = !setting->cdrom_disable_gameid;
 					else if (s == CONFIG_ADVANCED_PSU_HUGENAMES)
 						setting->PSU_HugeNames = !setting->PSU_HugeNames;
-					else if (s == CONFIG_ADVANCED_PSU_DATENAMES)
+					else if (s == CONFIG_ADVANCED_PSU_DATENAMES) {
 						setting->PSU_DateNames = !setting->PSU_DateNames;
-					else if (s == CONFIG_ADVANCED_PSU_NOOVERWRITE)
+						if (!setting->PSU_DateNames)
+							setting->PSU_NoOverwrite = 0;
+					} else if (s == CONFIG_ADVANCED_PSU_NOOVERWRITE) {
 						setting->PSU_NoOverwrite = !setting->PSU_NoOverwrite;
-					else if (s == CONFIG_ADVANCED_PATHPAD_LOCK)
+						if (setting->PSU_NoOverwrite)
+							setting->PSU_DateNames = 1;
+					} else if (s == CONFIG_ADVANCED_PATHPAD_LOCK)
 						setting->PathPad_Lock = !setting->PathPad_Lock;
 					else if (s == CONFIG_ADVANCED_FB_NOICONS)
 						setting->FB_NoIcons = !setting->FB_NoIcons;

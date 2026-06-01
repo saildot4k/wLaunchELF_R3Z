@@ -218,7 +218,9 @@ u64 USB_mass_scan_time = 0;
 int USB_mass_scanned = 0;  //0==Not_found_OR_No_Multi 1==found_Multi_mass_once
 int USB_mass_loaded = 0;   //0==none, 1==internal, 2==external
 
-static int mapUsbPathToMassPath(const char *usb_path, char *mass_path)
+int readGENERIC(const char *path, FILEINFO *info, int max);
+
+static int mapUsbPathToFatFsPath(const char *usb_path, char *fatfs_path)
 {
 	const char *suffix;
 	int unit = 0;
@@ -237,12 +239,84 @@ static int mapUsbPathToMassPath(const char *usb_path, char *mass_path)
 	if (*suffix == 0)
 		suffix = "/";
 
+#ifdef EXFAT
+	snprintf(fatfs_path, MAX_PATH, "usb%d:%s", unit, suffix);
+#else
 	if (unit == 0)
-		snprintf(mass_path, MAX_PATH, "mass:%s", suffix);
+		snprintf(fatfs_path, MAX_PATH, "mass:%s", suffix);
 	else
-		snprintf(mass_path, MAX_PATH, "mass%d:%s", unit, suffix);
+		snprintf(fatfs_path, MAX_PATH, "mass%d:%s", unit, suffix);
+#endif
 
 	return 0;
+}
+
+#ifdef EXFAT
+static int mapMassPathToUsbFatFsPath(const char *mass_path, char *usb_path)
+{
+	const char *suffix;
+	int unit = 0;
+
+	if (strncmp(mass_path, "mass", 4))
+		return -1;
+
+	if (mass_path[4] == ':')
+		suffix = mass_path + 5;
+	else if (mass_path[4] >= '0' && mass_path[4] <= '9' && mass_path[5] == ':') {
+		unit = mass_path[4] - '0';
+		suffix = mass_path + 6;
+	} else
+		return -1;
+
+	if (*suffix == 0)
+		suffix = "/";
+
+	snprintf(usb_path, MAX_PATH, "usb%d:%s", unit, suffix);
+	return 0;
+}
+#endif
+
+static int isSimpleDeviceRootPath(const char *path)
+{
+	const char *colon = strchr(path, ':');
+
+	return (colon != NULL && (colon[1] == '\0' || (colon[1] == '/' && colon[2] == '\0')));
+}
+
+static int readGENERICWithFirstOpenRetry(const char *path, FILEINFO *info, int max, int wait_budget_ms)
+{
+	u64 wait_start, backoff_start;
+	int dd, is_root, n;
+
+	n = readGENERIC(path, info, max);
+	if (n > 0 || wait_budget_ms <= 0)
+		return n;
+
+	is_root = isSimpleDeviceRootPath(path);
+	if (!is_root) {
+		dd = fileXioDopen(path);
+		if (dd >= 0) {
+			fileXioDclose(dd);
+			return n;
+		}
+	}
+
+	wait_start = Timer();
+	while (Timer() < wait_start + wait_budget_ms) {
+		dd = fileXioDopen(path);
+		if (dd >= 0) {
+			fileXioDclose(dd);
+			n = readGENERIC(path, info, max);
+			if (n > 0 || !is_root)
+				break;
+		}
+
+		backoff_start = Timer();
+		while (Timer() < backoff_start + 100) {
+		}
+	}
+
+	return n;
 }
 
 //char debugs[4096]; //For debug display strings. Comment it out when unused
@@ -676,24 +750,34 @@ int genFixPath(const char *inp_path, char *gen_path)
 		//end of clause for using a CD or DVD path
 
 	} else if (!strncmp(uLE_path, "usb", 3)) {  //if using USB alias path
-		char mass_path[MAX_PATH];
-		char *mass_sep;
+		char fatfs_path[MAX_PATH];
+		char *fatfs_sep;
 
 		loadUsbModules();
-		if (mapUsbPathToMassPath(uLE_path, mass_path) < 0) {
+		if (mapUsbPathToFatFsPath(uLE_path, fatfs_path) < 0) {
 			part_ix = -1;
 		} else {
-			strcpy(gen_path, mass_path);
-			mass_sep = strchr(gen_path, '/');
-			if (mass_sep && (mass_sep - gen_path < 7) && mass_sep[-1] == ':')
-				strcpy(gen_path + (mass_sep - gen_path), mass_sep + 1);
+			strcpy(gen_path, fatfs_path);
+			fatfs_sep = strchr(gen_path, '/');
+			if (fatfs_sep && (fatfs_sep - gen_path < 7) && fatfs_sep[-1] == ':')
+				strcpy(gen_path + (fatfs_sep - gen_path), fatfs_sep + 1);
 		}
 		//end of clause for using a USB alias path
 
 	} else if (!strncmp(uLE_path, "mass", 4)) {  //if using USB mass: path
 		loadUsbModules();
+#ifdef EXFAT
+		if (mapMassPathToUsbFatFsPath(uLE_path, gen_path) < 0)
+			part_ix = -1;
+		else {
+			pathSep = strchr(gen_path, '/');
+			if (pathSep && (pathSep - gen_path < 7) && pathSep[-1] == ':')
+				strcpy(gen_path + (pathSep - gen_path), pathSep + 1);
+		}
+#else
 		if (pathSep && (pathSep - uLE_path < 7) && pathSep[-1] == ':')
 			strcpy(gen_path + (pathSep - uLE_path), pathSep + 1);
+#endif
 		//end of clause for using a USB mass: path
 
 	}
@@ -792,28 +876,29 @@ int readVMC(const char *path, FILEINFO *info, int max)
 		return 0;
 
 	while (fileXioDread(fd, &dirbuf) > 0) {
-		//		if(dirbuf.stat.mode & FIO_S_IFDIR &&  //NB: normal usage (non-vmcfs)
-		if (dirbuf.stat.mode & sceMcFileAttrSubdir &&  //NB: nonstandard usage of vmcfs
-		    (!strcmp(dirbuf.name, ".") || !strcmp(dirbuf.name, "..")))
+		unsigned int vmc_mc_mode = dirbuf.stat.private_0;
+
+		if (!strcmp(dirbuf.name, ".") || !strcmp(dirbuf.name, ".."))
 			continue;  //Skip pseudopaths "." and ".."
 
 		strcpy(info[i].name, dirbuf.name);
 		clearMcTable(&info[i].stats);
-		//		if(dirbuf.stat.mode & FIO_S_IFDIR){  //NB: normal usage (non-vmcfs)
-		//			info[i].stats.attrFile = MC_ATTR_norm_folder;
-		//		}
-		if (dirbuf.stat.mode & sceMcFileAttrSubdir) {  //NB: vmcfs usage
+		if (vmc_mc_mode & sceMcFileAttrExists) {
+			info[i].stats.AttrFile = vmc_mc_mode;
+			info[i].stats.Reserve1 = (u16)dirbuf.stat.private_1;
+			info[i].stats.Reserve2 = dirbuf.stat.private_2;
+			if (!(vmc_mc_mode & sceMcFileAttrSubdir))
+				info[i].stats.FileSizeByte = dirbuf.stat.size;
+		} else if (FIO_S_ISDIR(dirbuf.stat.mode)) {
+			info[i].stats.AttrFile = MC_ATTR_norm_folder;
+		} else if (FIO_S_ISREG(dirbuf.stat.mode)) {
+			info[i].stats.AttrFile = MC_ATTR_norm_file;
+			info[i].stats.FileSizeByte = dirbuf.stat.size;
+		} else if (dirbuf.stat.mode & sceMcFileAttrSubdir) {
 			info[i].stats.AttrFile = dirbuf.stat.mode;
-		}
-		//		else if(dirbuf.stat.mode & FIO_S_IFREG){  //NB: normal usage (non-vmcfs)
-		//			info[i].stats.attrFile = MC_ATTR_norm_file;
-		//			info[i].stats.fileSizeByte = dirbuf.stat.size;
-		//			info[i].stats.unknown4[0] = dirbuf.stat.hisize;
-		//		}
-		else if (dirbuf.stat.mode & sceMcFileAttrFile) {  //NB: vmcfs usage
+		} else if (dirbuf.stat.mode & sceMcFileAttrFile) {
 			info[i].stats.AttrFile = dirbuf.stat.mode;
 			info[i].stats.FileSizeByte = dirbuf.stat.size;
-			info[i].stats.Reserve2 = dirbuf.stat.hisize;
 		} else
 			continue;  //Skip entry which is neither a file nor a folder
 		snprintf((char *)info[i].stats.EntryName, 32, "%.31s", info[i].name);
@@ -967,7 +1052,11 @@ void scan_USB_mass(void)
 {
 	int i;
 	iox_stat_t chk_stat;
-	char mass_path[8] = "mass0:/";
+#ifdef EXFAT
+	char usb_path[8] = "usb0:/";
+#else
+	char usb_path[8] = "mass0:/";
+#endif
 
 	loadUsbModules();
 	if (!USB_mass_loaded)
@@ -978,8 +1067,12 @@ void scan_USB_mass(void)
 		return;
 
 	for (i = 0; i < USB_mass_max_drives; i++) {
-		mass_path[4] = '0' + i;
-		if (fileXioGetStat(mass_path, &chk_stat) < 0) {
+#ifdef EXFAT
+		usb_path[3] = '0' + i;
+#else
+		usb_path[4] = '0' + i;
+#endif
+		if (fileXioGetStat(usb_path, &chk_stat) < 0) {
 			USB_mass_ix[i] = 0;
 			continue;
 		}
@@ -1248,18 +1341,28 @@ int getDir(const char *path, FILEINFO *info)
 		n = readHDDDVRP(path, info, max);
 #endif
 	else if (!strncmp(path, "mass", 4)) {
-		if (!USB_mass_scanned)
-			scan_USB_mass();
-		n = readGENERIC(path, info, max);
-	}
-	else if (!strncmp(path, "usb", 3)) {
-		char mass_path[MAX_PATH];
+#ifdef EXFAT
+		char usb_path[MAX_PATH];
 
-		if (mapUsbPathToMassPath(path, mass_path) < 0)
+		if (mapMassPathToUsbFatFsPath(path, usb_path) < 0)
 			return 0;
 		if (!USB_mass_scanned)
 			scan_USB_mass();
-		n = readGENERIC(mass_path, info, max);
+		n = readGENERICWithFirstOpenRetry(usb_path, info, max, 2000);
+#else
+		if (!USB_mass_scanned)
+			scan_USB_mass();
+		n = readGENERICWithFirstOpenRetry(path, info, max, 2000);
+#endif
+	}
+	else if (!strncmp(path, "usb", 3)) {
+		char usb_path[MAX_PATH];
+
+		if (mapUsbPathToFatFsPath(path, usb_path) < 0)
+			return 0;
+		if (!USB_mass_scanned)
+			scan_USB_mass();
+		n = readGENERICWithFirstOpenRetry(usb_path, info, max, 2000);
 	}
 	else if (!strncmp(path, "ata", 3)) {
 #ifdef EXFAT
@@ -1498,7 +1601,11 @@ int setFileList(const char *path, const char *ext, FILEINFO *files, int cnfmode)
 		files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
 
 		if (allow_usb_devices) {
+#ifdef EXFAT
+			strcpy(files[nfiles].name, "usb:");
+#else
 			strcpy(files[nfiles].name, "mass:");
+#endif
 			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
 		}
 
@@ -1588,11 +1695,9 @@ int setFileList(const char *path, const char *ext, FILEINFO *files, int cnfmode)
 		files[nfiles++].stats.AttrFile = sceMcFileAttrFile;
 		strcpy(files[nfiles].name, LNG(PS2Disc));
 		files[nfiles++].stats.AttrFile = sceMcFileAttrFile;
-		#ifdef ETH
-		strcpy(files[nfiles].name, LNG(PS2Net));
-		files[nfiles++].stats.AttrFile = sceMcFileAttrFile;
-		#endif
 		strcpy(files[nfiles].name, LNG(PS2PowerOff));
+		files[nfiles++].stats.AttrFile = sceMcFileAttrFile;
+		strcpy(files[nfiles].name, LNG(OSDSYS));
 		files[nfiles++].stats.AttrFile = sceMcFileAttrFile;
 		strcpy(files[nfiles].name, LNG(HddManager));
 		files[nfiles++].stats.AttrFile = sceMcFileAttrFile;
@@ -1609,7 +1714,7 @@ int setFileList(const char *path, const char *ext, FILEINFO *files, int cnfmode)
 		files[nfiles++].stats.AttrFile = sceMcFileAttrFile;
 		strcpy(files[nfiles].name, LNG(Build_Info));
 		files[nfiles++].stats.AttrFile = sceMcFileAttrFile;
-		strcpy(files[nfiles].name, LNG(OSDSYS));
+		strcpy(files[nfiles].name, LNG(Reboot_IOP));
 		files[nfiles++].stats.AttrFile = sceMcFileAttrFile;
 		for (i = 0; i < nfiles; i++)
 			files[i].title[0] = 0;

@@ -45,6 +45,11 @@ USBMASS_BD_SDK_MODULE_DIR :=
 
 IOMANX_SOURCE := iop/__precompiled/iomanX.irx
 FILEXIO_SOURCE := iop/__precompiled/fileXio.irx
+VMCMAN_AUTOGEN := iop/__generated/vmcman.irx
+VMCMAN_SOURCE := $(VMCMAN_AUTOGEN)
+VMCMAN_LOCAL_DIR := iop/vmcman
+VMCMAN_LOCAL_SOURCES := $(wildcard $(VMCMAN_LOCAL_DIR)/Makefile $(VMCMAN_LOCAL_DIR)/src/* $(VMCMAN_LOCAL_DIR)/include/*)
+VMCMAN_SDK_ROOT :=
 
 ifneq ($(wildcard $(PS2SDK)/iop/irx/bdm.irx),)
 BDM_SOURCE := $(PS2SDK)/iop/irx/bdm.irx
@@ -157,6 +162,22 @@ IOMANX_SOURCE := $(PS2SDK)/iop/irx/iomanX.irx
 endif
 ifneq ($(wildcard $(PS2SDK)/iop/irx/fileXio.irx),)
 FILEXIO_SOURCE := $(PS2SDK)/iop/irx/fileXio.irx
+endif
+
+ifneq ($(PS2SDKSRC),)
+ifneq ($(wildcard $(PS2SDKSRC)/Defs.make),)
+VMCMAN_SDK_ROOT := $(PS2SDKSRC)
+endif
+endif
+
+ifeq ($(strip $(VMCMAN_SDK_ROOT)),)
+ifneq ($(wildcard $(PS2SDK)/Defs.make),)
+VMCMAN_SDK_ROOT := $(PS2SDK)
+endif
+endif
+
+ifeq ($(strip $(VMCMAN_SDK_ROOT)),)
+$(error Missing PS2SDK source tree for local vmcman build. Set PS2SDKSRC to a ps2sdk checkout)
 endif
 
 
@@ -358,6 +379,23 @@ $(EE_ASM_DIR)filexio_irx.s: $(FILEXIO_SOURCE) | $(EE_ASM_DIR)
 iop/__generated:
 	mkdir -p $@
 
+$(VMCMAN_AUTOGEN): $(VMCMAN_LOCAL_SOURCES) | iop/__generated
+	$(MAKE) -C $(VMCMAN_LOCAL_DIR) \
+		PS2SDKSRC=$(VMCMAN_SDK_ROOT) \
+		PS2SDK=$(VMCMAN_SDK_ROOT) \
+		IOP_BIN_DIR=$(abspath iop/__generated)/ \
+		IOP_OBJS_DIR=$(abspath iop/__generated/vmcman_obj)/ \
+		IOP_BIN=$(abspath $@) \
+		DEBUG=$(DEBUG)
+	test -s $@
+
+$(EE_ASM_DIR)vmcman_irx.c: $(VMCMAN_SOURCE) scripts/bin2c-fallback.sh | $(EE_ASM_DIR)
+	sh scripts/bin2c-fallback.sh $< $@ vmcman_irx
+
+$(EE_OBJS_DIR)vmcman_irx.o: $(EE_ASM_DIR)vmcman_irx.c | $(EE_OBJS_DIR)
+	@echo -e "\033[1m CC  - $@\033[0m"
+	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
+
 $(EE_ASM_DIR)ps2dev9_irx.s: $(PS2SDK)/iop/irx/ps2dev9.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ps2dev9_irx
 
@@ -527,12 +565,6 @@ $(EE_ASM_DIR)ds34bt.s: iop/ds34bt.irx | $(EE_ASM_DIR)
 
 $(EE_ASM_DIR)padman.s: $(PADMAN_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ padman_irx
-
-iop/vmc_fs.irx: iop/vmc_fs
-	$(MAKE) -C $<
-
-$(EE_ASM_DIR)vmc_fs_irx.s: iop/vmc_fs.irx | $(EE_ASM_DIR)
-	$(BIN2S) $< $@ vmc_fs_irx
 
 loader/loader.elf: loader
 	$(MAKE) -C $<

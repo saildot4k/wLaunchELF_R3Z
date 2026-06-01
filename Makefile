@@ -32,7 +32,7 @@ EE_OBJS = main.o main_actions.o main_boot.o main_modules.o main_menu.o main_info
 	gui_sort.o gui_texteditor.o gui_hdd0_format.o psu_functions.o \
 	poweroff_irx.o iomanx_irx.o filexio_irx.o ps2dev9_irx.o \
 	ps2hdd_irx.o ps2fs_irx.o usbd_irx.o mcman_irx.o mcserv_irx.o \
-	cdvd_irx.o vmc_fs_irx.o ps2kbd_irx.o \
+	cdvd_irx.o vmcman_irx.o ps2kbd_irx.o \
 	hdd.o hdl_rpc.o hdl_info_irx.o editor.o timer.o icon.o lang.o \
 	font_uLE.o makeicon.o chkesr.o allowdvdv_irx.o
 
@@ -321,7 +321,6 @@ clean:
 	$(MAKE) -C loader clean
 	$(MAKE) -C iop/hdl_info clean
 	$(MAKE) -C iop/ps2host clean
-	$(MAKE) -C iop/vmc_fs clean
 	$(MAKE) -C iop/AllowDVDV clean
 	$(MAKE) -C iop/oldlibs/libcdvd clean
 	$(MAKE) -C iop/oldlibs/ps2ftpd clean
