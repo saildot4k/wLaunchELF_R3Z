@@ -45,6 +45,9 @@ Misc_Configure = Configure
 Misc_ShowFont = ShowFont
 Misc_Debug_Info = Debug Info
 Misc_About_uLE = About uLE
+Misc_Show_Build_Info = BuildInfo
+Misc_OSDSYS = OSDSYS
+Misc_Reboot_IOP = Reboot IOP
 # ----------------------------------------------------------------------
 # Next follows the 12 (as yet) launching links, here kept in traditional
 # order, though users are allowed to vary the order at will. For these
@@ -283,14 +286,15 @@ FONT_FILE =
 # the original save data, appended to the normal name.
 # Both options can be set simultaneously, for very detailed names, like:
 # "BESLES-5245800_Disgaea(1) Ep.1 LV1_2006-07-23_14-46-33.psu"
-# As yet they are not available in config menus. Use TextEditor instead.
+# These can also be changed from Advanced Settings in the GUI.
 # ----------------------------------------------------------------------
 PSU_HugeNames = 0
 PSU_DateNames = 0
 # ----------------------------------------------------------------------
 # PSU_NoOverwrite was added in v3.93, to eliminate redundant backups.
-# It's only useful to set it non-zero when PSU_DateNames is also set, as
-# it is otherwise ignored. When used, backup of timestamped PSU files
+# It is only useful when PSU_DateNames is also set. In the GUI, enabling
+# this also enables PSU_DateNames, and disabling PSU_DateNames disables it.
+# When used, backup of timestamped PSU files
 # check for an identical PSU filename at the destination, and if such
 # a file already exists the operation exits without error, as if a new
 # backup had been made. Thus you can select all saves on an MC and use

@@ -14,6 +14,7 @@ void setupPowerOff(void);
 void closeAllAndPoweroff(void);
 void startKbd(void);
 void ensureCoreIoStackReady(void);
+void rebootIopAndReloadCoreStack(void);
 
 #ifdef ETH
 void loadNetModules(void);

@@ -1695,11 +1695,9 @@ int setFileList(const char *path, const char *ext, FILEINFO *files, int cnfmode)
 		files[nfiles++].stats.AttrFile = sceMcFileAttrFile;
 		strcpy(files[nfiles].name, LNG(PS2Disc));
 		files[nfiles++].stats.AttrFile = sceMcFileAttrFile;
-		#ifdef ETH
-		strcpy(files[nfiles].name, LNG(PS2Net));
-		files[nfiles++].stats.AttrFile = sceMcFileAttrFile;
-		#endif
 		strcpy(files[nfiles].name, LNG(PS2PowerOff));
+		files[nfiles++].stats.AttrFile = sceMcFileAttrFile;
+		strcpy(files[nfiles].name, LNG(OSDSYS));
 		files[nfiles++].stats.AttrFile = sceMcFileAttrFile;
 		strcpy(files[nfiles].name, LNG(HddManager));
 		files[nfiles++].stats.AttrFile = sceMcFileAttrFile;
@@ -1716,7 +1714,7 @@ int setFileList(const char *path, const char *ext, FILEINFO *files, int cnfmode)
 		files[nfiles++].stats.AttrFile = sceMcFileAttrFile;
 		strcpy(files[nfiles].name, LNG(Build_Info));
 		files[nfiles++].stats.AttrFile = sceMcFileAttrFile;
-		strcpy(files[nfiles].name, LNG(OSDSYS));
+		strcpy(files[nfiles].name, LNG(Reboot_IOP));
 		files[nfiles++].stats.AttrFile = sceMcFileAttrFile;
 		for (i = 0; i < nfiles; i++)
 			files[i].title[0] = 0;

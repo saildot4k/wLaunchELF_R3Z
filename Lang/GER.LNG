@@ -348,3 +348,4 @@ lang(346, Create_New_PSU_if_filename_exists, "Neue PSU erstellen, wenn Dateiname
 lang(347, Lock_Main_LaunchKey_PathPad_Paths, "Hauptpfade fuer LaunchKey/PathPad sperren")
 lang(348, Disable_Icons_in_File_Browser, "Icons im Datei-Browser deaktivieren")
 lang(349, Language, "Sprache")
+lang(350, Reboot_IOP, "IOP neu starten")

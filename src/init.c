@@ -1127,6 +1127,11 @@ static void resetRuntimeDeviceState(void)
 	startKbd();
 }
 
+void rebootIopAndReloadCoreStack(void)
+{
+	resetRuntimeDeviceState();
+}
+
 static void switchStorageDriverStack(int target_mode)
 {
 #if defined(MMCE) || defined(MX4SIO)
