@@ -59,6 +59,8 @@ char Path[10][MAX_PATH];    // File Path For Each Opened Windows. 10 Max.
 void TextEditor(char *path)
 {
 	char tmp[MAX_PATH], tmp1[MAX_PATH], tmp2[MAX_PATH];
+	char key_char;
+	const char *key_label;
 	int ch;
 	int x, y, y0, y1;
 	int i = 0, j, ret = 0, layout_index;
@@ -338,7 +340,9 @@ void TextEditor(char *path)
 							j = 10 * FONT_WIDTH;
 						} else {
 							x = KEY_X + 2 + 4 + 14 + (KeyBoard_Cur % WFONTS + 1) * 20 - 32;
-							j = FONT_WIDTH + 4;
+							layout_index = getVirtualKeyboardEditorLayoutIndex(KeyBoard_Cur);
+							key_char = (layout_index >= 0) ? getVirtualKeyboardLayoutChar(setting->virtual_keyboard_layout, layout_index, KeyBoard_Caps) : 0;
+							j = (key_char == ' ') ? strlen(LNG(SPACE)) * FONT_WIDTH + 4 : FONT_WIDTH + 4;
 						}
 						y = KEY_Y + 12 + (KeyBoard_Cur / WFONTS) * 18;
 						drawOpSprite(setting->color[COLOR_SELECT], x - 2, y, x + j, y + FONT_HEIGHT - 1);
@@ -401,11 +405,17 @@ void TextEditor(char *path)
 
 					for (i = 0; i < KEY_LEN; i++) {
 						layout_index = getVirtualKeyboardEditorLayoutIndex(i);
-						if (layout_index >= 0 && isVirtualKeyboardEditorKey(setting->virtual_keyboard_layout, i))
-							drawChar(getVirtualKeyboardLayoutDisplayChar(setting->virtual_keyboard_layout, layout_index, KeyBoard_Caps),
-							         KEY_X + 2 + 4 + 14 + (i % WFONTS + 1) * 20 - 32,
-							         KEY_Y + 12 + (i / WFONTS) * 18,
-							         (i == KeyBoard_Cur) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
+						if (layout_index >= 0 && isVirtualKeyboardEditorKey(setting->virtual_keyboard_layout, i)) {
+							x = KEY_X + 2 + 4 + 14 + (i % WFONTS + 1) * 20 - 32;
+							y = KEY_Y + 12 + (i / WFONTS) * 18;
+							key_char = getVirtualKeyboardLayoutChar(setting->virtual_keyboard_layout, layout_index, KeyBoard_Caps);
+							key_label = (key_char == ' ') ? LNG(SPACE) : NULL;
+							if (key_label != NULL)
+								printXY(key_label, x, y, (i == KeyBoard_Cur) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT], TRUE, 0);
+							else
+								drawChar(getVirtualKeyboardLayoutDisplayChar(setting->virtual_keyboard_layout, layout_index, KeyBoard_Caps), x, y,
+								         (i == KeyBoard_Cur) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
+						}
 					}
 
 				}  // end Display Virtual KeyBoard Section.

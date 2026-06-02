@@ -31,97 +31,97 @@ enum {
 static const char *vkey_layout_rows[VKEY_LAYOUT_COUNT][VKEY_SHIFT_COUNT][VKEY_LAYOUT_ROWS] = {
     {
         {
-            "`1234567890-=    ",
-            "abcdefghijklmn[]\\",
-            "opqrstuvwxyz;'   ",
-            ".,/              ",
+            "1234567890-=     ",
+            "abcdefghijklmn[] ",
+            "opqrstuvwxyz;'\\  ",
+            " .,/`            ",
             "      _          ",
         },
         {
-            "~!@#$%^&*()_+    ",
-            "ABCDEFGHIJKLMN{}|",
-            "OPQRSTUVWXYZ:\"   ",
-            "<>?              ",
-            "      _          ",
-        },
-    },
-    {
-        {
-            "`1234567890-=    ",
-            "qwertyuiop[]\\    ",
-            "asdfghjkl;'      ",
-            "zxcvbnm,./       ",
-            "      _          ",
-        },
-        {
-            "~!@#$%^&*()_+    ",
-            "QWERTYUIOP{}|    ",
-            "ASDFGHJKL:\"      ",
-            "ZXCVBNM<>?       ",
+            "!@#$%^&*()_+     ",
+            "ABCDEFGHIJKLMN{} ",
+            "OPQRSTUVWXYZ:\"|  ",
+            " <>?~            ",
             "      _          ",
         },
     },
     {
         {
-            "`1234567890-=    ",
-            "',.pyfgcrl/=\\    ",
-            "aoeuidhtns-      ",
-            ";qjkxbmwvz       ",
+            "1234567890-=     ",
+            "qwertyuiop[]     ",
+            "asdfghjkl;'\\     ",
+            " zxcvbnm,./`     ",
             "      _          ",
         },
         {
-            "~!@#$%^&*()_+    ",
-            "\"<>PYFGCRL?+|    ",
-            "AOEUIDHTNS_      ",
-            ":QJKXBMWVZ       ",
-            "      _          ",
-        },
-    },
-    {
-        {
-            "`1234567890-=    ",
-            "azertyuiop[]\\    ",
-            "qsdfghjklm;'     ",
-            "wxcvbn,./        ",
-            "      _          ",
-        },
-        {
-            "~!@#$%^&*()_+    ",
-            "AZERTYUIOP{}|    ",
-            "QSDFGHJKLM:\"     ",
-            "WXCVBN<>?        ",
+            "!@#$%^&*()_+     ",
+            "QWERTYUIOP{}     ",
+            "ASDFGHJKL:\"|     ",
+            " ZXCVBNM<>?~     ",
             "      _          ",
         },
     },
     {
         {
-            "`1234567890-=    ",
-            "qwertzuiop[]\\    ",
-            "asdfghjkl;'      ",
-            "yxcvbnm,./       ",
+            "1234567890-=     ",
+            "',.pyfgcrl/=     ",
+            "aoeuidhtns-\\     ",
+            " ;qjkxbmwvz`     ",
             "      _          ",
         },
         {
-            "~!@#$%^&*()_+    ",
-            "QWERTZUIOP{}|    ",
-            "ASDFGHJKL:\"      ",
-            "YXCVBNM<>?       ",
+            "!@#$%^&*()_+     ",
+            "\"<>PYFGCRL?+     ",
+            "AOEUIDHTNS_|     ",
+            " :QJKXBMWVZ~     ",
             "      _          ",
         },
     },
     {
         {
-            "`1234567890-=    ",
-            "abcdefghijklmn[]\\",
-            "opqrstuvwxyz;'   ",
-            ".,/              ",
+            "1234567890-=     ",
+            "azertyuiop[]     ",
+            "qsdfghjklm;'\\    ",
+            " wxcvbn,./`      ",
             "      _          ",
         },
         {
-            "~!@#$%^&*()_+    ",
-            "ABCDEFGHIJKLMN{}|",
-            "OPQRSTUVWXYZ:\"   ",
-            "<>?              ",
+            "!@#$%^&*()_+     ",
+            "AZERTYUIOP{}     ",
+            "QSDFGHJKLM:\"|    ",
+            " WXCVBN<>?~      ",
+            "      _          ",
+        },
+    },
+    {
+        {
+            "1234567890-=     ",
+            "qwertzuiop[]     ",
+            "asdfghjkl;'\\     ",
+            " yxcvbnm,./`     ",
+            "      _          ",
+        },
+        {
+            "!@#$%^&*()_+     ",
+            "QWERTZUIOP{}     ",
+            "ASDFGHJKL:\"|     ",
+            " YXCVBNM<>?~     ",
+            "      _          ",
+        },
+    },
+    {
+        {
+            "1234567890-=     ",
+            "abcdefghijklmn[] ",
+            "opqrstuvwxyz;'\\  ",
+            " .,/`            ",
+            "      _          ",
+        },
+        {
+            "!@#$%^&*()_+     ",
+            "ABCDEFGHIJKLMN{} ",
+            "OPQRSTUVWXYZ:\"|  ",
+            " <>?~            ",
             "      _          ",
         },
     },
@@ -187,7 +187,7 @@ static char getVirtualKeyboardRawChar(int layout, int index, int caps)
 char getVirtualKeyboardLayoutDisplayChar(int layout, int index, int caps)
 {
     if (index == VKEY_SPACE_INDEX)
-        return '_';
+        return ' ';
     return getVirtualKeyboardRawChar(layout, index, caps);
 }
 

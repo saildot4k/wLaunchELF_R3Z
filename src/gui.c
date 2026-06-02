@@ -139,9 +139,10 @@ int keyboard(char *out, int max)
 	    KEY_X = ((SCREEN_WIDTH - KEY_W) / 2) & -2,
 	    KEY_Y = ((SCREEN_HEIGHT - KEY_H) / 2) & -2;
 	int KEY_LEN, KEY_LAST, KEY_OK, KEY_CANCEL;
-	int cur = 0, sel = 0, i = 0, x, y, t = 0, caps = 0;
+	int cur = 0, sel = 0, i = 0, x, y, t = 0, caps = 0, key_w;
 	char tmp[256], *p;
-	char KeyPress;
+	char KeyPress, key_char;
+	const char *key_label;
 
 	p = strrchr(out, '.');
 	if (p == NULL)
@@ -320,10 +321,16 @@ int keyboard(char *out, int max)
 					continue;
 				x = KEY_X + LINE_THICKNESS + 12 + (i % WFONTS) * (FONT_WIDTH + 12);
 				y = KEY_Y + LINE_THICKNESS + 1 + FONT_HEIGHT + 1 + LINE_THICKNESS + 8 + (i / WFONTS) * FONT_HEIGHT;
+				key_char = getVirtualKeyboardLayoutChar(setting->virtual_keyboard_layout, i, caps);
+				key_label = (key_char == ' ') ? LNG(SPACE) : NULL;
+				key_w = (key_label != NULL) ? strlen(key_label) * FONT_WIDTH : FONT_WIDTH;
 				if (i == sel)
-					drawOpSprite(setting->color[COLOR_SELECT], x - 2, y, x + FONT_WIDTH + 1, y + FONT_HEIGHT - 1);
-				drawChar(getVirtualKeyboardLayoutDisplayChar(setting->virtual_keyboard_layout, i, caps), x, y,
-				         (i == sel) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
+					drawOpSprite(setting->color[COLOR_SELECT], x - 2, y, x + key_w + 1, y + FONT_HEIGHT - 1);
+				if (key_label != NULL)
+					printXY(key_label, x, y, (i == sel) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT], TRUE, 0);
+				else
+					drawChar(getVirtualKeyboardLayoutDisplayChar(setting->virtual_keyboard_layout, i, caps), x, y,
+					         (i == sel) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
 			}
 			if (sel == KEY_OK)
 				drawOpSprite(setting->color[COLOR_SELECT],
