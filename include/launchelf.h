@@ -328,7 +328,6 @@ int get_vmcman_last_error(void);
 #ifdef ETH
 void load_ps2host(void);
 #endif
-int getNetworkMacAddress(u8 mac[6]);
 #ifdef UDPFS
 int load_udpfs(void);
 #endif
