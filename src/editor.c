@@ -31,6 +31,7 @@ int Window[10][NUM_STATE],  // Windowing System, 10 Windows Max.
     KeyBoard_Cur,                  // Virtual KeyBoard Cursor.
     KeyBoard_Active,               // Virtual KeyBoard Activated Or Not.
     KeyBoard_Caps,                 // Virtual KeyBoard caps toggle.
+    KeyBoard_Special,              // Virtual KeyBoard special layout toggle.
     del1, del2, del3, del4,        // Deleted Chars Different Cases.
     ins1, ins2, ins3, ins4, ins5,  // Added Chars Different Cases.
     t;                             // Text Cursor Timer.
@@ -75,15 +76,16 @@ static void editorKeyboardPrintLeft(const char *label, int box_left, int box_rig
 void TextEditor(char *path)
 {
 	char tmp[MAX_PATH], tmp1[MAX_PATH], tmp2[MAX_PATH];
-	char key_char;
+	unsigned int key_char;
 	const char *key_label;
+	const char *special_toggle_label;
 	int ch;
 	int x, y, x0, x1, y0, y1;
 	int i = 0, j, ret = 0, layout_index;
 	int tmpLen = 0;
 	int event = 1, post_event = 0;
 	int Editor_Start = 0;
-	int key_grid_first_col, key_grid_visible_cols, key_grid_visible_w, key_grid_area_x, key_grid_area_w, KEY_GRID_X;
+	int key_grid_first_col, key_grid_visible_cols, key_grid_visible_w, key_grid_area_x, key_grid_area_w, KEY_GRID_X, KEY_SPECIAL_GRID_X;
 	u64 color;
 	const int KEY_W = 350,
 	          KEY_H = 98,
@@ -105,6 +107,7 @@ void TextEditor(char *path)
 	key_grid_area_x = KEY_X + 32 + LINE_THICKNESS;
 	key_grid_area_w = KEY_W - LINE_THICKNESS;
 	KEY_GRID_X = key_grid_area_x + ((key_grid_area_w - key_grid_visible_w) / 2) - key_grid_first_col * KEY_CELL_W;
+	KEY_SPECIAL_GRID_X = key_grid_area_x + ((key_grid_area_w - ((VKEY_LAYOUT_COLS - 1) * KEY_CELL_W + FONT_WIDTH)) / 2);
 
 	Active_Window = 0, Num_Window = 0;
 
@@ -184,6 +187,7 @@ void TextEditor(char *path)
 						Editor_PushRows -= 1 * (Rows_Num - 1);
 				} else if (new_pad & PAD_SELECT && Window[Active_Window][OPENED]) {  // Virtual KeyBoard Active Rows_Num -= 7.
 					KeyBoard_Cur = 2;
+					KeyBoard_Special = 0;
 					Rows_Num -= 6;
 					KeyBoard_Active = 1;
 				}
@@ -358,7 +362,8 @@ void TextEditor(char *path)
 					             KEY_X + KEY_W + 32, KEY_Y + 6,
 					             KEY_X + KEY_W + 32 + LINE_THICKNESS - 1, Frame_end_y);
 
-					if (isVirtualKeyboardEditorKey(setting->virtual_keyboard_layout, KeyBoard_Cur)) {
+					if ((KeyBoard_Special && isEditorSpecialKeyboardKey(KeyBoard_Cur)) ||
+					    (!KeyBoard_Special && isVirtualKeyboardEditorKey(setting->virtual_keyboard_layout, KeyBoard_Cur))) {
 						if (KeyBoard_Cur % WFONTS == 0) {
 							x0 = KEY_BOX1_LEFT;
 							x1 = KEY_BOX1_RIGHT;
@@ -370,8 +375,13 @@ void TextEditor(char *path)
 							x1 = KEY_BOX4_RIGHT;
 						} else {
 							layout_index = getVirtualKeyboardEditorLayoutIndex(KeyBoard_Cur);
-							x = KEY_GRID_X + (layout_index % VKEY_LAYOUT_COLS) * KEY_CELL_W;
-							key_char = (layout_index >= 0) ? getVirtualKeyboardLayoutChar(setting->virtual_keyboard_layout, layout_index, KeyBoard_Caps) : 0;
+							if (KeyBoard_Special) {
+								x = KEY_SPECIAL_GRID_X + (layout_index % VKEY_LAYOUT_COLS) * KEY_CELL_W;
+								key_char = getEditorSpecialKeyboardChar(KeyBoard_Cur);
+							} else {
+								x = KEY_GRID_X + (layout_index % VKEY_LAYOUT_COLS) * KEY_CELL_W;
+								key_char = (layout_index >= 0) ? getVirtualKeyboardLayoutChar(setting->virtual_keyboard_layout, layout_index, KeyBoard_Caps) : 0;
+							}
 							j = (key_char == ' ') ? strlen(LNG(SPACE)) * FONT_WIDTH + 4 : FONT_WIDTH + 4;
 							x0 = x - 2;
 							x1 = x + j;
@@ -430,14 +440,20 @@ void TextEditor(char *path)
 					                        (KeyBoard_Cur == 2 * WFONTS - 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
 					editorKeyboardPrintLeft(LNG(TAB), KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 2 + 4,
 					                        (KeyBoard_Cur == 3 * WFONTS - 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
-					editorKeyboardPrintLeft(LNG(SPECIAL), KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 3 + 6,
+					special_toggle_label = KeyBoard_Special ? getVirtualKeyboardLayoutDisplayName(setting->virtual_keyboard_layout) : LNG(SPECIAL);
+					editorKeyboardPrintLeft(special_toggle_label, KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 3 + 6,
 					                        (KeyBoard_Cur == 4 * WFONTS - 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
 					editorKeyboardPrintLeft(LNG(KB_RETURN), KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 4 + 8,
 					                        (KeyBoard_Cur == 5 * WFONTS - 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
 
 					for (i = 0; i < KEY_LEN; i++) {
 						layout_index = getVirtualKeyboardEditorLayoutIndex(i);
-						if (layout_index >= 0 && isVirtualKeyboardEditorKey(setting->virtual_keyboard_layout, i)) {
+						if (KeyBoard_Special && layout_index >= 0 && isEditorSpecialKeyboardKey(i)) {
+							x = KEY_SPECIAL_GRID_X + (layout_index % VKEY_LAYOUT_COLS) * KEY_CELL_W;
+							y = KEY_Y + 12 + (i / WFONTS) * 18;
+							drawChar(getEditorSpecialKeyboardChar(i), x, y,
+							         (i == KeyBoard_Cur) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
+						} else if (!KeyBoard_Special && layout_index >= 0 && isVirtualKeyboardEditorKey(setting->virtual_keyboard_layout, i)) {
 							x = KEY_GRID_X + (layout_index % VKEY_LAYOUT_COLS) * KEY_CELL_W;
 							y = KEY_Y + 12 + (i / WFONTS) * 18;
 							key_char = getVirtualKeyboardLayoutChar(setting->virtual_keyboard_layout, layout_index, KeyBoard_Caps);

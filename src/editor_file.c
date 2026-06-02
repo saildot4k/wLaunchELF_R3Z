@@ -22,6 +22,7 @@ void editorResetState(void)
 
 	KeyBoard_Cur = 2, KeyBoard_Active = 0,
 	KeyBoard_Caps = 0,
+	KeyBoard_Special = 0,
 	Editor_Insert = 1, Editor_RetMode = TextMode[Active_Window];
 	Editor_Home = 0, Editor_End = 0;
 
