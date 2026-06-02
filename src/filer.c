@@ -6,6 +6,7 @@
 #include "gui_hdd0_format.h"
 #include "gui_sort.h"
 #include "filer_shared.h"
+#include "filer_internal.h"
 #include "main_startup.h"
 
 #define MC_ATTR_norm_folder 0x8427  //Normal folder on PS2 MC
@@ -16,123 +17,10 @@ static void clearMcTable(sceMcTblGetDir *mcT)
 	memset((void *)mcT, 0, sizeof(sceMcTblGetDir));
 }
 
-enum {
-	TRANSFER_STORAGE_DEFAULT = 0,
-	TRANSFER_STORAGE_MMCE,
-	TRANSFER_STORAGE_MX4SIO
-};
 
-enum {
-	TRANSFER_PSX_HDD_NONE = 0,
-	TRANSFER_PSX_HDD_ATA,
-	TRANSFER_PSX_HDD_DVR
-};
 
-#if defined(ETH) || defined(UDPFS)
-extern int host_error;
-#endif
 
-static int transferStorageGateForPath(const char *path)
-{
-	if (path == NULL)
-		return TRANSFER_STORAGE_DEFAULT;
-#ifdef MMCE
-	if (!strncmp(path, "mmce", 4))
-		return TRANSFER_STORAGE_MMCE;
-#endif
-#ifdef MX4SIO
-	if (!strncmp(path, "mx4sio", 6))
-		return TRANSFER_STORAGE_MX4SIO;
-#endif
-	return TRANSFER_STORAGE_DEFAULT;
-}
 
-static int transferPsxHddGateForPath(const char *path)
-{
-	if (path == NULL)
-		return TRANSFER_PSX_HDD_NONE;
-#ifdef DVRP
-	if (!strncmp(path, "dvr_hdd", 7) || !strncmp(path, "dvr_pfs", 7))
-		return TRANSFER_PSX_HDD_DVR;
-#endif
-	if (!strncmp(path, "hdd", 3) || !strncmp(path, "pfs", 3))
-		return TRANSFER_PSX_HDD_ATA;
-	return TRANSFER_PSX_HDD_NONE;
-}
-
-int ensurePathDeviceStackReady(const char *path)
-{
-	if (path == NULL || path[0] == '\0')
-		return TRUE;
-	if (!strncmp(path, "mc", 2) || !strncmp(path, "vmc", 3))
-		return TRUE;
-	if (!strncmp(path, "mass", 4) || !strncmp(path, "usb", 3)) {
-		loadUsbModules();
-		return (USB_mass_loaded != 0);
-	}
-#ifdef MMCE
-	if (!strncmp(path, "mmce", 4)) {
-		return loadMmceModules();
-	}
-#endif
-#ifdef MX4SIO
-	if (!strncmp(path, "mx4sio", 6))
-		return loadMx4sioModules();
-#endif
-#ifdef EXFAT
-	if (!strncmp(path, "ata", 3)) {
-		return loadAtaModules();
-	}
-#endif
-	if (!strncmp(path, "hdd", 3) || !strncmp(path, "pfs", 3)) {
-		return loadHddModules();
-	}
-#ifdef DVRP
-	if (!strncmp(path, "dvr_hdd", 7) || !strncmp(path, "dvr_pfs", 7)) {
-		return loadDVRPHddModules();
-	}
-#endif
-	if (!strncmp(path, "cdfs", 4)) {
-		loadCdModules();
-		return TRUE;
-	}
-#ifdef ETH
-	if (!strncmp(path, "host", 4)) {
-		initHOST();
-		return !host_error;
-	}
-#endif
-#ifdef UDPFS
-	if (!strncmp(path, "udpfs", 5)) {
-		return load_udpfs();
-	}
-#endif
-	return TRUE;
-}
-
-int prepareTransferDeviceStacks(const char *src_path, const char *dst_path)
-{
-	int src_storage = transferStorageGateForPath(src_path);
-	int dst_storage = transferStorageGateForPath(dst_path);
-	int src_psx_hdd = transferPsxHddGateForPath(src_path);
-	int dst_psx_hdd = transferPsxHddGateForPath(dst_path);
-
-	if (src_storage != TRANSFER_STORAGE_DEFAULT &&
-	    dst_storage != TRANSFER_STORAGE_DEFAULT &&
-	    src_storage != dst_storage)
-		return TRANSFER_STACK_INCOMPATIBLE;
-
-	if (src_psx_hdd != TRANSFER_PSX_HDD_NONE &&
-	    dst_psx_hdd != TRANSFER_PSX_HDD_NONE &&
-	    src_psx_hdd != dst_psx_hdd)
-		return TRANSFER_STACK_INCOMPATIBLE;
-
-	if (!ensurePathDeviceStackReady(src_path))
-		return TRANSFER_STACK_LOAD_FAILED;
-	if (!ensurePathDeviceStackReady(dst_path))
-		return TRANSFER_STACK_LOAD_FAILED;
-	return TRANSFER_STACK_READY;
-}
 
 int PasteProgress_f = 0;   //Flags progress report having been made in Pasting
 int PasteMode;             //Top-level PasteMode flag
@@ -323,112 +211,12 @@ static int readGENERICWithFirstOpenRetry(const char *path, FILEINFO *info, int m
 //--------------------------------------------------------------
 //executable code
 //--------------------------------------------------------------
-int mountParty(const char *party)
-{
-	int i, j;
-	char pfs_str[6];
-
-	for (i = 0; i < MOUNT_LIMIT; i++) {  //Here we check already mounted PFS indexes
-		if (!strcmp(party, mountedParty[i]))
-			goto return_i;
-	}
-
-	for (i = 0, j = -1; i < MOUNT_LIMIT; i++) {  //Here we search for a free PFS index
-		if (mountedParty[i][0] == 0) {
-			j = i;
-			break;
-		}
-	}
-
-	if (j == -1) {  //Here we search for a suitable PFS index to unmount
-		for (i = 0; i < MOUNT_LIMIT; i++) {
-			if ((i != latestMount) && (Party_vmcIndex[i] < 0)) {
-				j = i;
-				break;
-			}
-		}
-		if (j < 0)
-			return -1;  //no usable mountpoint available
-		unmountParty(j);
-	}
-	//Here j is the index of a free PFS mountpoint
-	//But 'free' only means that the main uLE program isn't using it
-	//If the ftp server is running, that may have used the mountpoints
-
-	//RA NB: The old code to reclaim FTP partitions was seriously bugged...
-
-	i = j;
-	strcpy(pfs_str, "pfs0:");
-
-	pfs_str[3] = '0' + i;
-		if (fileXioMount(pfs_str, party, FIO_MT_RDWR) < 0) {                 //if FTP stole it
-			for (i = 0; i < MOUNT_LIMIT; i++) {                               //for loop to kill FTP partition mountpoints
-				if ((i != latestMount) && (Party_vmcIndex[i] < 0)) {  //if unneeded by uLE
-					unmountParty(i);                                  //unmount partition mountpoint
-					pfs_str[3] = '0' + i;                             //prepare to reuse that mountpoint
-					if (fileXioMount(pfs_str, party, FIO_MT_RDWR) >= 0)
-						break;  //break from the loop on successful mount
-				}               //ends if unneeded by uLE
-			}                   //ends for loop to kill FTP partition mountpoints
-			//Here i indicates what happened above with the following meanings:
-			//0..MOUNT_LIMIT-1==Success, MOUNT_LIMIT==Failure
-			if (i >= MOUNT_LIMIT)
-				return -1;
-		}  //ends if clause for mountpoints stolen by FTP
-	strcpy(mountedParty[i], party);
-return_i:
-	latestMount = i;
-	return i;
-}
 //--------------------------------------------------------------
-void unmountParty(int party_ix)
-{
-	char pfs_str[6];
-
-	strcpy(pfs_str, "pfs0:");
-	pfs_str[3] += party_ix;
-	if (fileXioUmount(pfs_str) < 0)
-		return;  //leave variables unchanged if unmount failed (remember true state)
-	if (party_ix < MOUNT_LIMIT) {
-		mountedParty[party_ix][0] = 0;
-	}
-	if (latestMount == party_ix)
-		latestMount = -1;
-}
 #ifdef DVRP
 //--------------------------------------------------------------
 // The above modified for the DVRP.
 //--------------------------------------------------------------
-int mountDVRPParty(const char *party)
-{
-	int i;
-
-	for (i = 0; i < MOUNT_LIMIT; i++) {  //Here we check already mounted PFS indexes
-		if (!strcmp(party, mountedDVRPParty[i]))
-			goto return_i;
-	}
-
-	if (strcmp(party, "dvr_hdd0:__xdata") == 0) {
-		i = 1;
-	} else if (strcmp(party, "dvr_hdd0:__xcontents") == 0) {
-		i = 0;
-	} else {
-		return -1;
-	}
-	strcpy(mountedDVRPParty[i], party);
-return_i:
-	latestDVRPMount = i;
-	return i;
-}
 //--------------------------------------------------------------
-void unmountDVRPParty(int party_ix)
-{
-	if (party_ix < MOUNT_LIMIT) {
-		mountedDVRPParty[party_ix][0] = 0;
-	}
-	if (latestDVRPMount == party_ix)
-		latestDVRPMount = -1;
-}
 //--------------------------------------------------------------
 #endif
 //--------------------------------------------------------------
@@ -438,104 +226,11 @@ void unmountDVRPParty(int party_ix)
 // the string array 'mountedParty'.
 // From v4.23 this routine is also used to unmount VMC devices
 //------------------------------
-void unmountAll(void)
-{
-	char pfs_str[6];
-#ifdef DVRP
-	char dvr_pfs_str[10];
-#endif
-	char vmc_str[6];
-	int i;
-
-	strcpy(vmc_str, "vmc0:");
-	for (i = 0; i < 2; i++) {
-		if (vmcMounted[i]) {
-			vmc_str[3] = '0' + i;
-			fileXioUmount(vmc_str);
-			vmcMounted[i] = 0;
-			vmc_PartyIndex[i] = -1;
-		}
-	}
-
-	strcpy(pfs_str, "pfs0:");
-	for (i = 0; i < MOUNT_LIMIT; i++) {
-		Party_vmcIndex[i] = -1;
-		if (mountedParty[i][0] != 0) {
-			pfs_str[3] = '0' + i;
-			fileXioUmount(pfs_str);
-			mountedParty[i][0] = 0;
-		}
-	}
-	latestMount = -1;
-#ifdef DVRP
-	strcpy(dvr_pfs_str, "dvr_pfs0:");
-	for (i = 0; i < MOUNT_LIMIT; i++) {
-		if (mountedDVRPParty[i][0] != 0) {
-			dvr_pfs_str[7] = '0' + i;
-			fileXioUmount(dvr_pfs_str);
-			mountedDVRPParty[i][0] = 0;
-		}
-	}
-	latestDVRPMount = -1;
-	#endif
-}  //ends unmountAll
+//ends unmountAll
 //--------------------------------------------------------------
-static int getHddPartyFromPath(const char *path, char *party, size_t party_size)
-{
-	const char *start;
-	const char *end;
 
-	if (strncmp(path, "hdd0:/", 6))
-		return 0;
-	start = path + 6;
-	if (start[0] == '\0')
-		return 0;
-	end = strchr(start, '/');
-	if (end == NULL)
-		end = start + strlen(start);
-	if (end <= start)
-		return 0;
-	snprintf(party, party_size, "hdd0:%.*s", (int)(end - start), start);
-	return 1;
-}
 
-static int clipboardUsesHddParty(const char *party)
-{
-	char clipParty[MAX_NAME];
-
-	if (nclipFiles <= 0 || clipPath[0] == '\0')
-		return 0;
-	if (!getHddPartyFromPath(clipPath, clipParty, sizeof(clipParty)))
-		return 0;
-	return (strcmp(clipParty, party) == 0);
-}
-
-static void unmountHddPartiesNotNeededByClipboard(void)
-{
-	int i;
-
-	for (i = 0; i < MOUNT_LIMIT; i++) {
-		if (mountedParty[i][0] == 0)
-			continue;
-		/*
-		 * Keep the source partition mounted only when clipboard entries still come
-		 * from that partition. Otherwise release mounts while at hdd0:/.
-		 */
-		if (clipboardUsesHddParty(mountedParty[i]))
-			continue;
-		if (Party_vmcIndex[i] >= 0)
-			continue;
-		unmountParty(i);
-	}
-}
 //--------------------------------------------------------------
-void invalidatePartitionCaches(void)
-{
-	nparties = 0;
-#ifdef DVRP
-	ndvrpparties = 0;
-#endif
-}
 //--------------------------------------------------------------
 int readMC(const char *path, FILEINFO *info, int max)
 {
