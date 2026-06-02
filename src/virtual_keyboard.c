@@ -23,46 +23,46 @@ static const char *vkey_layout_display_names[VKEY_LAYOUT_COUNT] = {
 
 static const char *vkey_layout_rows[VKEY_LAYOUT_COUNT][VKEY_LAYOUT_ROWS] = {
     {
-        "  01abcdefghijklm:; ",
-        "  23nopqrstuvwxyz., ",
-        "  45!@#$%^&*()_+=-  ",
-        "  67{}[]<>/\\'\"`~|   ",
-        "  89          ?     ",
+        "0123456789!@#$%^&",
+        "abcdefghijklmnopq",
+        "rstuvwxyz.,:;+-=_",
+        "*/\\|?[]{}<>()'\"~`",
+        "0123456789abcdefg",
     },
     {
-        "  01qwertyuiop[]\\   ",
-        "  23asdfghjkl;'-    ",
-        "  45zxcvbnm,./      ",
-        "  67!@#$%^&*()_+=   ",
-        "  89{}<>|`~:\"       ",
+        "0123456789!@#$%^&",
+        "qwertyuiopasdfghj",
+        "klzxcvbnm,.;:/?-*",
+        "*\\|[]{}<>()'\"~`+=",
+        "qwertyuiopzxcvbnm",
     },
     {
-        "  01',.pyfgcrl/=\\   ",
-        "  23aoeuidhtns-     ",
-        "  45;qjkxbmwvz      ",
-        "  67!@#$%^&*()_+=   ",
-        "  89{}<>|`~:\"       ",
+        "0123456789!@#$%^&",
+        "',.pyfgcrlaoeuidh",
+        "tns;qjkxbmwvz-=?/",
+        "*\\|[]{}<>()'\"~`+=",
+        "aoeuidhtnspyfgcrl",
     },
     {
-        "  01azertyuiop^$    ",
-        "  23qsdfghjklm;*    ",
-        "  45wxcvbn,;:!      ",
-        "  67!@#$%&()_+=-    ",
-        "  89{}<>|`~\"'/\\     ",
+        "0123456789!@#$%^&",
+        "azertyuiopqsdfghj",
+        "klmwxcvbn,;!?./*+",
+        "*\\|[]{}<>()'\"~`+=",
+        "azertyuiopwxcvbnm",
     },
     {
-        "  01qwertzuiop[]\\   ",
-        "  23asdfghjkl;'-    ",
-        "  45yxcvbnm,./      ",
-        "  67!@#$%^&*()_+=   ",
-        "  89{}<>|`~:\"       ",
+        "0123456789!@#$%^&",
+        "qwertzuiopasdfghj",
+        "klyxcvbnm,.;:/?-*",
+        "*\\|[]{}<>()'\"~`+=",
+        "qwertzuiopyxcvbnm",
     },
     {
-        "  010123456789-+    ",
-        "  23abcdefghijklm   ",
-        "  45nopqrstuvwxyz   ",
-        "  67.,;:/\\'\"!?_     ",
-        "  89()[]{}<>`       ",
+        "0123456789!@#$%^&",
+        "abcdefghijklmnopq",
+        "rstuvwxyz.,;:/\\!?",
+        "-_=+[]{}<>()'\"~`|",
+        "0123456789abcdefg",
     },
 };
 
@@ -124,6 +124,29 @@ char getVirtualKeyboardLayoutChar(int layout, int index, int caps)
     if (caps && c >= 'a' && c <= 'z')
         c = (char)(c - ('a' - 'A'));
     return c;
+}
+
+int getVirtualKeyboardEditorLayoutIndex(int editor_index)
+{
+    int row;
+    int col;
+
+    if (editor_index < 0 || editor_index >= VKEY_EDITOR_SIZE)
+        return -1;
+    row = editor_index / VKEY_EDITOR_COLS;
+    col = editor_index % VKEY_EDITOR_COLS;
+    if (col < 2 || col >= VKEY_EDITOR_COLS - 1)
+        return -1;
+    return row * VKEY_LAYOUT_COLS + (col - 2);
+}
+
+char getVirtualKeyboardEditorChar(int layout, int editor_index, int caps)
+{
+    int layout_index = getVirtualKeyboardEditorLayoutIndex(editor_index);
+
+    if (layout_index < 0)
+        return ' ';
+    return getVirtualKeyboardLayoutChar(layout, layout_index, caps);
 }
 //--------------------------------------------------------------
 //End of file: virtual_keyboard.c

@@ -61,7 +61,7 @@ void TextEditor(char *path)
 	char tmp[MAX_PATH], tmp1[MAX_PATH], tmp2[MAX_PATH];
 	int ch;
 	int x, y, y0, y1;
-	int i = 0, j, ret = 0;
+	int i = 0, j, ret = 0, layout_index;
 	int tmpLen = 0;
 	int event = 1, post_event = 0;
 	int Editor_Start = 0;
@@ -70,7 +70,7 @@ void TextEditor(char *path)
 	          KEY_H = 98,
 	          KEY_X = (SCREEN_WIDTH - KEY_W) / 2,
 	          KEY_Y = (Menu_end_y - KEY_H);
-	int KEY_LEN = VKEY_LAYOUT_SIZE;
+	int KEY_LEN = VKEY_EDITOR_SIZE;
 
 	tmp[0] = '\0', tmp1[0] = '\0', ch = '\0';
 
@@ -382,10 +382,12 @@ void TextEditor(char *path)
 				        setting->color[COLOR_TEXT], TRUE, ((SCREEN_WIDTH - SCREEN_MARGIN) - (KEY_X + KEY_W + 32) - 3 * FONT_WIDTH));
 
 				for (i = 0; i < KEY_LEN; i++) {
-					drawChar(getVirtualKeyboardLayoutChar(setting->virtual_keyboard_layout, i, KeyBoard_Caps),
-					         KEY_X + 2 + 4 + 14 + (i % WFONTS + 1) * 20 - 32,
-					         KEY_Y + 12 + (i / WFONTS) * 18,
-					         setting->color[COLOR_TEXT]);
+					layout_index = getVirtualKeyboardEditorLayoutIndex(i);
+					if (layout_index >= 0)
+						drawChar(getVirtualKeyboardLayoutChar(setting->virtual_keyboard_layout, layout_index, KeyBoard_Caps),
+						         KEY_X + 2 + 4 + 14 + (i % WFONTS + 1) * 20 - 32,
+						         KEY_Y + 12 + (i / WFONTS) * 18,
+						         setting->color[COLOR_TEXT]);
 				}
 
 				//Virtual KeyBoard Cursor positioning section.

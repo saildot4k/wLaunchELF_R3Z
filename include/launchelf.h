@@ -230,9 +230,11 @@ enum VIRTUAL_KEYBOARD_LAYOUT {
 	VKEY_LAYOUT_COUNT
 };
 
-#define VKEY_LAYOUT_COLS 20
+#define VKEY_LAYOUT_COLS 17
 #define VKEY_LAYOUT_ROWS 5
 #define VKEY_LAYOUT_SIZE (VKEY_LAYOUT_COLS * VKEY_LAYOUT_ROWS)
+#define VKEY_EDITOR_COLS (VKEY_LAYOUT_COLS + 3)
+#define VKEY_EDITOR_SIZE (VKEY_EDITOR_COLS * VKEY_LAYOUT_ROWS)
 
 typedef struct
 {
@@ -543,6 +545,8 @@ const char *getVirtualKeyboardLayoutConfigName(int layout);
 const char *getVirtualKeyboardLayoutDisplayName(int layout);
 int getVirtualKeyboardLayoutByConfigName(const char *name);
 char getVirtualKeyboardLayoutChar(int layout, int index, int caps);
+int getVirtualKeyboardEditorLayoutIndex(int editor_index);
+char getVirtualKeyboardEditorChar(int layout, int editor_index, int caps);
 
 void Init_Default_Language(void);
 void Load_External_Language(void);

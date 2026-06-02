@@ -3,7 +3,7 @@
 //--------------------------------------------------------------
 #include "editor_private.h"
 
-const int WFONTS = VKEY_LAYOUT_COLS,  // Virtual KeyBoard Width.
+const int WFONTS = VKEY_EDITOR_COLS,  // Virtual KeyBoard Width.
     HFONTS = VKEY_LAYOUT_ROWS;        // Virtual KeyBoard Height.
 
 
@@ -258,7 +258,7 @@ void editorVirtualKeyboardEntry(void)
 			TextBuffer[Active_Window][Editor_Cur + ins2] = ' ';
 			goto common;
 		case 5:  // Any Char.
-			TextBuffer[Active_Window][Editor_Cur + ins2] = getVirtualKeyboardLayoutChar(setting->virtual_keyboard_layout, KeyBoard_Cur, KeyBoard_Caps);
+			TextBuffer[Active_Window][Editor_Cur + ins2] = getVirtualKeyboardEditorChar(setting->virtual_keyboard_layout, KeyBoard_Cur, KeyBoard_Caps);
 			goto common;
 		common:
 			TextBuffer[Active_Window][Editor_Cur + ins3] = '\0';
