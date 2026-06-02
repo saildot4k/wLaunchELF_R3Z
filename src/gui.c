@@ -139,7 +139,7 @@ int keyboard(char *out, int max)
 	    KEY_X = ((SCREEN_WIDTH - KEY_W) / 2) & -2,
 	    KEY_Y = ((SCREEN_HEIGHT - KEY_H) / 2) & -2;
 	int KEY_LEN, KEY_LAST, KEY_OK, KEY_CANCEL;
-	int cur = 0, sel = 0, i = 0, x, y, t = 0, caps = 1;
+	int cur = 0, sel = 0, i = 0, x, y, t = 0, caps = 0;
 	char tmp[256], *p;
 	char KeyPress;
 
@@ -162,15 +162,15 @@ int keyboard(char *out, int max)
 			if (new_pad & PAD_UP) {
 				if (sel <= KEY_LAST) {
 					if (sel >= WFONTS)
-						sel -= WFONTS;
+						sel = getVirtualKeyboardLayoutNextKey(setting->virtual_keyboard_layout, sel, 0, -1);
 					else if (sel < 5)
 						sel = KEY_OK;
 					else
 						sel = KEY_CANCEL;
 				} else if (sel == KEY_OK)
-					sel = WFONTS * (HFONTS - 1);
+					sel = getVirtualKeyboardLayoutNextKey(setting->virtual_keyboard_layout, WFONTS * (HFONTS - 1), 0, 0);
 				else
-					sel = KEY_LAST;
+					sel = getVirtualKeyboardLayoutNextKey(setting->virtual_keyboard_layout, KEY_LAST, 0, 0);
 			} else if (new_pad & PAD_DOWN) {
 				if (sel <= KEY_LAST) {
 					if (sel / WFONTS == HFONTS - 1) {
@@ -179,27 +179,21 @@ int keyboard(char *out, int max)
 						else
 							sel = KEY_CANCEL;
 					} else if (sel / WFONTS <= HFONTS - 2)
-						sel += WFONTS;
+						sel = getVirtualKeyboardLayoutNextKey(setting->virtual_keyboard_layout, sel, 0, 1);
 				} else if (sel == KEY_OK)
-					sel = 0;
+					sel = getVirtualKeyboardLayoutNextKey(setting->virtual_keyboard_layout, 0, 0, 0);
 				else
-					sel = WFONTS - 1;
+					sel = getVirtualKeyboardLayoutNextKey(setting->virtual_keyboard_layout, WFONTS - 1, 0, 0);
 			} else if (new_pad & PAD_LEFT) {
 				if (sel <= KEY_LAST) {
-					if (sel % WFONTS == 0)
-						sel += WFONTS - 1;
-					else
-						sel--;
+					sel = getVirtualKeyboardLayoutNextKey(setting->virtual_keyboard_layout, sel, -1, 0);
 				} else if (sel == KEY_OK)
 					sel = KEY_CANCEL;
 				else
 					sel = KEY_OK;
 			} else if (new_pad & PAD_RIGHT) {
 				if (sel <= KEY_LAST) {
-					if (sel % WFONTS == WFONTS - 1)
-						sel -= WFONTS - 1;
-					else
-						sel++;
+					sel = getVirtualKeyboardLayoutNextKey(setting->virtual_keyboard_layout, sel, 1, 0);
 				} else if (sel == KEY_OK)
 					sel = KEY_CANCEL;
 				else
@@ -226,7 +220,7 @@ int keyboard(char *out, int max)
 				caps = !caps;
 			} else if ((swapKeys && new_pad & PAD_CROSS) || (!swapKeys && new_pad & PAD_CIRCLE)) {
 				i = strlen(out);
-				if (sel <= KEY_LAST) {
+				if (sel <= KEY_LAST && isVirtualKeyboardLayoutKey(setting->virtual_keyboard_layout, sel)) {
 					if (i < max && i < 33) {
 						strcpy(tmp, out);
 						out[cur] = getVirtualKeyboardLayoutChar(setting->virtual_keyboard_layout, sel, caps);
@@ -321,23 +315,36 @@ int keyboard(char *out, int max)
 				             KEY_X + LINE_THICKNESS + 1 + cur * 8 + LINE_THICKNESS - 1,
 				             KEY_Y + LINE_THICKNESS + 2 + (FONT_HEIGHT - 2) - 1);
 			}
-			for (i = 0; i < KEY_LEN; i++)
-				drawChar(getVirtualKeyboardLayoutChar(setting->virtual_keyboard_layout, i, caps),
-				         KEY_X + LINE_THICKNESS + 12 + (i % WFONTS) * (FONT_WIDTH + 12),
-				         KEY_Y + LINE_THICKNESS + 1 + FONT_HEIGHT + 1 + LINE_THICKNESS + 8 + (i / WFONTS) * FONT_HEIGHT, setting->color[COLOR_TEXT]);
+			for (i = 0; i < KEY_LEN; i++) {
+				if (!isVirtualKeyboardLayoutKey(setting->virtual_keyboard_layout, i))
+					continue;
+				x = KEY_X + LINE_THICKNESS + 12 + (i % WFONTS) * (FONT_WIDTH + 12);
+				y = KEY_Y + LINE_THICKNESS + 1 + FONT_HEIGHT + 1 + LINE_THICKNESS + 8 + (i / WFONTS) * FONT_HEIGHT;
+				if (i == sel)
+					drawOpSprite(setting->color[COLOR_SELECT], x - 2, y, x + FONT_WIDTH + 1, y + FONT_HEIGHT - 1);
+				drawChar(getVirtualKeyboardLayoutDisplayChar(setting->virtual_keyboard_layout, i, caps), x, y,
+				         (i == sel) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
+			}
+			if (sel == KEY_OK)
+				drawOpSprite(setting->color[COLOR_SELECT],
+				             KEY_X + LINE_THICKNESS + 10,
+				             KEY_Y + LINE_THICKNESS + 1 + FONT_HEIGHT + 1 + LINE_THICKNESS + 8 + HFONTS * FONT_HEIGHT,
+				             KEY_X + LINE_THICKNESS + 12 + strlen(LNG(OK)) * FONT_WIDTH + 1,
+				             KEY_Y + LINE_THICKNESS + 1 + FONT_HEIGHT + 1 + LINE_THICKNESS + 8 + (HFONTS + 1) * FONT_HEIGHT - 1);
+			else if (sel == KEY_CANCEL)
+				drawOpSprite(setting->color[COLOR_SELECT],
+				             KEY_X + KEY_W - 3 - (strlen(LNG(CANCEL)) + 2) * FONT_WIDTH,
+				             KEY_Y + LINE_THICKNESS + 1 + FONT_HEIGHT + 1 + LINE_THICKNESS + 8 + HFONTS * FONT_HEIGHT,
+				             KEY_X + KEY_W - 1,
+				             KEY_Y + LINE_THICKNESS + 1 + FONT_HEIGHT + 1 + LINE_THICKNESS + 8 + (HFONTS + 1) * FONT_HEIGHT - 1);
 			printXY(LNG(OK),
 			        KEY_X + LINE_THICKNESS + 12,
-			        KEY_Y + LINE_THICKNESS + 1 + FONT_HEIGHT + 1 + LINE_THICKNESS + 8 + HFONTS * FONT_HEIGHT, setting->color[COLOR_TEXT], TRUE, 0);
+			        KEY_Y + LINE_THICKNESS + 1 + FONT_HEIGHT + 1 + LINE_THICKNESS + 8 + HFONTS * FONT_HEIGHT,
+			        (sel == KEY_OK) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT], TRUE, 0);
 			printXY(LNG(CANCEL),
 			        KEY_X + KEY_W - 1 - (strlen(LNG(CANCEL)) + 2) * FONT_WIDTH,
-			        KEY_Y + LINE_THICKNESS + 1 + FONT_HEIGHT + 1 + LINE_THICKNESS + 8 + HFONTS * FONT_HEIGHT, setting->color[COLOR_TEXT], TRUE, 0);
-
-			if (sel <= KEY_OK)
-				x = KEY_X + LINE_THICKNESS + 12 + (sel % WFONTS) * (FONT_WIDTH + 12) - 8;
-			else
-				x = KEY_X + KEY_W - 2 - (strlen(LNG(CANCEL)) + 3) * FONT_WIDTH;
-			y = KEY_Y + LINE_THICKNESS + 1 + FONT_HEIGHT + 1 + LINE_THICKNESS + 8 + (sel / WFONTS) * FONT_HEIGHT;
-			drawChar(LEFT_CUR, x, y, setting->color[COLOR_SELECT]);
+			        KEY_Y + LINE_THICKNESS + 1 + FONT_HEIGHT + 1 + LINE_THICKNESS + 8 + HFONTS * FONT_HEIGHT,
+			        (sel == KEY_CANCEL) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT], TRUE, 0);
 
 			x = SCREEN_MARGIN;
 			y = Menu_tooltip_y;

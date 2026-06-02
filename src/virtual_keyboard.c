@@ -21,48 +21,109 @@ static const char *vkey_layout_display_names[VKEY_LAYOUT_COUNT] = {
     "N",
 };
 
-static const char *vkey_layout_rows[VKEY_LAYOUT_COUNT][VKEY_LAYOUT_ROWS] = {
+enum {
+    VKEY_SHIFT_NORMAL = 0,
+    VKEY_SHIFT_CAPS,
+    VKEY_SHIFT_COUNT,
+    VKEY_SPACE_INDEX = (4 * VKEY_LAYOUT_COLS) + 6
+};
+
+static const char *vkey_layout_rows[VKEY_LAYOUT_COUNT][VKEY_SHIFT_COUNT][VKEY_LAYOUT_ROWS] = {
     {
-        "0123456789!@#$%^&",
-        "abcdefghijklmnopq",
-        "rstuvwxyz.,:;+-=_",
-        "*/\\|?[]{}<>()'\"~`",
-        "0123456789abcdefg",
+        {
+            "`1234567890-=    ",
+            "abcdefghijklmn[]\\",
+            "opqrstuvwxyz;'   ",
+            ".,/              ",
+            "      _          ",
+        },
+        {
+            "~!@#$%^&*()_+    ",
+            "ABCDEFGHIJKLMN{}|",
+            "OPQRSTUVWXYZ:\"   ",
+            "<>?              ",
+            "      _          ",
+        },
     },
     {
-        "0123456789!@#$%^&",
-        "qwertyuiopasdfghj",
-        "klzxcvbnm,.;:/?-*",
-        "*\\|[]{}<>()'\"~`+=",
-        "qwertyuiopzxcvbnm",
+        {
+            "`1234567890-=    ",
+            "qwertyuiop[]\\    ",
+            "asdfghjkl;'      ",
+            "zxcvbnm,./       ",
+            "      _          ",
+        },
+        {
+            "~!@#$%^&*()_+    ",
+            "QWERTYUIOP{}|    ",
+            "ASDFGHJKL:\"      ",
+            "ZXCVBNM<>?       ",
+            "      _          ",
+        },
     },
     {
-        "0123456789!@#$%^&",
-        "',.pyfgcrlaoeuidh",
-        "tns;qjkxbmwvz-=?/",
-        "*\\|[]{}<>()'\"~`+=",
-        "aoeuidhtnspyfgcrl",
+        {
+            "`1234567890-=    ",
+            "',.pyfgcrl/=\\    ",
+            "aoeuidhtns-      ",
+            ";qjkxbmwvz       ",
+            "      _          ",
+        },
+        {
+            "~!@#$%^&*()_+    ",
+            "\"<>PYFGCRL?+|    ",
+            "AOEUIDHTNS_      ",
+            ":QJKXBMWVZ       ",
+            "      _          ",
+        },
     },
     {
-        "0123456789!@#$%^&",
-        "azertyuiopqsdfghj",
-        "klmwxcvbn,;!?./*+",
-        "*\\|[]{}<>()'\"~`+=",
-        "azertyuiopwxcvbnm",
+        {
+            "`1234567890-=    ",
+            "azertyuiop[]\\    ",
+            "qsdfghjklm;'     ",
+            "wxcvbn,./        ",
+            "      _          ",
+        },
+        {
+            "~!@#$%^&*()_+    ",
+            "AZERTYUIOP{}|    ",
+            "QSDFGHJKLM:\"     ",
+            "WXCVBN<>?        ",
+            "      _          ",
+        },
     },
     {
-        "0123456789!@#$%^&",
-        "qwertzuiopasdfghj",
-        "klyxcvbnm,.;:/?-*",
-        "*\\|[]{}<>()'\"~`+=",
-        "qwertzuiopyxcvbnm",
+        {
+            "`1234567890-=    ",
+            "qwertzuiop[]\\    ",
+            "asdfghjkl;'      ",
+            "yxcvbnm,./       ",
+            "      _          ",
+        },
+        {
+            "~!@#$%^&*()_+    ",
+            "QWERTZUIOP{}|    ",
+            "ASDFGHJKL:\"      ",
+            "YXCVBNM<>?       ",
+            "      _          ",
+        },
     },
     {
-        "0123456789!@#$%^&",
-        "abcdefghijklmnopq",
-        "rstuvwxyz.,;:/\\!?",
-        "-_=+[]{}<>()'\"~`|",
-        "0123456789abcdefg",
+        {
+            "`1234567890-=    ",
+            "abcdefghijklmn[]\\",
+            "opqrstuvwxyz;'   ",
+            ".,/              ",
+            "      _          ",
+        },
+        {
+            "~!@#$%^&*()_+    ",
+            "ABCDEFGHIJKLMN{}|",
+            "OPQRSTUVWXYZ:\"   ",
+            "<>?              ",
+            "      _          ",
+        },
     },
 };
 
@@ -110,20 +171,102 @@ int getVirtualKeyboardLayoutByConfigName(const char *name)
     return -1;
 }
 
-char getVirtualKeyboardLayoutChar(int layout, int index, int caps)
+static char getVirtualKeyboardRawChar(int layout, int index, int caps)
 {
-    char c;
     int row;
     int col;
+    int shift = caps ? VKEY_SHIFT_CAPS : VKEY_SHIFT_NORMAL;
 
     if (index < 0 || index >= VKEY_LAYOUT_SIZE)
         return ' ';
     row = index / VKEY_LAYOUT_COLS;
     col = index % VKEY_LAYOUT_COLS;
-    c = vkey_layout_rows[normalizeVirtualKeyboardLayout(layout)][row][col];
-    if (caps && c >= 'a' && c <= 'z')
-        c = (char)(c - ('a' - 'A'));
-    return c;
+    return vkey_layout_rows[normalizeVirtualKeyboardLayout(layout)][shift][row][col];
+}
+
+char getVirtualKeyboardLayoutDisplayChar(int layout, int index, int caps)
+{
+    if (index == VKEY_SPACE_INDEX)
+        return '_';
+    return getVirtualKeyboardRawChar(layout, index, caps);
+}
+
+char getVirtualKeyboardLayoutChar(int layout, int index, int caps)
+{
+    if (index == VKEY_SPACE_INDEX)
+        return ' ';
+    return getVirtualKeyboardRawChar(layout, index, caps);
+}
+
+int isVirtualKeyboardLayoutKey(int layout, int index)
+{
+    if (index < 0 || index >= VKEY_LAYOUT_SIZE)
+        return 0;
+    if (index == VKEY_SPACE_INDEX)
+        return 1;
+    return getVirtualKeyboardRawChar(layout, index, VKEY_SHIFT_NORMAL) != ' ';
+}
+
+static int findSelectableInRow(int layout, int row, int col)
+{
+    int offset;
+    int left;
+    int right;
+    int index;
+
+    if (row < 0 || row >= VKEY_LAYOUT_ROWS)
+        return -1;
+    for (offset = 0; offset < VKEY_LAYOUT_COLS; offset++) {
+        left = col - offset;
+        right = col + offset;
+        if (left >= 0) {
+            index = row * VKEY_LAYOUT_COLS + left;
+            if (isVirtualKeyboardLayoutKey(layout, index))
+                return index;
+        }
+        if (right < VKEY_LAYOUT_COLS && right != left) {
+            index = row * VKEY_LAYOUT_COLS + right;
+            if (isVirtualKeyboardLayoutKey(layout, index))
+                return index;
+        }
+    }
+    return -1;
+}
+
+int getVirtualKeyboardLayoutNextKey(int layout, int index, int dx, int dy)
+{
+    int row;
+    int col;
+    int next;
+    int tries;
+
+    if (!isVirtualKeyboardLayoutKey(layout, index)) {
+        if (index >= 0 && index < VKEY_LAYOUT_SIZE)
+            index = findSelectableInRow(layout, index / VKEY_LAYOUT_COLS, index % VKEY_LAYOUT_COLS);
+        else
+            index = findSelectableInRow(layout, 0, 0);
+    }
+    if (index < 0)
+        return 0;
+
+    row = index / VKEY_LAYOUT_COLS;
+    col = index % VKEY_LAYOUT_COLS;
+    if (dx != 0) {
+        for (tries = 0; tries < VKEY_LAYOUT_COLS; tries++) {
+            col = (col + dx + VKEY_LAYOUT_COLS) % VKEY_LAYOUT_COLS;
+            next = row * VKEY_LAYOUT_COLS + col;
+            if (isVirtualKeyboardLayoutKey(layout, next))
+                return next;
+        }
+    } else if (dy != 0) {
+        for (tries = 0; tries < VKEY_LAYOUT_ROWS; tries++) {
+            row = (row + dy + VKEY_LAYOUT_ROWS) % VKEY_LAYOUT_ROWS;
+            next = findSelectableInRow(layout, row, col);
+            if (next >= 0)
+                return next;
+        }
+    }
+    return index;
 }
 
 int getVirtualKeyboardEditorLayoutIndex(int editor_index)
@@ -140,6 +283,20 @@ int getVirtualKeyboardEditorLayoutIndex(int editor_index)
     return row * VKEY_LAYOUT_COLS + (col - 2);
 }
 
+int isVirtualKeyboardEditorKey(int layout, int editor_index)
+{
+    int layout_index;
+    int col;
+
+    if (editor_index < 0 || editor_index >= VKEY_EDITOR_SIZE)
+        return 0;
+    col = editor_index % VKEY_EDITOR_COLS;
+    if (col < 2 || col >= VKEY_EDITOR_COLS - 1)
+        return 1;
+    layout_index = getVirtualKeyboardEditorLayoutIndex(editor_index);
+    return isVirtualKeyboardLayoutKey(layout, layout_index);
+}
+
 char getVirtualKeyboardEditorChar(int layout, int editor_index, int caps)
 {
     int layout_index = getVirtualKeyboardEditorLayoutIndex(editor_index);
@@ -147,6 +304,77 @@ char getVirtualKeyboardEditorChar(int layout, int editor_index, int caps)
     if (layout_index < 0)
         return ' ';
     return getVirtualKeyboardLayoutChar(layout, layout_index, caps);
+}
+
+char getVirtualKeyboardEditorDisplayChar(int layout, int editor_index, int caps)
+{
+    int layout_index = getVirtualKeyboardEditorLayoutIndex(editor_index);
+
+    if (layout_index < 0)
+        return ' ';
+    return getVirtualKeyboardLayoutDisplayChar(layout, layout_index, caps);
+}
+
+static int getVirtualKeyboardEditorNextInRow(int layout, int row, int col)
+{
+    int offset;
+    int left;
+    int right;
+    int index;
+
+    if (row < 0 || row >= VKEY_LAYOUT_ROWS)
+        return -1;
+    for (offset = 0; offset < VKEY_EDITOR_COLS; offset++) {
+        left = col - offset;
+        right = col + offset;
+        if (left >= 0) {
+            index = row * VKEY_EDITOR_COLS + left;
+            if (isVirtualKeyboardEditorKey(layout, index))
+                return index;
+        }
+        if (right < VKEY_EDITOR_COLS && right != left) {
+            index = row * VKEY_EDITOR_COLS + right;
+            if (isVirtualKeyboardEditorKey(layout, index))
+                return index;
+        }
+    }
+    return -1;
+}
+
+int getVirtualKeyboardEditorNextKey(int layout, int editor_index, int dx, int dy)
+{
+    int row;
+    int col;
+    int next;
+    int tries;
+
+    if (!isVirtualKeyboardEditorKey(layout, editor_index)) {
+        if (editor_index >= 0 && editor_index < VKEY_EDITOR_SIZE)
+            editor_index = getVirtualKeyboardEditorNextInRow(layout, editor_index / VKEY_EDITOR_COLS, editor_index % VKEY_EDITOR_COLS);
+        else
+            editor_index = getVirtualKeyboardEditorNextInRow(layout, 0, 0);
+    }
+    if (editor_index < 0)
+        return 0;
+
+    row = editor_index / VKEY_EDITOR_COLS;
+    col = editor_index % VKEY_EDITOR_COLS;
+    if (dx != 0) {
+        for (tries = 0; tries < VKEY_EDITOR_COLS; tries++) {
+            col = (col + dx + VKEY_EDITOR_COLS) % VKEY_EDITOR_COLS;
+            next = row * VKEY_EDITOR_COLS + col;
+            if (isVirtualKeyboardEditorKey(layout, next))
+                return next;
+        }
+    } else if (dy != 0) {
+        for (tries = 0; tries < VKEY_LAYOUT_ROWS; tries++) {
+            row = (row + dy + VKEY_LAYOUT_ROWS) % VKEY_LAYOUT_ROWS;
+            next = getVirtualKeyboardEditorNextInRow(layout, row, col);
+            if (next >= 0)
+                return next;
+        }
+    }
+    return editor_index;
 }
 //--------------------------------------------------------------
 //End of file: virtual_keyboard.c

@@ -14,28 +14,16 @@ void editorVirtualKeyboardEntry(void)
 	Operation = 0;
 
 	if (new_pad & PAD_UP) {  // Virtual KeyBoard move up.
-		if (KeyBoard_Cur >= WFONTS)
-			KeyBoard_Cur -= WFONTS;
-		else
-			KeyBoard_Cur += WFONTS * (HFONTS - 1);
+		KeyBoard_Cur = getVirtualKeyboardEditorNextKey(setting->virtual_keyboard_layout, KeyBoard_Cur, 0, -1);
 		//ends Virtual KeyBoard move up.
 	} else if (new_pad & PAD_DOWN) {  // Virtual KeyBoard move down.
-		if (KeyBoard_Cur < WFONTS * (HFONTS - 1))
-			KeyBoard_Cur += WFONTS;
-		else
-			KeyBoard_Cur -= WFONTS * (HFONTS - 1);
+		KeyBoard_Cur = getVirtualKeyboardEditorNextKey(setting->virtual_keyboard_layout, KeyBoard_Cur, 0, 1);
 		//ends Virtual KeyBoard move down.
 	} else if (new_pad & PAD_LEFT) {  // Virtual KeyBoard move left.
-		if (!KeyBoard_Cur)
-			KeyBoard_Cur = WFONTS * HFONTS - 1;
-		else
-			KeyBoard_Cur--;
+		KeyBoard_Cur = getVirtualKeyboardEditorNextKey(setting->virtual_keyboard_layout, KeyBoard_Cur, -1, 0);
 		//ends Virtual KeyBoard move left.
 	} else if (new_pad & PAD_RIGHT) {  // Virtual KeyBoard move right.
-		if (KeyBoard_Cur == WFONTS * HFONTS - 1)
-			KeyBoard_Cur = 0;
-		else
-			KeyBoard_Cur++;
+		KeyBoard_Cur = getVirtualKeyboardEditorNextKey(setting->virtual_keyboard_layout, KeyBoard_Cur, 1, 0);
 		//ends Virtual KeyBoard move right.
 	} else if (new_pad & PAD_L2) {  // Text move left.
 		if (Editor_Cur > 0)

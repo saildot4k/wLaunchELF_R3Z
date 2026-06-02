@@ -545,8 +545,14 @@ const char *getVirtualKeyboardLayoutConfigName(int layout);
 const char *getVirtualKeyboardLayoutDisplayName(int layout);
 int getVirtualKeyboardLayoutByConfigName(const char *name);
 char getVirtualKeyboardLayoutChar(int layout, int index, int caps);
+char getVirtualKeyboardLayoutDisplayChar(int layout, int index, int caps);
+int isVirtualKeyboardLayoutKey(int layout, int index);
+int getVirtualKeyboardLayoutNextKey(int layout, int index, int dx, int dy);
 int getVirtualKeyboardEditorLayoutIndex(int editor_index);
 char getVirtualKeyboardEditorChar(int layout, int editor_index, int caps);
+char getVirtualKeyboardEditorDisplayChar(int layout, int editor_index, int caps);
+int isVirtualKeyboardEditorKey(int layout, int editor_index);
+int getVirtualKeyboardEditorNextKey(int layout, int editor_index, int dx, int dy);
 
 void Init_Default_Language(void);
 void Load_External_Language(void);
