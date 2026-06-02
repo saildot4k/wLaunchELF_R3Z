@@ -203,6 +203,7 @@ static void load_ps2netfs(void);
 #ifdef UDPFS
 static void load_udpfs_stack(void);
 #endif
+static void loadCoreCdvdModule(void);
 static void loadBasicModules(void);
 static int loadExternalFile(char *argPath, void **fileBaseP, int *fileSizeP);
 static int loadExternalModule(char *modPath, void *defBase, int defSize);
@@ -674,6 +675,7 @@ static void loadBasicModules(void)
 	DPRINTF(" [rom0:PADMAN]: id=%d\n", id);
 #endif
 
+	loadCoreCdvdModule();
 	have_basic_modules = 1;
 }
 //------------------------------
@@ -682,7 +684,6 @@ static void loadBasicModules(void)
 void ensureCoreIoStackReady(void)
 {
 	loadBasicModules();
-	loadCdModules();
 
 	if (!have_filexio_ready) {
 		fileXioInit();
@@ -724,18 +725,23 @@ void ensureCoreIoStackReady(void)
 //------------------------------
 //endfunc ensureCoreIoStackReady
 //---------------------------------------------------------------------------
-void loadCdModules(void)
+static void loadCoreCdvdModule(void)
 {
 	int ret, id __attribute__((unused));
 
 	if (!have_cdvd) {
-		showLoadingModulesMsg("cdvd");
 		sceCdInit(SCECdINoD);  // SCECdINoD init without check for a disc. Reduces risk of a lockup if the drive is in a erroneous state.
 		id = SifExecModuleBuffer(cdvd_irx, size_cdvd_irx, 0, NULL, &ret);
 		LCDVD_INIT();
 		DPRINTF(" [CDVD]: id=%d, ret=%d\n", id, ret);
 		have_cdvd = 1;
 	}
+}
+//---------------------------------------------------------------------------
+void loadCdModules(void)
+{
+	loadBasicModules();
+	loadCoreCdvdModule();
 }
 //------------------------------
 //endfunc loadCdModules

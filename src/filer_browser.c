@@ -739,6 +739,34 @@ static int browser_sel, browser_nfiles;
 static void submenu_func_GetSize(char *mess, char *path, FILEINFO *files);
 static void submenu_func_Paste(char *mess, char *path);
 static void submenu_func_psuPaste(char *mess, char *path);
+
+static int isRootSpacerEntry(const char *path, const FILEINFO *file)
+{
+	return path[0] == '\0' && file->name[0] == '\0';
+}
+
+static void skipRootSpacerSelection(const char *path, FILEINFO *files, int nfiles, int *sel, int direction)
+{
+	int original;
+
+	if (nfiles <= 0)
+		return;
+
+	if (direction == 0)
+		direction = 1;
+
+	original = *sel;
+	while (isRootSpacerEntry(path, &files[*sel])) {
+		*sel += direction;
+		if (*sel >= nfiles)
+			*sel = 0;
+		else if (*sel < 0)
+			*sel = nfiles - 1;
+		if (*sel == original)
+			break;
+	}
+}
+
 int getFilePath(char *out, int cnfmode)
 {
 	char path[MAX_PATH], cursorEntry[MAX_PATH],
@@ -801,6 +829,7 @@ int getFilePath(char *out, int cnfmode)
 						browser_sel--;
 					else
 						browser_sel = browser_nfiles - 1;
+					skipRootSpacerSelection(path, files, browser_nfiles, &browser_sel, -1);
 				}
 			} else if (new_pad & PAD_DOWN) {
 				if (browser_nfiles > 0) {
@@ -808,6 +837,7 @@ int getFilePath(char *out, int cnfmode)
 						browser_sel++;
 					else
 						browser_sel = 0;
+					skipRootSpacerSelection(path, files, browser_nfiles, &browser_sel, 1);
 				}
 				} else if (new_pad & PAD_LEFT) {
 					if (browser_nfiles > 0) {
@@ -820,6 +850,7 @@ int getFilePath(char *out, int cnfmode)
 							browser_sel = 0;
 						else
 							browser_sel -= step;
+						skipRootSpacerSelection(path, files, browser_nfiles, &browser_sel, -1);
 					}
 				} else if (new_pad & PAD_RIGHT) {
 					if (browser_nfiles > 0) {
@@ -832,6 +863,7 @@ int getFilePath(char *out, int cnfmode)
 							browser_sel = browser_nfiles - 1;
 						else
 							browser_sel += step;
+						skipRootSpacerSelection(path, files, browser_nfiles, &browser_sel, 1);
 					}
 				}
 			else if (new_pad & PAD_TRIANGLE)
@@ -1183,6 +1215,9 @@ int getFilePath(char *out, int cnfmode)
 						}
 					}
 					browser_sel++;
+					if (browser_sel >= browser_nfiles)
+						browser_sel = 0;
+					skipRootSpacerSelection(path, files, browser_nfiles, &browser_sel, 1);
 				} else if (new_pad & PAD_SQUARE) {
 					if (path[0] != 0 && (strcmp(path, "hdd0:/") && strcmp(path, "dvr_hdd0:/"))) {
 						for (i = 1; i < browser_nfiles; i++) {
@@ -1278,6 +1313,8 @@ int getFilePath(char *out, int cnfmode)
 			browser_sel = browser_nfiles - 1;
 		if (browser_sel < 0)
 			browser_sel = 0;
+		if (browser_nfiles > 0)
+			skipRootSpacerSelection(path, files, browser_nfiles, &browser_sel, 1);
 		if (browser_sel >= top + rows)
 			top = browser_sel - rows + 1;
 		if (browser_sel < top)
@@ -1304,6 +1341,10 @@ int getFilePath(char *out, int cnfmode)
 
 				if (top + i >= browser_nfiles)
 					break;
+				if (isRootSpacerEntry(path, &files[top + i])) {
+					y += font_height;
+					continue;
+				}
 				if (top + i == browser_sel)
 					color = setting->color[COLOR_SELECT];  //Highlight cursor line
 				else

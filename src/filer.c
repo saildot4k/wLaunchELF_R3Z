@@ -1674,6 +1674,8 @@ int setFileList(const char *path, const char *ext, FILEINFO *files, int cnfmode)
 			if (cnfmode < 2) {
 				//This condition blocks use of MISC pseudo-device for driver path picks.
 				//And allows this device only for launch keys and for normal browsing.
+				memset(&files[nfiles], 0, sizeof(files[nfiles]));
+				nfiles++;
 				strcpy(files[nfiles].name, LNG(MISC));
 			files[nfiles].stats.AttrFile = sceMcFileAttrSubdir;
 			nfiles++;
