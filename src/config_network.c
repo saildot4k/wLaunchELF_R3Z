@@ -127,6 +127,14 @@ static data_ip_struct BuildOctets(char *ip, char *nm, char *gw)
 	return (iplist);
 }
 //---------------------------------------------------------------------------
+static int formatSaveToPrefix(char *buffer, int size)
+{
+	const char *label = LNG(Save_to);
+	int label_len = strlen(label);
+
+	return snprintf(buffer, size, "  %s%s \"", label, (label_len > 0 && label[label_len - 1] == ':') ? "" : ":");
+}
+//---------------------------------------------------------------------------
 enum CONFIG_NET {
 	CONFIG_NET_FIRST = 1,
 	CONFIG_NET_IP = CONFIG_NET_FIRST,
@@ -140,6 +148,27 @@ enum CONFIG_NET {
 
 	CONFIG_NET_COUNT
 };
+
+static int getNetworkSettingsCursorY(int selection)
+{
+	int base_y = Menu_start_y + FONT_HEIGHT + FONT_HEIGHT / 2;
+
+	switch (selection) {
+		case CONFIG_NET_IP:
+			return base_y;
+		case CONFIG_NET_NM:
+			return base_y + FONT_HEIGHT;
+		case CONFIG_NET_GW:
+			return base_y + 2 * FONT_HEIGHT;
+		case CONFIG_NET_SAVE:
+			// MAC is display-only, so jump from Gateway straight to Save.
+			return base_y + 4 * FONT_HEIGHT + FONT_HEIGHT / 2;
+		case CONFIG_NET_RETURN:
+			return base_y + 6 * FONT_HEIGHT;
+		default:
+			return base_y;
+	}
+}
 
 void Config_Network(void)
 {
@@ -254,6 +283,7 @@ void Config_Network(void)
 			          strlen(LNG(IP_Address)) + 5 :
 			          strlen(LNG(Netmask)) + 5;
 			len = (len > strlen(LNG(Gateway)) + 5) ? len : strlen(LNG(Gateway)) + 5;
+			len = (len > strlen("MAC") + 5) ? len : strlen("MAC") + 5;
 			sprintf(c, "%s:", LNG(IP_Address));
 			printXY(c, x + 2 * FONT_WIDTH, y, setting->color[COLOR_TEXT], TRUE, 0);
 			sprintf(c, "%.3i . %.3i . %.3i . %.3i", ipdata.ip[0], ipdata.ip[1], ipdata.ip[2], ipdata.ip[3]);
@@ -272,12 +302,25 @@ void Config_Network(void)
 			printXY(c, x + len * FONT_WIDTH, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 
+			sprintf(c, "MAC:");
+			printXY(c, x + 2 * FONT_WIDTH, y, setting->color[COLOR_TEXT], TRUE, 0);
+			{
+				u8 mac[6];
+				if (getNetworkMacAddress(mac))
+					snprintf(c, sizeof(c), "%02X:%02X:%02X:%02X:%02X:%02X",
+					    mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+				else
+					snprintf(c, sizeof(c), "%s", LNG(Start_Network_to_Display));
+			}
+			printXY(c, x + len * FONT_WIDTH, y, setting->color[COLOR_TEXT], TRUE, 0);
+			y += FONT_HEIGHT;
+
 			y += FONT_HEIGHT / 2;
 
 			uLE_related(path, "uLE:/IPCONFIG.DAT");  //Get save target.
 			{
 				int path_len;
-				int prefix_len = snprintf(c, sizeof(c), "  %s \"", LNG(Save_to));
+				int prefix_len = formatSaveToPrefix(c, sizeof(c));
 				if (prefix_len < 0 || prefix_len >= (int)sizeof(c))
 					c[sizeof(c) - 1] = '\0';
 				else {
@@ -296,12 +339,7 @@ void Config_Network(void)
 			y += FONT_HEIGHT;
 
 			//Cursor positioning section
-			y = Menu_start_y + s * FONT_HEIGHT + FONT_HEIGHT / 2;
-
-			if (s >= CONFIG_NET_AFT_IP)
-				y += FONT_HEIGHT / 2;
-			if (s >= CONFIG_NET_RETURN)
-				y += FONT_HEIGHT / 2;
+			y = getNetworkSettingsCursorY(s);
 			if (l > 1)
 				x += (len - 1) * FONT_WIDTH - 1 + (l - 2) * 6 * FONT_WIDTH;
 			drawChar(LEFT_CUR, x, y, setting->color[COLOR_TEXT]);

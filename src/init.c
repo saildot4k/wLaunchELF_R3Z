@@ -302,6 +302,64 @@ static void load_ps2dev9(void)
 //endfunc load_ps2dev9
 //---------------------------------------------------------------------------
 #ifdef ETH
+#define WLE_PS2IP_IRX_ID 0x0B0125F2
+#define WLE_PS2IPS_ID_GETCONFIG 12
+
+typedef struct
+{
+	char netif_name[4];
+	u32 ipaddr;
+	u32 netmask;
+	u32 gw;
+	u32 dhcp_enabled;
+	u32 dhcp_status;
+	u8 hw_addr[8];
+} wle_ip_info_t;
+
+static SifRpcClientData_t ps2ip_rpc_client __attribute__((aligned(64)));
+static wle_ip_info_t ps2ip_rpc_info __attribute__((aligned(64)));
+static char ps2ip_rpc_netif[4] __attribute__((aligned(64))) = "sm0";
+static u8 ps2ip_rpc_bound = 0;
+
+static int ps2ipMacLooksValid(const u8 mac[6])
+{
+	int i;
+	int all_zero = 1;
+	int all_ff = 1;
+
+	for (i = 0; i < 6; i++) {
+		if (mac[i] != 0x00)
+			all_zero = 0;
+		if (mac[i] != 0xff)
+			all_ff = 0;
+	}
+
+	return !(all_zero || all_ff);
+}
+
+static int bindPs2ipRpc(void)
+{
+	int ret;
+	int retry;
+
+	if (ps2ip_rpc_bound)
+		return 1;
+
+	memset(&ps2ip_rpc_client, 0, sizeof(ps2ip_rpc_client));
+	for (retry = 0; retry < 8; retry++) {
+		ret = SifBindRpc(&ps2ip_rpc_client, WLE_PS2IP_IRX_ID, 0);
+		if (ret < 0)
+			return 0;
+		if (ps2ip_rpc_client.server != NULL) {
+			ps2ip_rpc_bound = 1;
+			return 1;
+		}
+		delay(1);
+	}
+
+	return 0;
+}
+
 static void load_ps2ip(void)
 {
 	int ret, ID __attribute__((unused));
@@ -329,6 +387,34 @@ static void load_ps2ip(void)
 #endif
 //------------------------------
 //endfunc load_ps2ip
+//---------------------------------------------------------------------------
+int getNetworkMacAddress(u8 mac[6])
+{
+#ifdef ETH
+	if (mac == NULL || !ps2dev9_loaded || !have_ps2ip || !have_ps2smap)
+		return 0;
+
+	if (!bindPs2ipRpc())
+		return 0;
+
+	memset(&ps2ip_rpc_info, 0, sizeof(ps2ip_rpc_info));
+	if (SifCallRpc(&ps2ip_rpc_client, WLE_PS2IPS_ID_GETCONFIG, 0,
+	        ps2ip_rpc_netif, sizeof(ps2ip_rpc_netif),
+	        &ps2ip_rpc_info, sizeof(ps2ip_rpc_info), 0, 0) < 0)
+		return 0;
+
+	if (!ps2ipMacLooksValid(ps2ip_rpc_info.hw_addr))
+		return 0;
+
+	memcpy(mac, ps2ip_rpc_info.hw_addr, 6);
+	return 1;
+#else
+	(void)mac;
+	return 0;
+#endif
+}
+//------------------------------
+//endfunc getNetworkMacAddress
 //---------------------------------------------------------------------------
 static int load_ps2hdd_stack(int with_ata_bd)
 {
@@ -1544,6 +1630,9 @@ void Reset()
 	have_ps2host = 0;
 	have_ps2ip = 0;
 	have_ps2netfs = 0;
+#ifdef ETH
+	ps2ip_rpc_bound = 0;
+#endif
 #ifdef UDPFS
 	have_udpfs_smap = 0;
 	have_udpfs_ministack = 0;
