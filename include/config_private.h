@@ -51,6 +51,8 @@ enum {
 void configFormatLabelValue(char *dst, size_t dst_size, const char *label, const char *value);
 void configFormatLabelValueAligned(char *dst, size_t dst_size, const char *label, const char *value, int label_width);
 
+int CheckMC(void);
+
 void Config_Screen(void);
 void Config_Startup(void);
 void Config_Network(void);
