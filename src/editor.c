@@ -71,7 +71,9 @@ void TextEditor(char *path)
 	const int KEY_W = 350,
 	          KEY_H = 98,
 	          KEY_X = (SCREEN_WIDTH - KEY_W) / 2,
-	          KEY_Y = (Menu_end_y - KEY_H);
+	          KEY_Y = (Menu_end_y - KEY_H),
+	          KEY_CELL_W = 20,
+	          KEY_GRID_X = KEY_X + 32 + ((KEY_W - (VKEY_LAYOUT_COLS * KEY_CELL_W)) / 2) + ((KEY_CELL_W - FONT_WIDTH) / 2);
 	int KEY_LEN = VKEY_EDITOR_SIZE;
 
 	tmp[0] = '\0', tmp1[0] = '\0', ch = '\0';
@@ -339,8 +341,8 @@ void TextEditor(char *path)
 							x = KEY_X + 2 + 4 + 392;
 							j = 10 * FONT_WIDTH;
 						} else {
-							x = KEY_X + 2 + 4 + 14 + (KeyBoard_Cur % WFONTS + 1) * 20 - 32;
 							layout_index = getVirtualKeyboardEditorLayoutIndex(KeyBoard_Cur);
+							x = KEY_GRID_X + (layout_index % VKEY_LAYOUT_COLS) * KEY_CELL_W;
 							key_char = (layout_index >= 0) ? getVirtualKeyboardLayoutChar(setting->virtual_keyboard_layout, layout_index, KeyBoard_Caps) : 0;
 							j = (key_char == ' ') ? strlen(LNG(SPACE)) * FONT_WIDTH + 4 : FONT_WIDTH + 4;
 						}
@@ -406,7 +408,7 @@ void TextEditor(char *path)
 					for (i = 0; i < KEY_LEN; i++) {
 						layout_index = getVirtualKeyboardEditorLayoutIndex(i);
 						if (layout_index >= 0 && isVirtualKeyboardEditorKey(setting->virtual_keyboard_layout, i)) {
-							x = KEY_X + 2 + 4 + 14 + (i % WFONTS + 1) * 20 - 32;
+							x = KEY_GRID_X + (layout_index % VKEY_LAYOUT_COLS) * KEY_CELL_W;
 							y = KEY_Y + 12 + (i / WFONTS) * 18;
 							key_char = getVirtualKeyboardLayoutChar(setting->virtual_keyboard_layout, layout_index, KeyBoard_Caps);
 							key_label = (key_char == ' ') ? LNG(SPACE) : NULL;

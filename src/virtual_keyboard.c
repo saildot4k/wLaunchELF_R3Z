@@ -341,6 +341,24 @@ static int getVirtualKeyboardEditorNextInRow(int layout, int row, int col)
     return -1;
 }
 
+static int getVirtualKeyboardEditorNextCharInRow(int layout, int row, int editor_col)
+{
+    int layout_col;
+    int layout_index;
+
+    if (row < 0 || row >= VKEY_LAYOUT_ROWS)
+        return -1;
+    layout_col = editor_col - 2;
+    if (layout_col < 0)
+        layout_col = 0;
+    else if (layout_col >= VKEY_LAYOUT_COLS)
+        layout_col = VKEY_LAYOUT_COLS - 1;
+    layout_index = findSelectableInRow(layout, row, layout_col);
+    if (layout_index < 0)
+        return -1;
+    return row * VKEY_EDITOR_COLS + (layout_index % VKEY_LAYOUT_COLS) + 2;
+}
+
 int getVirtualKeyboardEditorNextKey(int layout, int editor_index, int dx, int dy)
 {
     int row;
@@ -369,7 +387,10 @@ int getVirtualKeyboardEditorNextKey(int layout, int editor_index, int dx, int dy
     } else if (dy != 0) {
         for (tries = 0; tries < VKEY_LAYOUT_ROWS; tries++) {
             row = (row + dy + VKEY_LAYOUT_ROWS) % VKEY_LAYOUT_ROWS;
-            next = getVirtualKeyboardEditorNextInRow(layout, row, col);
+            if (col >= 2 && col < VKEY_EDITOR_COLS - 1)
+                next = getVirtualKeyboardEditorNextCharInRow(layout, row, col);
+            else
+                next = getVirtualKeyboardEditorNextInRow(layout, row, col);
             if (next >= 0)
                 return next;
         }

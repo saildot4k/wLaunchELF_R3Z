@@ -134,10 +134,13 @@ int keyboard(char *out, int max)
 	const int
 	    WFONTS = VKEY_LAYOUT_COLS,
 	    HFONTS = VKEY_LAYOUT_ROWS,
-	    KEY_W = LINE_THICKNESS + 12 + (VKEY_LAYOUT_COLS * FONT_WIDTH + (VKEY_LAYOUT_COLS - 1) * 12) + 12 + LINE_THICKNESS,
+	    KEY_COL_W = FONT_WIDTH + 12,
+	    KEY_GRID_W = VKEY_LAYOUT_COLS * FONT_WIDTH + (VKEY_LAYOUT_COLS - 1) * 12,
+	    KEY_W = LINE_THICKNESS + 12 + KEY_GRID_W + KEY_COL_W + 12 + LINE_THICKNESS,
 	    KEY_H = LINE_THICKNESS + 1 + FONT_HEIGHT + 1 + LINE_THICKNESS + 8 + ((VKEY_LAYOUT_ROWS + 1) * FONT_HEIGHT) + 8 + LINE_THICKNESS,
 	    KEY_X = ((SCREEN_WIDTH - KEY_W) / 2) & -2,
-	    KEY_Y = ((SCREEN_HEIGHT - KEY_H) / 2) & -2;
+	    KEY_Y = ((SCREEN_HEIGHT - KEY_H) / 2) & -2,
+	    KEY_GRID_X = KEY_X + ((KEY_W - KEY_GRID_W) / 2);
 	int KEY_LEN, KEY_LAST, KEY_OK, KEY_CANCEL;
 	int cur = 0, sel = 0, i = 0, x, y, t = 0, caps = 0, key_w;
 	char tmp[256], *p;
@@ -319,7 +322,7 @@ int keyboard(char *out, int max)
 			for (i = 0; i < KEY_LEN; i++) {
 				if (!isVirtualKeyboardLayoutKey(setting->virtual_keyboard_layout, i))
 					continue;
-				x = KEY_X + LINE_THICKNESS + 12 + (i % WFONTS) * (FONT_WIDTH + 12);
+				x = KEY_GRID_X + (i % WFONTS) * KEY_COL_W;
 				y = KEY_Y + LINE_THICKNESS + 1 + FONT_HEIGHT + 1 + LINE_THICKNESS + 8 + (i / WFONTS) * FONT_HEIGHT;
 				key_char = getVirtualKeyboardLayoutChar(setting->virtual_keyboard_layout, i, caps);
 				key_label = (key_char == ' ') ? LNG(SPACE) : NULL;
