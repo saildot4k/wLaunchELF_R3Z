@@ -216,7 +216,7 @@ Init_Delay = 0
 # ----------------------------------------------------------------------
 # VirtualKeyboardLayout selects the virtual keyboard grid used by both
 # the popup keyboard and the text editor keyboard. Valid values are:
-# abc, qwerty, dvorak, azerty, qwertz, and n.
+# abc, qwerty, dvorak, azerty, qwertz, abnt, and abnt2.
 # ----------------------------------------------------------------------
 VirtualKeyboardLayout = abc
 # ----------------------------------------------------------------------

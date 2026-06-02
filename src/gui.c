@@ -136,11 +136,12 @@ int keyboard(char *out, int max)
 	    HFONTS = VKEY_LAYOUT_ROWS,
 	    KEY_COL_W = FONT_WIDTH + 12,
 	    KEY_GRID_W = VKEY_LAYOUT_COLS * FONT_WIDTH + (VKEY_LAYOUT_COLS - 1) * 12,
+	    KEY_GRID_SHIFT_X = KEY_COL_W / 2,
 	    KEY_W = LINE_THICKNESS + 12 + KEY_GRID_W + KEY_COL_W + 12 + LINE_THICKNESS,
 	    KEY_H = LINE_THICKNESS + 1 + FONT_HEIGHT + 1 + LINE_THICKNESS + 8 + ((VKEY_LAYOUT_ROWS + 1) * FONT_HEIGHT) + 8 + LINE_THICKNESS,
 	    KEY_X = ((SCREEN_WIDTH - KEY_W) / 2) & -2,
 	    KEY_Y = ((SCREEN_HEIGHT - KEY_H) / 2) & -2,
-	    KEY_GRID_X = KEY_X + ((KEY_W - KEY_GRID_W) / 2);
+	    KEY_GRID_X = KEY_X + ((KEY_W - KEY_GRID_W) / 2) + KEY_GRID_SHIFT_X;
 	int KEY_LEN, KEY_LAST, KEY_OK, KEY_CANCEL;
 	int cur = 0, sel = 0, i = 0, x, y, t = 0, caps = 0, key_w;
 	char tmp[256], *p;

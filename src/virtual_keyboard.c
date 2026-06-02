@@ -9,23 +9,25 @@ static const char *vkey_layout_config_names[VKEY_LAYOUT_COUNT] = {
     "dvorak",
     "azerty",
     "qwertz",
-    "n",
+    "abnt",
+    "abnt2",
 };
 
 static const char *vkey_layout_display_names[VKEY_LAYOUT_COUNT] = {
     "ABC",
     "QWERTY",
     "DVORAK",
-    "Azerty",
-    "Qwertz",
-    "N",
+    "AZERTY",
+    "QWERTZ",
+    "ABNT",
+    "ABNT2",
 };
 
 enum {
     VKEY_SHIFT_NORMAL = 0,
     VKEY_SHIFT_CAPS,
     VKEY_SHIFT_COUNT,
-    VKEY_SPACE_INDEX = (4 * VKEY_LAYOUT_COLS) + 6
+    VKEY_SPACE_INDEX = (4 * VKEY_LAYOUT_COLS) + 4
 };
 
 static const char *vkey_layout_rows[VKEY_LAYOUT_COUNT][VKEY_SHIFT_COUNT][VKEY_LAYOUT_ROWS] = {
@@ -35,14 +37,14 @@ static const char *vkey_layout_rows[VKEY_LAYOUT_COUNT][VKEY_SHIFT_COUNT][VKEY_LA
             "abcdefghijklmn[] ",
             "opqrstuvwxyz;'\\  ",
             " .,/`            ",
-            "      _          ",
+            "    _            ",
         },
         {
             "!@#$%^&*()_+     ",
             "ABCDEFGHIJKLMN{} ",
             "OPQRSTUVWXYZ:\"|  ",
             " <>?~            ",
-            "      _          ",
+            "    _            ",
         },
     },
     {
@@ -51,14 +53,14 @@ static const char *vkey_layout_rows[VKEY_LAYOUT_COUNT][VKEY_SHIFT_COUNT][VKEY_LA
             "qwertyuiop[]     ",
             "asdfghjkl;'\\     ",
             " zxcvbnm,./`     ",
-            "      _          ",
+            "    _            ",
         },
         {
             "!@#$%^&*()_+     ",
             "QWERTYUIOP{}     ",
             "ASDFGHJKL:\"|     ",
             " ZXCVBNM<>?~     ",
-            "      _          ",
+            "    _            ",
         },
     },
     {
@@ -67,14 +69,14 @@ static const char *vkey_layout_rows[VKEY_LAYOUT_COUNT][VKEY_SHIFT_COUNT][VKEY_LA
             "',.pyfgcrl/=     ",
             "aoeuidhtns-\\     ",
             " ;qjkxbmwvz`     ",
-            "      _          ",
+            "    _            ",
         },
         {
             "!@#$%^&*()_+     ",
             "\"<>PYFGCRL?+     ",
             "AOEUIDHTNS_|     ",
             " :QJKXBMWVZ~     ",
-            "      _          ",
+            "    _            ",
         },
     },
     {
@@ -83,14 +85,14 @@ static const char *vkey_layout_rows[VKEY_LAYOUT_COUNT][VKEY_SHIFT_COUNT][VKEY_LA
             "azertyuiop[]     ",
             "qsdfghjklm;'\\    ",
             " wxcvbn,./`      ",
-            "      _          ",
+            "    _            ",
         },
         {
             "!@#$%^&*()_+     ",
             "AZERTYUIOP{}     ",
             "QSDFGHJKLM:\"|    ",
             " WXCVBN<>?~      ",
-            "      _          ",
+            "    _            ",
         },
     },
     {
@@ -99,30 +101,46 @@ static const char *vkey_layout_rows[VKEY_LAYOUT_COUNT][VKEY_SHIFT_COUNT][VKEY_LA
             "qwertzuiop[]     ",
             "asdfghjkl;'\\     ",
             " yxcvbnm,./`     ",
-            "      _          ",
+            "    _            ",
         },
         {
             "!@#$%^&*()_+     ",
             "QWERTZUIOP{}     ",
             "ASDFGHJKL:\"|     ",
             " YXCVBNM<>?~     ",
-            "      _          ",
+            "    _            ",
         },
     },
     {
         {
-            "1234567890-=     ",
-            "abcdefghijklmn[] ",
-            "opqrstuvwxyz;'\\  ",
-            " .,/`            ",
-            "      _          ",
+            "'1234567890-=    ",
+            "qwertyuiop'[     ",
+            "asdfghjkl;~]     ",
+            " \\zxcvbnm,.;     ",
+            "    _            ",
         },
         {
-            "!@#$%^&*()_+     ",
-            "ABCDEFGHIJKLMN{} ",
-            "OPQRSTUVWXYZ:\"|  ",
-            " <>?~            ",
-            "      _          ",
+            "\"!@#$%^&*()_+    ",
+            "QWERTYUIOP`{     ",
+            "ASDFGHJKL:^}     ",
+            " |ZXCVBNM<>:     ",
+            "    _            ",
+        },
+    },
+    {
+        {
+            "'1234567890-=    ",
+            "qwertyuiop'[     ",
+            "asdfghjkl;~]     ",
+            " \\zxcvbnm,.;/    ",
+            "    _            ",
+        },
+        {
+            "\"!@#$%^&*()_+    ",
+            "QWERTYUIOP`{     ",
+            "ASDFGHJKL:^}     ",
+            " |ZXCVBNM<>:?    ",
+            "    _            ",
         },
     },
 };
@@ -167,7 +185,11 @@ int getVirtualKeyboardLayoutByConfigName(const char *name)
     if (!stricmp(name, "4"))
         return VKEY_LAYOUT_QWERTZ;
     if (!stricmp(name, "5"))
-        return VKEY_LAYOUT_N;
+        return VKEY_LAYOUT_ABNT;
+    if (!stricmp(name, "6"))
+        return VKEY_LAYOUT_ABNT2;
+    if (!stricmp(name, "n"))
+        return VKEY_LAYOUT_ABNT;
     return -1;
 }
 
