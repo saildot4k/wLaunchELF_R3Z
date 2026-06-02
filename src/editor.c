@@ -48,14 +48,6 @@ char Path[10][MAX_PATH];    // File Path For Each Opened Windows. 10 Max.
 //--------------------------------------------------------------
 //--------------------------------------------------------------
 
-static int editorKeyboardTextX(const char *label, int box_left, int box_right)
-{
-	int x;
-
-	x = box_right - LINE_THICKNESS - (int)strlen(label) * FONT_WIDTH + 1;
-	return (x < box_left) ? box_left : x;
-}
-
 static int editorKeyboardTextWidth(int x, int box_right)
 {
 	int width;
@@ -64,11 +56,10 @@ static int editorKeyboardTextWidth(int x, int box_right)
 	return (width > 0) ? width : FONT_WIDTH;
 }
 
-static void editorKeyboardPrintRight(const char *label, int box_left, int box_right, int y, u64 color)
+static void editorKeyboardPrintLeft(const char *label, int box_left, int box_right, int y, u64 color)
 {
-	int x;
+	int x = box_left + LINE_THICKNESS;
 
-	x = editorKeyboardTextX(label, box_left, box_right);
 	printXY(label, x, y, color, TRUE, editorKeyboardTextWidth(x, box_right));
 }
 
@@ -92,15 +83,13 @@ void TextEditor(char *path)
 	int tmpLen = 0;
 	int event = 1, post_event = 0;
 	int Editor_Start = 0;
+	int key_grid_first_col, key_grid_visible_cols, key_grid_visible_w, key_grid_area_x, key_grid_area_w, KEY_GRID_X;
 	u64 color;
 	const int KEY_W = 350,
 	          KEY_H = 98,
 	          KEY_X = (SCREEN_WIDTH - KEY_W) / 2,
 	          KEY_Y = (Menu_end_y - KEY_H),
 	          KEY_CELL_W = 20,
-	          KEY_GRID_W = VKEY_LAYOUT_COLS * KEY_CELL_W,
-	          KEY_GRID_SHIFT_X = KEY_CELL_W / 2,
-	          KEY_GRID_X = KEY_X + 32 + ((KEY_W - KEY_GRID_W) / 2) + ((KEY_CELL_W - FONT_WIDTH) / 2) + KEY_GRID_SHIFT_X,
 	          KEY_BOX1_LEFT = SCREEN_MARGIN,
 	          KEY_BOX1_RIGHT = KEY_X - 48 - 1,
 	          KEY_BOX2_LEFT = KEY_X - 48 + LINE_THICKNESS,
@@ -110,6 +99,12 @@ void TextEditor(char *path)
 	int KEY_LEN = VKEY_EDITOR_SIZE;
 
 	tmp[0] = '\0', tmp1[0] = '\0', ch = '\0';
+	key_grid_first_col = getVirtualKeyboardLayoutFirstColumn(setting->virtual_keyboard_layout);
+	key_grid_visible_cols = getVirtualKeyboardLayoutColumnCount(setting->virtual_keyboard_layout);
+	key_grid_visible_w = (key_grid_visible_cols - 1) * KEY_CELL_W + FONT_WIDTH;
+	key_grid_area_x = KEY_X + 32 + LINE_THICKNESS;
+	key_grid_area_w = KEY_W - LINE_THICKNESS;
+	KEY_GRID_X = key_grid_area_x + ((key_grid_area_w - key_grid_visible_w) / 2) - key_grid_first_col * KEY_CELL_W;
 
 	Active_Window = 0, Num_Window = 0;
 
@@ -389,41 +384,41 @@ void TextEditor(char *path)
 						color = setting->color[COLOR_SELECT];
 					else
 						color = setting->color[COLOR_TEXT];
-					editorKeyboardPrintRight(LNG(MARK), KEY_BOX1_LEFT, KEY_BOX1_RIGHT, KEY_Y + 12,
-					                         (KeyBoard_Cur == 0) ? setting->color[COLOR_BACKGR] : color);
-					editorKeyboardPrintRight(LNG(LINE_UP), KEY_BOX2_LEFT, KEY_BOX2_RIGHT, KEY_Y + 12,
-					                         (KeyBoard_Cur == 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
+					editorKeyboardPrintLeft(LNG(MARK), KEY_BOX1_LEFT, KEY_BOX1_RIGHT, KEY_Y + 12,
+					                        (KeyBoard_Cur == 0) ? setting->color[COLOR_BACKGR] : color);
+					editorKeyboardPrintLeft(LNG(LINE_UP), KEY_BOX2_LEFT, KEY_BOX2_RIGHT, KEY_Y + 12,
+					                        (KeyBoard_Cur == 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
 				if (Mark[MARK_COPY])
 					color = setting->color[COLOR_SELECT];
 					else
 						color = setting->color[COLOR_TEXT];
-					editorKeyboardPrintRight(LNG(COPY), KEY_BOX1_LEFT, KEY_BOX1_RIGHT, KEY_Y + 12 + FONT_HEIGHT + 2,
-					                         (KeyBoard_Cur == WFONTS) ? setting->color[COLOR_BACKGR] : color);
-					editorKeyboardPrintRight(LNG(LINE_DOWN), KEY_BOX2_LEFT, KEY_BOX2_RIGHT, KEY_Y + 12 + FONT_HEIGHT + 2,
-					                         (KeyBoard_Cur == WFONTS + 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
+					editorKeyboardPrintLeft(LNG(COPY), KEY_BOX1_LEFT, KEY_BOX1_RIGHT, KEY_Y + 12 + FONT_HEIGHT + 2,
+					                        (KeyBoard_Cur == WFONTS) ? setting->color[COLOR_BACKGR] : color);
+					editorKeyboardPrintLeft(LNG(LINE_DOWN), KEY_BOX2_LEFT, KEY_BOX2_RIGHT, KEY_Y + 12 + FONT_HEIGHT + 2,
+					                        (KeyBoard_Cur == WFONTS + 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
 				if (Mark[MARK_CUT])
 					color = setting->color[COLOR_SELECT];
 					else
 						color = setting->color[COLOR_TEXT];
-					editorKeyboardPrintRight(LNG(CUT), KEY_BOX1_LEFT, KEY_BOX1_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 2 + 4,
-					                         (KeyBoard_Cur == 2 * WFONTS) ? setting->color[COLOR_BACKGR] : color);
-					editorKeyboardPrintRight(LNG(PAGE_UP), KEY_BOX2_LEFT, KEY_BOX2_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 2 + 4,
-					                         (KeyBoard_Cur == 2 * WFONTS + 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
-					editorKeyboardPrintRight(LNG(PASTE), KEY_BOX1_LEFT, KEY_BOX1_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 3 + 6,
-					                         (KeyBoard_Cur == 3 * WFONTS) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
-					editorKeyboardPrintRight(LNG(PAGE_DOWN), KEY_BOX2_LEFT, KEY_BOX2_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 3 + 6,
-					                         (KeyBoard_Cur == 3 * WFONTS + 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
-					editorKeyboardPrintRight(LNG(HOME), KEY_BOX1_LEFT, KEY_BOX1_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 4 + 8,
-					                         (KeyBoard_Cur == 4 * WFONTS) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
-					editorKeyboardPrintRight(LNG(END), KEY_BOX2_LEFT, KEY_BOX2_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 4 + 8,
-					                         (KeyBoard_Cur == 4 * WFONTS + 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
+					editorKeyboardPrintLeft(LNG(CUT), KEY_BOX1_LEFT, KEY_BOX1_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 2 + 4,
+					                        (KeyBoard_Cur == 2 * WFONTS) ? setting->color[COLOR_BACKGR] : color);
+					editorKeyboardPrintLeft(LNG(PAGE_UP), KEY_BOX2_LEFT, KEY_BOX2_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 2 + 4,
+					                        (KeyBoard_Cur == 2 * WFONTS + 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
+					editorKeyboardPrintLeft(LNG(PASTE), KEY_BOX1_LEFT, KEY_BOX1_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 3 + 6,
+					                        (KeyBoard_Cur == 3 * WFONTS) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
+					editorKeyboardPrintLeft(LNG(PAGE_DOWN), KEY_BOX2_LEFT, KEY_BOX2_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 3 + 6,
+					                        (KeyBoard_Cur == 3 * WFONTS + 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
+					editorKeyboardPrintLeft(LNG(HOME), KEY_BOX1_LEFT, KEY_BOX1_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 4 + 8,
+					                        (KeyBoard_Cur == 4 * WFONTS) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
+					editorKeyboardPrintLeft(LNG(END), KEY_BOX2_LEFT, KEY_BOX2_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 4 + 8,
+					                        (KeyBoard_Cur == 4 * WFONTS + 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
 
 				if (Editor_Insert)
 					color = setting->color[COLOR_SELECT];
 					else
 						color = setting->color[COLOR_TEXT];
-					editorKeyboardPrintRight(LNG(INSERT), KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12,
-					                         (KeyBoard_Cur == WFONTS - 1) ? setting->color[COLOR_BACKGR] : color);
+					editorKeyboardPrintLeft(LNG(INSERT), KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12,
+					                        (KeyBoard_Cur == WFONTS - 1) ? setting->color[COLOR_BACKGR] : color);
 				tmp[0] = '\0';
 				if (Editor_RetMode == OTHER)
 					strcpy(tmp, LNG(RET_CRLF));
@@ -431,14 +426,14 @@ void TextEditor(char *path)
 					strcpy(tmp, LNG(RET_CR));
 				else if (Editor_RetMode == MAC)
 					strcpy(tmp, LNG(RET_LF));
-					editorKeyboardPrintRight(tmp, KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12 + FONT_HEIGHT + 2,
-					                         (KeyBoard_Cur == 2 * WFONTS - 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
-					editorKeyboardPrintRight(LNG(TAB), KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 2 + 4,
-					                         (KeyBoard_Cur == 3 * WFONTS - 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
-					editorKeyboardPrintRight(LNG(SPACE), KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 3 + 6,
-					                         (KeyBoard_Cur == 4 * WFONTS - 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
-					editorKeyboardPrintRight(LNG(KB_RETURN), KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 4 + 8,
-					                         (KeyBoard_Cur == 5 * WFONTS - 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
+					editorKeyboardPrintLeft(tmp, KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12 + FONT_HEIGHT + 2,
+					                        (KeyBoard_Cur == 2 * WFONTS - 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
+					editorKeyboardPrintLeft(LNG(TAB), KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 2 + 4,
+					                        (KeyBoard_Cur == 3 * WFONTS - 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
+					editorKeyboardPrintLeft(LNG(SPACE), KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 3 + 6,
+					                        (KeyBoard_Cur == 4 * WFONTS - 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
+					editorKeyboardPrintLeft(LNG(KB_RETURN), KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 4 + 8,
+					                        (KeyBoard_Cur == 5 * WFONTS - 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
 
 					for (i = 0; i < KEY_LEN; i++) {
 						layout_index = getVirtualKeyboardEditorLayoutIndex(i);

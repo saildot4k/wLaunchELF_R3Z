@@ -545,6 +545,8 @@ int normalizeVirtualKeyboardLayout(int layout);
 const char *getVirtualKeyboardLayoutConfigName(int layout);
 const char *getVirtualKeyboardLayoutDisplayName(int layout);
 int getVirtualKeyboardLayoutByConfigName(const char *name);
+int getVirtualKeyboardLayoutFirstColumn(int layout);
+int getVirtualKeyboardLayoutColumnCount(int layout);
 char getVirtualKeyboardLayoutChar(int layout, int index, int caps);
 char getVirtualKeyboardLayoutDisplayChar(int layout, int index, int caps);
 int isVirtualKeyboardLayoutKey(int layout, int index);

@@ -229,6 +229,52 @@ int isVirtualKeyboardLayoutKey(int layout, int index)
     return getVirtualKeyboardRawChar(layout, index, VKEY_SHIFT_NORMAL) != ' ';
 }
 
+static void getVirtualKeyboardLayoutColumnRange(int layout, int *first_col, int *last_col)
+{
+    int row;
+    int col;
+    int index;
+    int first = VKEY_LAYOUT_COLS;
+    int last = 0;
+
+    for (row = 0; row < VKEY_LAYOUT_ROWS; row++) {
+        for (col = 0; col < VKEY_LAYOUT_COLS; col++) {
+            index = row * VKEY_LAYOUT_COLS + col;
+            if (isVirtualKeyboardLayoutKey(layout, index)) {
+                if (col < first)
+                    first = col;
+                if (col > last)
+                    last = col;
+            }
+        }
+    }
+
+    if (first == VKEY_LAYOUT_COLS) {
+        first = 0;
+        last = 0;
+    }
+    *first_col = first;
+    *last_col = last;
+}
+
+int getVirtualKeyboardLayoutFirstColumn(int layout)
+{
+    int first;
+    int last;
+
+    getVirtualKeyboardLayoutColumnRange(layout, &first, &last);
+    return first;
+}
+
+int getVirtualKeyboardLayoutColumnCount(int layout)
+{
+    int first;
+    int last;
+
+    getVirtualKeyboardLayoutColumnRange(layout, &first, &last);
+    return last - first + 1;
+}
+
 static int findSelectableInRow(int layout, int row, int col)
 {
     int offset;

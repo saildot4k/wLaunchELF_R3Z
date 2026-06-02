@@ -135,15 +135,14 @@ int keyboard(char *out, int max)
 	    WFONTS = VKEY_LAYOUT_COLS,
 	    HFONTS = VKEY_LAYOUT_ROWS,
 	    KEY_COL_W = FONT_WIDTH + 12,
-	    KEY_GRID_W = VKEY_LAYOUT_COLS * FONT_WIDTH + (VKEY_LAYOUT_COLS - 1) * 12,
-	    KEY_GRID_SHIFT_X = KEY_COL_W / 2,
-	    KEY_W = LINE_THICKNESS + 12 + KEY_GRID_W + KEY_COL_W + 12 + LINE_THICKNESS,
+	    KEY_BACKING_GRID_W = VKEY_LAYOUT_COLS * FONT_WIDTH + (VKEY_LAYOUT_COLS - 1) * 12,
+	    KEY_W = LINE_THICKNESS + 12 + KEY_BACKING_GRID_W + KEY_COL_W + 12 + LINE_THICKNESS,
 	    KEY_H = LINE_THICKNESS + 1 + FONT_HEIGHT + 1 + LINE_THICKNESS + 8 + ((VKEY_LAYOUT_ROWS + 1) * FONT_HEIGHT) + 8 + LINE_THICKNESS,
 	    KEY_X = ((SCREEN_WIDTH - KEY_W) / 2) & -2,
-	    KEY_Y = ((SCREEN_HEIGHT - KEY_H) / 2) & -2,
-	    KEY_GRID_X = KEY_X + ((KEY_W - KEY_GRID_W) / 2) + KEY_GRID_SHIFT_X;
+	    KEY_Y = ((SCREEN_HEIGHT - KEY_H) / 2) & -2;
 	int KEY_LEN, KEY_LAST, KEY_OK, KEY_CANCEL;
 	int cur = 0, sel = 0, i = 0, x, y, t = 0, caps = 0, key_w;
+	int key_grid_first_col, key_grid_visible_cols, key_grid_visible_w, key_grid_area_x, key_grid_area_w, KEY_GRID_X;
 	char tmp[256], *p;
 	char KeyPress, key_char;
 	const char *key_label;
@@ -157,6 +156,12 @@ int keyboard(char *out, int max)
 	KEY_LAST = WFONTS * HFONTS - 1;
 	KEY_OK = KEY_LAST + 1;
 	KEY_CANCEL = KEY_OK + 1;
+	key_grid_first_col = getVirtualKeyboardLayoutFirstColumn(setting->virtual_keyboard_layout);
+	key_grid_visible_cols = getVirtualKeyboardLayoutColumnCount(setting->virtual_keyboard_layout);
+	key_grid_visible_w = (key_grid_visible_cols - 1) * KEY_COL_W + FONT_WIDTH;
+	key_grid_area_x = KEY_X + LINE_THICKNESS + 12;
+	key_grid_area_w = KEY_BACKING_GRID_W + KEY_COL_W;
+	KEY_GRID_X = key_grid_area_x + ((key_grid_area_w - key_grid_visible_w) / 2) - key_grid_first_col * KEY_COL_W;
 
 	event = 1;
 	while (1) {
