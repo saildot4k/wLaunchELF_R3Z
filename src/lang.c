@@ -45,6 +45,12 @@ static Language Lang_Polish[] = {
 #undef lang
     {NULL}};
 
+static Language Lang_French[] = {
+#define lang(id, name, value) {value},
+#include "../Lang/FRE.LNG"
+#undef lang
+    {NULL}};
+
 Language Lang_String[sizeof(Lang_Default) / sizeof(Lang_Default[0])];
 Language Lang_Extern[sizeof(Lang_Default) / sizeof(Lang_Default[0])];
 
@@ -52,22 +58,24 @@ void *External_Lang_Buffer = NULL;
 
 static const char *builtin_language_config_names[BUILTIN_LANGUAGE_COUNT] = {
     "english",
-    "italian",
     "spanish",
-    "german",
+    "french",
+    "italian",
+    "polish",
     "portuguese",
     "brazilian",
-    "polish",
+    "german",
 };
 
 static const char *builtin_language_native_names[BUILTIN_LANGUAGE_COUNT] = {
     "English",
-    "Italiano",
     "Espanol",
-    "Deutsch",
+    "Francais",
+    "Italiano",
+    "Polski",
     "Portugues",
     "Portugues Brasileiro",
-    "Polski",
+    "Deutsch",
 };
 
 int normalizeBuiltinLanguage(int language)
@@ -82,18 +90,20 @@ int normalizeBuiltinLanguage(int language)
 static Language *getBuiltinLanguageTable(int language)
 {
 	switch (normalizeBuiltinLanguage(language)) {
-		case BUILTIN_LANGUAGE_ITALIAN:
-			return Lang_Italian;
 		case BUILTIN_LANGUAGE_SPANISH:
 			return Lang_Spanish;
-		case BUILTIN_LANGUAGE_GERMAN:
-			return Lang_German;
+		case BUILTIN_LANGUAGE_FRENCH:
+			return Lang_French;
+		case BUILTIN_LANGUAGE_ITALIAN:
+			return Lang_Italian;
+		case BUILTIN_LANGUAGE_POLISH:
+			return Lang_Polish;
 		case BUILTIN_LANGUAGE_PORTUGUESE:
 			return Lang_Portuguese;
 		case BUILTIN_LANGUAGE_BRAZILIAN:
 			return Lang_Brazilian;
-		case BUILTIN_LANGUAGE_POLISH:
-			return Lang_Polish;
+		case BUILTIN_LANGUAGE_GERMAN:
+			return Lang_German;
 		case BUILTIN_LANGUAGE_ENGLISH:
 		default:
 			return Lang_Default;
@@ -116,21 +126,24 @@ int getBuiltinLanguageByConfigName(const char *name)
 		return -1;
 	if (!stricmp(name, "0") || !stricmp(name, "english") || !stricmp(name, "eng") || !stricmp(name, "en"))
 		return BUILTIN_LANGUAGE_ENGLISH;
-	if (!stricmp(name, "1") || !stricmp(name, "italian") || !stricmp(name, "ita") || !stricmp(name, "it") || !stricmp(name, "italiano"))
-		return BUILTIN_LANGUAGE_ITALIAN;
-	if (!stricmp(name, "2") || !stricmp(name, "spanish") || !stricmp(name, "spa") || !stricmp(name, "es") || !stricmp(name, "espanol"))
+	if (!stricmp(name, "1") || !stricmp(name, "spanish") || !stricmp(name, "spa") || !stricmp(name, "es") || !stricmp(name, "espanol"))
 		return BUILTIN_LANGUAGE_SPANISH;
-	if (!stricmp(name, "3") || !stricmp(name, "german") || !stricmp(name, "ger") || !stricmp(name, "deu") || !stricmp(name, "de") || !stricmp(name, "deutsch"))
-		return BUILTIN_LANGUAGE_GERMAN;
-	if (!stricmp(name, "4") || !stricmp(name, "portuguese") || !stricmp(name, "por") || !stricmp(name, "pt") || !stricmp(name, "portugues"))
+	if (!stricmp(name, "2") || !stricmp(name, "french") || !stricmp(name, "fre") || !stricmp(name, "fra") ||
+	    !stricmp(name, "fr") || !stricmp(name, "francais"))
+		return BUILTIN_LANGUAGE_FRENCH;
+	if (!stricmp(name, "3") || !stricmp(name, "italian") || !stricmp(name, "ita") || !stricmp(name, "it") || !stricmp(name, "italiano"))
+		return BUILTIN_LANGUAGE_ITALIAN;
+	if (!stricmp(name, "4") || !stricmp(name, "polish") || !stricmp(name, "pol") || !stricmp(name, "pl") ||
+	    !stricmp(name, "polski"))
+		return BUILTIN_LANGUAGE_POLISH;
+	if (!stricmp(name, "5") || !stricmp(name, "portuguese") || !stricmp(name, "por") || !stricmp(name, "pt") || !stricmp(name, "portugues"))
 		return BUILTIN_LANGUAGE_PORTUGUESE;
-	if (!stricmp(name, "5") || !stricmp(name, "brazilian") || !stricmp(name, "brazil") || !stricmp(name, "br") ||
+	if (!stricmp(name, "6") || !stricmp(name, "brazilian") || !stricmp(name, "brazil") || !stricmp(name, "br") ||
 	    !stricmp(name, "ptbr") || !stricmp(name, "pt-br") || !stricmp(name, "portuguese-br") ||
 	    !stricmp(name, "brazilian_portuguese"))
 		return BUILTIN_LANGUAGE_BRAZILIAN;
-	if (!stricmp(name, "6") || !stricmp(name, "polish") || !stricmp(name, "pol") || !stricmp(name, "pl") ||
-	    !stricmp(name, "polski"))
-		return BUILTIN_LANGUAGE_POLISH;
+	if (!stricmp(name, "7") || !stricmp(name, "german") || !stricmp(name, "ger") || !stricmp(name, "deu") || !stricmp(name, "de") || !stricmp(name, "deutsch"))
+		return BUILTIN_LANGUAGE_GERMAN;
 	return -1;
 }
 

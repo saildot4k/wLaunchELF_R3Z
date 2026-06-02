@@ -260,7 +260,8 @@ CNF_Path =
 USBMASS_FILE =
 # ----------------------------------------------------------------------
 # language selects the built-in language used by the GUI. Valid values
-# are english, italian, spanish, german, portuguese, brazilian, and polish.
+# are english, spanish, french, italian, polish, portuguese, brazilian,
+# and german.
 # If this setting is omitted, blank, or invalid, English is used.
 # This can be changed live in the 'STARTUP SETTINGS' screen.
 # ----------------------------------------------------------------------
