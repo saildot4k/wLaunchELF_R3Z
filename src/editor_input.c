@@ -7,9 +7,109 @@ const int WFONTS = VKEY_EDITOR_COLS,  // Virtual KeyBoard Width.
     HFONTS = VKEY_LAYOUT_ROWS;        // Virtual KeyBoard Height.
 
 
+static const unsigned char EditorSymbolChars[] = {
+    0xA1, 0xA3, 0xBF, 0xB0,
+    0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8,
+    0xC9, 0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xCF, 0xD0, 0xD1,
+    0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD8, 0xD9, 0xDA, 0xDB,
+    0xDC, 0xDD, 0xDE, 0xDF, 0xE0, 0xE1, 0xE2, 0xE3, 0xE4,
+    0xE5, 0xE6, 0xE7, 0xE8, 0xE9, 0xEA, 0xEB, 0xEC, 0xED,
+    0xEE, 0xEF, 0xF0, 0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6,
+    0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF,
+};
+
+static void editorPrepareSingleCharInsert(void)
+{
+	if (TextMode[Active_Window] == OTHER && TextBuffer[Active_Window][Editor_Cur] == '\n' && Editor_Cur > 0 && TextBuffer[Active_Window][Editor_Cur - 1] == '\r') {
+		Editor_Cur -= 1;  //Entry at LF of CRLF must work at CR instead
+	}
+	if (Editor_Insert || TextBuffer[Active_Window][Editor_Cur] == '\0') {
+		ins1 = 1, ins2 = 0, ins3 = 1, ins4 = 0, ins5 = 1;  //Insert char normally
+	} else {
+		if (TextMode[Active_Window] == OTHER && TextBuffer[Active_Window][Editor_Cur] == '\r' && TextBuffer[Active_Window][Editor_Cur + 1] == '\n') {  //OWrite char at CRLF
+			ins1 = 0, ins2 = 0, ins3 = 1, ins4 = 2, ins5 = 1;                                                                                          //OWrite at CR of CRLF
+		} else {                                                                                                                                       //OWrite return at normal char
+			ins1 = 0, ins2 = 0, ins3 = 1, ins4 = 1, ins5 = 1;                                                                                          //OWrite normal char
+		}
+	}
+}
+
+static unsigned char editorSymbolDialog(void)
+{
+	const int SYMBOL_COLS = 11;
+	const int SYMBOL_ROWS = 6;
+	const int SYMBOL_COUNT = sizeof(EditorSymbolChars) / sizeof(EditorSymbolChars[0]);
+	const int SYMBOL_CELL_W = FONT_WIDTH + 12;
+	const int SYMBOL_CELL_H = FONT_HEIGHT + 6;
+	const int GRID_W = (SYMBOL_COLS - 1) * SYMBOL_CELL_W + FONT_WIDTH;
+	const int GRID_H = (SYMBOL_ROWS - 1) * SYMBOL_CELL_H + FONT_HEIGHT;
+	const int BOX_W = GRID_W + 32;
+	const int BOX_H = GRID_H + FONT_HEIGHT + 32;
+	const int BOX_X = ((SCREEN_WIDTH - BOX_W) / 2) & -2;
+	const int BOX_Y = ((SCREEN_HEIGHT - BOX_H) / 2) & -2;
+	const int GRID_X = BOX_X + (BOX_W - GRID_W) / 2;
+	const int GRID_Y = BOX_Y + LINE_THICKNESS + FONT_HEIGHT + 14;
+	int event = 1;
+	int post_event = 0;
+	int sel = 0;
+	int i, x, y;
+
+	while (1) {
+		waitPadReady(0, 0);
+		if (readpad_no_KB()) {
+			if (new_pad)
+				event |= 2;
+
+			if (new_pad & PAD_UP) {
+				sel = (sel + SYMBOL_COUNT - SYMBOL_COLS) % SYMBOL_COUNT;
+			} else if (new_pad & PAD_DOWN) {
+				sel = (sel + SYMBOL_COLS) % SYMBOL_COUNT;
+			} else if (new_pad & PAD_LEFT) {
+				sel = (sel > 0) ? sel - 1 : SYMBOL_COUNT - 1;
+			} else if (new_pad & PAD_RIGHT) {
+				sel = (sel + 1) % SYMBOL_COUNT;
+			} else if ((swapKeys && new_pad & PAD_CROSS) || (!swapKeys && new_pad & PAD_CIRCLE)) {
+				new_pad = 0;
+				return EditorSymbolChars[sel];
+			} else if (new_pad & PAD_SELECT || new_pad & PAD_TRIANGLE || (!swapKeys && new_pad & PAD_CROSS) || (swapKeys && new_pad & PAD_CIRCLE)) {
+				new_pad = 0;
+				return 0;
+			}
+		}
+
+		if (event || post_event) {
+			drawPopSprite(setting->color[COLOR_BACKGR],
+			              BOX_X, BOX_Y,
+			              BOX_X + BOX_W - 1, BOX_Y + BOX_H - 1);
+			drawFrame(BOX_X, BOX_Y,
+			          BOX_X + BOX_W - 1, BOX_Y + BOX_H - 1,
+			          setting->color[COLOR_FRAME]);
+			printXY(LNG(SPECIAL),
+			        BOX_X + (BOX_W - strlen(LNG(SPECIAL)) * FONT_WIDTH) / 2,
+			        BOX_Y + LINE_THICKNESS + 4,
+			        setting->color[COLOR_TEXT], TRUE, 0);
+
+			for (i = 0; i < SYMBOL_COUNT; i++) {
+				x = GRID_X + (i % SYMBOL_COLS) * SYMBOL_CELL_W;
+				y = GRID_Y + (i / SYMBOL_COLS) * SYMBOL_CELL_H;
+				if (i == sel)
+					drawOpSprite(setting->color[COLOR_SELECT],
+					             x - 2, y,
+					             x + FONT_WIDTH + 1, y + FONT_HEIGHT - 1);
+				drawChar(EditorSymbolChars[i], x, y,
+				         (i == sel) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
+			}
+		}
+		drawScr();
+		post_event = event;
+		event = 0;
+	}
+}
+
 void editorVirtualKeyboardEntry(void)
 {
 	int i, Operation;
+	unsigned char symbol_char = '\0';
 
 	Operation = 0;
 
@@ -153,6 +253,12 @@ void editorVirtualKeyboardEntry(void)
 		} else if (KeyBoard_Cur == 2 * WFONTS - 1) {  // Virtual KeyBoard Return Mode CR/LF, LF, CR.
 			if ((Editor_RetMode++) >= 4)
 				Editor_RetMode = OTHER;
+		} else if (KeyBoard_Cur == 4 * WFONTS - 1) {  // Virtual KeyBoard symbol picker.
+			symbol_char = editorSymbolDialog();
+			if (symbol_char != '\0') {
+				editorPrepareSingleCharInsert();
+				Operation = 6;
+			}
 		} else if (KeyBoard_Cur == 5 * WFONTS - 1) {  // Virtual KeyBoard RETURN.
 
 			if (TextMode[Active_Window] == OTHER && TextBuffer[Active_Window][Editor_Cur] == '\n' && Editor_Cur > 0 && TextBuffer[Active_Window][Editor_Cur - 1] == '\r') {
@@ -176,23 +282,10 @@ void editorVirtualKeyboardEntry(void)
 			}
 			Operation = 2;
 			//ends Virtual KeyBoard RETURN.
-		} else {  // Virtual KeyBoard Any other char + Space + Tabulation.
-			if (TextMode[Active_Window] == OTHER && TextBuffer[Active_Window][Editor_Cur] == '\n' && Editor_Cur > 0 && TextBuffer[Active_Window][Editor_Cur - 1] == '\r') {
-				Editor_Cur -= 1;  //Entry at LF of CRLF must work at CR instead
-			}
-			if (Editor_Insert || TextBuffer[Active_Window][Editor_Cur] == '\0') {
-				ins1 = 1, ins2 = 0, ins3 = 1, ins4 = 0, ins5 = 1;  //Insert char normally
-			} else {
-				if (TextMode[Active_Window] == OTHER && TextBuffer[Active_Window][Editor_Cur] == '\r' && TextBuffer[Active_Window][Editor_Cur + 1] == '\n') {  //OWrite char at CRLF
-					ins1 = 0, ins2 = 0, ins3 = 1, ins4 = 2, ins5 = 1;                                                                                          //OWrite at CR of CRLF
-				} else {                                                                                                                                       //OWrite return at normal char
-					ins1 = 0, ins2 = 0, ins3 = 1, ins4 = 1, ins5 = 1;                                                                                          //OWrite normal char
-				}
-			}
+		} else {  // Virtual KeyBoard Any other char + Tabulation.
+			editorPrepareSingleCharInsert();
 			if (KeyBoard_Cur == 3 * WFONTS - 1)  // Tabulation.
 				Operation = 3;
-			else if (KeyBoard_Cur == 4 * WFONTS - 1)  // Space.
-				Operation = 4;
 			else  // Any other char.
 				Operation = 5;
 		}
@@ -242,11 +335,11 @@ void editorVirtualKeyboardEntry(void)
 		case 3:  // Tabulation.
 			TextBuffer[Active_Window][Editor_Cur + ins2] = '\t';
 			goto common;
-		case 4:  // Space.
-			TextBuffer[Active_Window][Editor_Cur + ins2] = ' ';
-			goto common;
 		case 5:  // Any Char.
 			TextBuffer[Active_Window][Editor_Cur + ins2] = getVirtualKeyboardEditorChar(setting->virtual_keyboard_layout, KeyBoard_Cur, KeyBoard_Caps);
+			goto common;
+		case 6:  // Symbol picker char.
+			TextBuffer[Active_Window][Editor_Cur + ins2] = (char)symbol_char;
 			goto common;
 		common:
 			TextBuffer[Active_Window][Editor_Cur + ins3] = '\0';

@@ -430,7 +430,7 @@ void TextEditor(char *path)
 					                        (KeyBoard_Cur == 2 * WFONTS - 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
 					editorKeyboardPrintLeft(LNG(TAB), KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 2 + 4,
 					                        (KeyBoard_Cur == 3 * WFONTS - 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
-					editorKeyboardPrintLeft(LNG(SPACE), KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 3 + 6,
+					editorKeyboardPrintLeft(LNG(SPECIAL), KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 3 + 6,
 					                        (KeyBoard_Cur == 4 * WFONTS - 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
 					editorKeyboardPrintLeft(LNG(KB_RETURN), KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 4 + 8,
 					                        (KeyBoard_Cur == 5 * WFONTS - 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
@@ -503,7 +503,7 @@ void TextEditor(char *path)
 						color = COL_TEXT_END;
 						Editor_TextEnd = 1;
 					} else {
-						ch = TextBuffer[Active_Window][Top_Width + tmpLen + j];
+						ch = (unsigned char)TextBuffer[Active_Window][Top_Width + tmpLen + j];
 						if (Mark[MARK_ON] && Mark[MARK_COLOR])  //Text Color Black / White If Mark.
 							color = COL_MARK_TEXT;
 						else
