@@ -10,6 +10,7 @@ enum CONFIG_STARTUP {
 	CONFIG_STARTUP_INIT_DELAY,
 	CONFIG_STARTUP_TIMEOUT,
 	CONFIG_STARTUP_RESET_IOP_ELFOAD,
+	CONFIG_STARTUP_VKEY_LAYOUT,
 	CONFIG_STARTUP_KEYBOARD,
 	CONFIG_STARTUP_USBKBD,
 	CONFIG_STARTUP_KBDMAP,
@@ -88,6 +89,8 @@ void Config_Startup(void)
 						setting->Init_Delay--;
 					else if (s == CONFIG_STARTUP_TIMEOUT && setting->timeout > 0)
 						setting->timeout--;
+					else if (s == CONFIG_STARTUP_VKEY_LAYOUT)
+						setting->virtual_keyboard_layout = normalizeVirtualKeyboardLayout(setting->virtual_keyboard_layout - 1);
 					else if (s == CONFIG_STARTUP_USBKBD)
 						setting->usbkbd_file[0] = '\0';
 					else if (s == CONFIG_STARTUP_KBDMAP)
@@ -122,6 +125,8 @@ void Config_Startup(void)
 						setting->usbkbd_used = !setting->usbkbd_used;
 					else if (s == CONFIG_STARTUP_RESET_IOP_ELFOAD)
 						setting->reboot_iop_elf_load = !setting->reboot_iop_elf_load;
+					else if (s == CONFIG_STARTUP_VKEY_LAYOUT)
+						setting->virtual_keyboard_layout = normalizeVirtualKeyboardLayout(setting->virtual_keyboard_layout + 1);
 					else if (s == CONFIG_STARTUP_USBKBD)
 						getFilePath(setting->usbkbd_file, USBKBD_IRX_CNF);
 					else if (s == CONFIG_STARTUP_KBDMAP)
@@ -204,6 +209,10 @@ void Config_Startup(void)
 			y += FONT_HEIGHT;
 			y += FONT_HEIGHT / 2;
 
+			configFormatLabelValue(c, sizeof(c), LNG(Virtual_Keyboard_Layout), getVirtualKeyboardLayoutDisplayName(setting->virtual_keyboard_layout));
+			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
+			y += FONT_HEIGHT;
+
 			sprintf(c, "  %s: %s", LNG(USB_Keyboard_Used), (setting->usbkbd_used) ? LNG(ON): LNG(OFF));
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
@@ -257,7 +266,7 @@ void Config_Startup(void)
 					len = sprintf(c, "\xFF"
 					                 "0:%s",
 					              LNG(Change));
-			} else if ((s == CONFIG_STARTUP_LANGUAGE) || (s == CONFIG_STARTUP_INIT_DELAY) || (s == CONFIG_STARTUP_TIMEOUT)) {  //language || Init_Delay || timeout
+			} else if ((s == CONFIG_STARTUP_LANGUAGE) || (s == CONFIG_STARTUP_INIT_DELAY) || (s == CONFIG_STARTUP_TIMEOUT) || (s == CONFIG_STARTUP_VKEY_LAYOUT)) {  //language || Init_Delay || timeout || vkey layout
 				if (swapKeys)
 					len = sprintf(c, "\xFF"
 					                 "1:%s \xFF"

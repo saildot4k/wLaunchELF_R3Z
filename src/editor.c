@@ -30,6 +30,7 @@ int Window[10][NUM_STATE],  // Windowing System, 10 Windows Max.
     Editor_TextEnd,                // Set To 1 When '\0' Char Is Found Tell Text End.
     KeyBoard_Cur,                  // Virtual KeyBoard Cursor.
     KeyBoard_Active,               // Virtual KeyBoard Activated Or Not.
+    KeyBoard_Caps,                 // Virtual KeyBoard caps toggle.
     del1, del2, del3, del4,        // Deleted Chars Different Cases.
     ins1, ins2, ins3, ins4, ins5,  // Added Chars Different Cases.
     t;                             // Text Cursor Timer.
@@ -69,7 +70,7 @@ void TextEditor(char *path)
 	          KEY_H = 98,
 	          KEY_X = (SCREEN_WIDTH - KEY_W) / 2,
 	          KEY_Y = (Menu_end_y - KEY_H);
-	int KEY_LEN = strlen(KEY);
+	int KEY_LEN = VKEY_LAYOUT_SIZE;
 
 	tmp[0] = '\0', tmp1[0] = '\0', ch = '\0';
 
@@ -381,7 +382,7 @@ void TextEditor(char *path)
 				        setting->color[COLOR_TEXT], TRUE, ((SCREEN_WIDTH - SCREEN_MARGIN) - (KEY_X + KEY_W + 32) - 3 * FONT_WIDTH));
 
 				for (i = 0; i < KEY_LEN; i++) {
-					drawChar(KEY[i],
+					drawChar(getVirtualKeyboardLayoutChar(setting->virtual_keyboard_layout, i, KeyBoard_Caps),
 					         KEY_X + 2 + 4 + 14 + (i % WFONTS + 1) * 20 - 32,
 					         KEY_Y + 12 + (i / WFONTS) * 18,
 					         setting->color[COLOR_TEXT]);
@@ -501,16 +502,18 @@ void TextEditor(char *path)
 					sprintf(tmp1, "R1:%s \xFF"
 					              "3:%s \xFF"
 					              "1:%s \xFF"
-					              "0:%s L2:%s R2:%s Sel:%s",
+					              "0:%s \xFF"
+					              "2:%s L2:%s R2:%s Sel:%s",
 					        LNG(Menu), LNG(Exit), LNG(Sel), LNG(BackSpace),
-					        LNG(Left), LNG(Right), LNG(Close_KB));
+					        LNG(CAPS), LNG(Left), LNG(Right), LNG(Close_KB));
 				else
 					sprintf(tmp1, "R1:%s \xFF"
 					              "3:%s \xFF"
 					              "0:%s \xFF"
-					              "1:%s L2:%s R2:%s Sel:%s",
+					              "1:%s \xFF"
+					              "2:%s L2:%s R2:%s Sel:%s",
 					        LNG(Menu), LNG(Exit), LNG(Sel), LNG(BackSpace),
-					        LNG(Left), LNG(Right), LNG(Close_KB));
+					        LNG(CAPS), LNG(Left), LNG(Right), LNG(Close_KB));
 			} else if (setting->usbkbd_used) {  //Display KeyBoard Tooltip.
 				if (Window[Active_Window][OPENED]) {
 					if (Mark[MARK_ON])

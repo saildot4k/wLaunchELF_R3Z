@@ -81,13 +81,13 @@ extern int Editor_PushRows;
 extern int Editor_TextEnd;
 extern int KeyBoard_Cur;
 extern int KeyBoard_Active;
+extern int KeyBoard_Caps;
 extern int del1, del2, del3, del4;
 extern int ins1, ins2, ins3, ins4, ins5;
 extern int t;
 extern char Path[10][MAX_PATH];
 extern const int WFONTS;
 extern const int HFONTS;
-extern char *KEY;
 
 int editorMenu(void);
 void editorVirtualKeyboardEntry(void);

@@ -219,6 +219,21 @@ enum SETTING_LK {
 	SETTING_LK_COUNT
 };
 
+enum VIRTUAL_KEYBOARD_LAYOUT {
+	VKEY_LAYOUT_ABC = 0,
+	VKEY_LAYOUT_QWERTY,
+	VKEY_LAYOUT_DVORAK,
+	VKEY_LAYOUT_AZERTY,
+	VKEY_LAYOUT_QWERTZ,
+	VKEY_LAYOUT_N,
+
+	VKEY_LAYOUT_COUNT
+};
+
+#define VKEY_LAYOUT_COLS 20
+#define VKEY_LAYOUT_ROWS 5
+#define VKEY_LAYOUT_SIZE (VKEY_LAYOUT_COLS * VKEY_LAYOUT_ROWS)
+
 typedef struct
 {
 	char CNF_Path[MAX_PATH];
@@ -261,6 +276,7 @@ typedef struct
 	int usbkbd_used;
 	int language;
 	int reboot_iop_elf_load;
+	int virtual_keyboard_layout;
 	int Show_Titles;
 	int PathPad_Lock;
 	int PSU_HugeNames;
@@ -521,6 +537,12 @@ enum {
 extern Language Lang_String[];
 extern Language Lang_Default[];
 extern void *External_Lang_Buffer;
+
+int normalizeVirtualKeyboardLayout(int layout);
+const char *getVirtualKeyboardLayoutConfigName(int layout);
+const char *getVirtualKeyboardLayoutDisplayName(int layout);
+int getVirtualKeyboardLayoutByConfigName(const char *name);
+char getVirtualKeyboardLayoutChar(int layout, int index, int caps);
 
 void Init_Default_Language(void);
 void Load_External_Language(void);

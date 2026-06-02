@@ -3,13 +3,8 @@
 //--------------------------------------------------------------
 #include "editor_private.h"
 
-const int WFONTS = 20,  // Virtual KeyBoard Width.
-    HFONTS = 5;                // Virtual KeyBoard Height.
-char *KEY = "  01ABCDEFGHIJKLM:; "
-                   "  23NOPQRSTUVWXYZ., "
-                   "  45abcdefghijklm() "
-                   "  67nopqrstuvwxyz[] "
-                   "  89+-=!#\\/?$%&@_^' ";  // Virtual KeyBoard Matrix.
+const int WFONTS = VKEY_LAYOUT_COLS,  // Virtual KeyBoard Width.
+    HFONTS = VKEY_LAYOUT_ROWS;        // Virtual KeyBoard Height.
 
 
 void editorVirtualKeyboardEntry(void)
@@ -51,6 +46,8 @@ void editorVirtualKeyboardEntry(void)
 	} else if (new_pad & PAD_SELECT) {  // Virtual KeyBoard Exit.
 		Rows_Num += 6;
 		KeyBoard_Active = 0;
+	} else if (new_pad & PAD_SQUARE) {  // Virtual KeyBoard CAPS.
+		KeyBoard_Caps = !KeyBoard_Caps;
 	} else if ((!swapKeys && new_pad & PAD_CROSS) || (swapKeys && new_pad & PAD_CIRCLE)) {  // Virtual KeyBoard Backspace
 		if (Editor_Cur > 0) {
 			if (TextMode[Active_Window] == OTHER && TextBuffer[Active_Window][Editor_Cur] == '\n' && TextBuffer[Active_Window][Editor_Cur - 1] == '\r') {
@@ -261,7 +258,7 @@ void editorVirtualKeyboardEntry(void)
 			TextBuffer[Active_Window][Editor_Cur + ins2] = ' ';
 			goto common;
 		case 5:  // Any Char.
-			TextBuffer[Active_Window][Editor_Cur + ins2] = KEY[KeyBoard_Cur];
+			TextBuffer[Active_Window][Editor_Cur + ins2] = getVirtualKeyboardLayoutChar(setting->virtual_keyboard_layout, KeyBoard_Cur, KeyBoard_Caps);
 			goto common;
 		common:
 			TextBuffer[Active_Window][Editor_Cur + ins3] = '\0';

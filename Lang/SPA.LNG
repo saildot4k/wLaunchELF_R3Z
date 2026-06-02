@@ -349,3 +349,5 @@ lang(347, Lock_Main_LaunchKey_PathPad_Paths, "Bloquear rutas principales LaunchK
 lang(348, Disable_Icons_in_File_Browser, "Desactivar iconos en explorador")
 lang(349, Language, "Idioma")
 lang(350, Reboot_IOP, "Reiniciar IOP")
+lang(351, Virtual_Keyboard_Layout, "Distribucion teclado virtual")
+lang(352, CAPS, "MAYUS")
