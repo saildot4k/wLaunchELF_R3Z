@@ -1,9 +1,6 @@
 #include "launchelf.h"
 #include "init.h"
 #include <unistd.h>
-#if defined(ETH) || defined(UDPFS)
-#include <smapregs.h>
-#endif
 
 #define IMPORT_BIN2C(_n) \
     extern u8 _n[];   \
@@ -304,42 +301,6 @@ static void load_ps2dev9(void)
 //------------------------------
 //endfunc load_ps2dev9
 //---------------------------------------------------------------------------
-#if defined(ETH) || defined(UDPFS)
-static int networkMacLooksValid(const u8 mac[6])
-{
-	int i;
-	int all_zero = 1;
-	int all_ff = 1;
-
-	for (i = 0; i < 6; i++) {
-		if (mac[i] != 0x00)
-			all_zero = 0;
-		if (mac[i] != 0xff)
-			all_ff = 0;
-	}
-
-	return !(all_zero || all_ff);
-}
-
-static int readSmapMacAddress(u8 mac[6])
-{
-	u32 mac_address_hi, mac_address_lo;
-	USE_SMAP_EMAC3_REGS;
-
-	mac_address_hi = SMAP_EMAC3_GET32(SMAP_R_EMAC3_ADDR_HI);
-	mac_address_lo = SMAP_EMAC3_GET32(SMAP_R_EMAC3_ADDR_LO);
-
-	mac[0] = mac_address_hi >> 8;
-	mac[1] = mac_address_hi;
-	mac[2] = mac_address_lo >> 24;
-	mac[3] = mac_address_lo >> 16;
-	mac[4] = mac_address_lo >> 8;
-	mac[5] = mac_address_lo;
-
-	return networkMacLooksValid(mac);
-}
-#endif
-
 #ifdef ETH
 #define WLE_PS2IP_IRX_ID 0x0B0125F2
 #define WLE_PS2IPS_ID_GETCONFIG 12
@@ -359,6 +320,22 @@ static SifRpcClientData_t ps2ip_rpc_client __attribute__((aligned(64)));
 static wle_ip_info_t ps2ip_rpc_info __attribute__((aligned(64)));
 static char ps2ip_rpc_netif[4] __attribute__((aligned(64))) = "sm0";
 static u8 ps2ip_rpc_bound = 0;
+
+static int ps2ipMacLooksValid(const u8 mac[6])
+{
+	int i;
+	int all_zero = 1;
+	int all_ff = 1;
+
+	for (i = 0; i < 6; i++) {
+		if (mac[i] != 0x00)
+			all_zero = 0;
+		if (mac[i] != 0xff)
+			all_ff = 0;
+	}
+
+	return !(all_zero || all_ff);
+}
 
 static int bindPs2ipRpc(void)
 {
@@ -413,38 +390,24 @@ static void load_ps2ip(void)
 //---------------------------------------------------------------------------
 int getNetworkMacAddress(u8 mac[6])
 {
-#if defined(ETH) || defined(UDPFS)
-	if (mac == NULL || !ps2dev9_loaded)
+#ifdef ETH
+	if (mac == NULL || !ps2dev9_loaded || !have_ps2ip || !have_ps2smap)
 		return 0;
 
-#ifdef ETH
-	if (have_ps2smap && readSmapMacAddress(mac))
-		return 1;
+	if (!bindPs2ipRpc())
+		return 0;
 
-	if (have_ps2ip && have_ps2smap) {
-		if (!bindPs2ipRpc())
-			return 0;
+	memset(&ps2ip_rpc_info, 0, sizeof(ps2ip_rpc_info));
+	if (SifCallRpc(&ps2ip_rpc_client, WLE_PS2IPS_ID_GETCONFIG, 0,
+	        ps2ip_rpc_netif, sizeof(ps2ip_rpc_netif),
+	        &ps2ip_rpc_info, sizeof(ps2ip_rpc_info), 0, 0) < 0)
+		return 0;
 
-		memset(&ps2ip_rpc_info, 0, sizeof(ps2ip_rpc_info));
-		if (SifCallRpc(&ps2ip_rpc_client, WLE_PS2IPS_ID_GETCONFIG, 0,
-		        ps2ip_rpc_netif, sizeof(ps2ip_rpc_netif),
-		        &ps2ip_rpc_info, sizeof(ps2ip_rpc_info), 0, 0) < 0)
-			return 0;
+	if (!ps2ipMacLooksValid(ps2ip_rpc_info.hw_addr))
+		return 0;
 
-		if (!networkMacLooksValid(ps2ip_rpc_info.hw_addr))
-			return 0;
-
-		memcpy(mac, ps2ip_rpc_info.hw_addr, 6);
-		return 1;
-	}
-#endif
-
-#ifdef UDPFS
-	if (have_udpfs_smap && readSmapMacAddress(mac))
-		return 1;
-#endif
-
-	return 0;
+	memcpy(mac, ps2ip_rpc_info.hw_addr, 6);
+	return 1;
 #else
 	(void)mac;
 	return 0;
