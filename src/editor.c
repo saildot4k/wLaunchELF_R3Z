@@ -52,7 +52,7 @@ static int editorKeyboardTextWidth(int x, int box_right)
 {
 	int width;
 
-	width = box_right - LINE_THICKNESS - x + 1;
+	width = box_right - x + 1;
 	return (width > 0) ? width : FONT_WIDTH;
 }
 

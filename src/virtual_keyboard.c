@@ -34,16 +34,16 @@ static const char *vkey_layout_rows[VKEY_LAYOUT_COUNT][VKEY_SHIFT_COUNT][VKEY_LA
     {
         {
             "1234567890-=     ",
-            "abcdefghijklmn[] ",
-            "opqrstuvwxyz;'\\  ",
-            " .,/`            ",
+            "abcdefghij[]     ",
+            "klmnopqrs;'\\     ",
+            " tuvwxyz,./`     ",
             "    _            ",
         },
         {
             "!@#$%^&*()_+     ",
-            "ABCDEFGHIJKLMN{} ",
-            "OPQRSTUVWXYZ:\"|  ",
-            " <>?~            ",
+            "ABCDEFGHIJ{}     ",
+            "KLMNOPQRS:\"|     ",
+            " TUVWXYZ<>?~     ",
             "    _            ",
         },
     },

@@ -10,6 +10,7 @@
 
 asm/*
 obj/*
+build/stale-code-report.txt
 
 githash.h
 !iop/__precompiled/*

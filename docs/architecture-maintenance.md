@@ -43,7 +43,7 @@ Use:
 
 - `make stale-audit`
 
-CI uploads `stale-code-report.txt` as an artifact.
+CI does not upload this report; it is a local/manual maintenance aid only.
 
 ## Recommended Future Splits
 

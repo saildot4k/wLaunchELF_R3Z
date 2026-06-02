@@ -218,7 +218,7 @@ Init_Delay = 0
 # the popup keyboard and the text editor keyboard. Valid values are:
 # abc, qwerty, dvorak, azerty, qwertz, abnt, and abnt2.
 # ----------------------------------------------------------------------
-VirtualKeyboardLayout = abc
+VirtualKeyboardLayout = qwerty
 # ----------------------------------------------------------------------
 # USBKBD_USED allows you to disable initialization of the USB keyboard
 # driver. This is mainly useful when you need to test some specific
