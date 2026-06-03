@@ -3,16 +3,24 @@ ifeq ($(SIO2MAN),0) # no custom SIO2 stack? use ps2dev:1.0 drivers
   MCMAN_SOURCE = $(PS2SDK)/iop/irx/mcman.irx
   MCSERV_SOURCE = $(PS2SDK)/iop/irx/mcserv.irx
   SIO2MAN_SOURCE = $(PS2SDK)/iop/irx/sio2man.irx
-else # custom SIO2 stack (MMCE/MX4SIO/manual): use newer IRX to avoid deadlocks
-  $(info using latest mc drivers (prefer PS2SDK IRX, fallback bundled))
+else # custom SIO2 stack (MMCE/MX4SIO/manual): keep mc/pad on the SIO2MAN 1.x ABI
+  $(info using SIO2MAN 1.x-compatible mc/pad drivers)
   MCMAN_SOURCE = iop/__precompiled/mcman.irx
   MCSERV_SOURCE = iop/__precompiled/mcserv.irx
   SIO2MAN_SOURCE = iop/__precompiled/sio2man.irx
-  ifneq ($(wildcard $(PS2SDK)/iop/irx/mcman.irx),)
-    MCMAN_SOURCE = $(PS2SDK)/iop/irx/mcman.irx
+  ifneq ($(wildcard $(PS2SDK)/iop/irx/mcman-1400.irx),)
+    MCMAN_SOURCE = $(PS2SDK)/iop/irx/mcman-1400.irx
+  else
+    ifneq ($(wildcard $(PS2SDK)/iop/irx/mcman.irx),)
+      MCMAN_SOURCE = $(PS2SDK)/iop/irx/mcman.irx
+    endif
   endif
-  ifneq ($(wildcard $(PS2SDK)/iop/irx/mcserv.irx),)
-    MCSERV_SOURCE = $(PS2SDK)/iop/irx/mcserv.irx
+  ifneq ($(wildcard $(PS2SDK)/iop/irx/mcserv-1400.irx),)
+    MCSERV_SOURCE = $(PS2SDK)/iop/irx/mcserv-1400.irx
+  else
+    ifneq ($(wildcard $(PS2SDK)/iop/irx/mcserv.irx),)
+      MCSERV_SOURCE = $(PS2SDK)/iop/irx/mcserv.irx
+    endif
   endif
   ifneq ($(wildcard $(PS2SDK)/iop/irx/sio2man.irx),)
     SIO2MAN_SOURCE = $(PS2SDK)/iop/irx/sio2man.irx
@@ -22,6 +30,26 @@ endif
 PADMAN_SOURCE = $(PS2SDK)/iop/irx/padman.irx
 ifneq ($(wildcard iop/__precompiled/padman.irx),)
 PADMAN_SOURCE = iop/__precompiled/padman.irx
+endif
+ifeq ($(SIO2MAN),1)
+  ifneq ($(wildcard $(PS2SDK)/iop/irx/padman-1400.irx),)
+    PADMAN_SOURCE = $(PS2SDK)/iop/irx/padman-1400.irx
+  endif
+endif
+
+EXTFLASH_SOURCE = iop/__precompiled/extflash.irx
+XFROMMAN_SOURCE = iop/__precompiled/xfromman.irx
+XFORMSERV_SOURCE = $(PS2SDK)/iop/irx/xfromserv.irx
+ifeq ($(XFROM),1)
+  ifneq ($(wildcard $(PS2SDK)/iop/irx/extflash.irx),)
+    EXTFLASH_SOURCE = $(PS2SDK)/iop/irx/extflash.irx
+  endif
+  ifneq ($(wildcard $(PS2SDK)/iop/irx/xfromman.irx),)
+    XFROMMAN_SOURCE = $(PS2SDK)/iop/irx/xfromman.irx
+  endif
+  ifeq ($(wildcard $(XFORMSERV_SOURCE)),)
+    $(error Missing xfromserv.irx. Update PS2SDK/ps2dev container for XFROM support)
+  endif
 endif
 
 # Prefer newer storage stack modules:
@@ -251,11 +279,14 @@ $(EE_ASM_DIR)mx4sio_bd.s: $(MX4SIO_BD_SOURCE) | $(EE_ASM_DIR)
 $(EE_ASM_DIR)mmceman_irx.s: iop/__precompiled/mmceman.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ mmceman_irx
  
-$(EE_ASM_DIR)extflash_irx.s: iop/__precompiled/extflash.irx | $(EE_ASM_DIR)
+$(EE_ASM_DIR)extflash_irx.s: $(EXTFLASH_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ extflash_irx
 
-$(EE_ASM_DIR)xfromman_irx.s: iop/__precompiled/xfromman.irx | $(EE_ASM_DIR)
+$(EE_ASM_DIR)xfromman_irx.s: $(XFROMMAN_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ xfromman_irx
+
+$(EE_ASM_DIR)xfromserv_irx.s: $(XFORMSERV_SOURCE) | $(EE_ASM_DIR)
+	$(BIN2S) $< $@ xfromserv_irx
 
 #---{ USB }---#
 

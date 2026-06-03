@@ -129,6 +129,7 @@ static u8 have_ata_bd = 0;
 #endif
 #ifdef XFROM
 static u8 have_Flash_modules = 0;
+static u8 xfromserv_loaded = 0;
 #endif
 #ifdef MMCE
 static u8 have_mmce = 0;
@@ -396,13 +397,19 @@ static int load_ps2hdd_stack(int with_ata_bd)
 #ifdef XFROM
 IMPORT_BIN2C(extflash_irx);
 IMPORT_BIN2C(xfromman_irx);
+IMPORT_BIN2C(xfromserv_irx);
 static void load_pflash(void)
 {
 	int ID __attribute__((unused)), ret;
-		ID = SifExecModuleBuffer(extflash_irx, size_extflash_irx, 0, NULL, &ret);
-		DPRINTF(" [PFLASH]: ID=%d, ret=%d\n", ID, ret);
-		ID = SifExecModuleBuffer(xfromman_irx, size_xfromman_irx, 0, NULL, &ret);
-		DPRINTF(" [XFROMMAN]: ID=%d, ret=%d\n", ID, ret);
+	ID = SifExecModuleBuffer(extflash_irx, size_extflash_irx, 0, NULL, &ret);
+	DPRINTF(" [PFLASH]: ID=%d, ret=%d\n", ID, ret);
+	ID = SifExecModuleBuffer(xfromman_irx, size_xfromman_irx, 0, NULL, &ret);
+	DPRINTF(" [XFROMMAN]: ID=%d, ret=%d\n", ID, ret);
+	ID = SifExecModuleBuffer(xfromserv_irx, size_xfromserv_irx, 0, NULL, &ret);
+	DPRINTF(" [XFROMSERV]: ID=%d, ret=%d\n", ID, ret);
+	xfromserv_loaded = (ID >= 0 && ret == 0);
+	if (xfromserv_loaded)
+		xfromInit(MC_TYPE_MC);
 }
 //------------------------------
 //endfunc load_pflash
@@ -1407,10 +1414,10 @@ int loadHddModules(void)
 //endfunc loadHddModules
 //---------------------------------------------------------------------------
 #ifdef XFROM
-void loadFlashModules(void)
+int loadFlashModules(void)
 {
 	if (!console_is_PSX)
-		return;
+		return 0;
 
 	ensureCoreIoStackReady();
 	if (!have_Flash_modules) {
@@ -1420,6 +1427,7 @@ void loadFlashModules(void)
 		load_pflash();
 		have_Flash_modules = TRUE;
 	}
+	return xfromserv_loaded;
 }
 //------------------------------
 //endfunc loadFlashModules
@@ -1577,6 +1585,7 @@ void Reset()
 	ps2kbd_opened = 0;
 	#ifdef XFROM
 		have_Flash_modules = 0;
+		xfromserv_loaded = 0;
 	#endif
 #ifdef DVRP
 	have_DVRP_HDD_modules = 0;

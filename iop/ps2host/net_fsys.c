@@ -229,7 +229,7 @@ static int fsysLseek(int fd, unsigned int offset, int whence)
 	return ret;
 }
 //----------------------------------------------------------------------------
-static int fsysIoctl(iop_file_t *file, unsigned long request, void *data)
+static int fsysIoctl(iop_file_t *file, int request, void *data)
 {
 	int remote_fd = ((struct filedesc_info *)file)->own_fd;
 	int ret;

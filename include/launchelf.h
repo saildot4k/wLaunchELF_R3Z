@@ -347,7 +347,7 @@ int uLE_cdDiscValid(void);
 int uLE_cdStop(void);
 int IsSupportedFileType(char *path);
 #ifdef XFROM
-void loadFlashModules(void);
+int loadFlashModules(void);
 #endif
 #ifdef MMCE
 int loadMmceModules(void);

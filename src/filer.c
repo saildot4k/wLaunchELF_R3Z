@@ -265,6 +265,61 @@ int readMC(const char *path, FILEINFO *info, int max)
 //------------------------------
 //endfunc readMC
 //--------------------------------------------------------------
+#ifdef XFROM
+static const char *getXfromRelativePath(const char *path)
+{
+	const char *relative_path = strchr(path, ':');
+
+	if (relative_path == NULL)
+		return path;
+	relative_path++;
+	if (*relative_path == '/')
+		relative_path++;
+	return relative_path;
+}
+
+int readXFROM(const char *path, FILEINFO *info, int max)
+{
+	static sceMcTblGetDir mcDir[MAX_ENTRY] __attribute__((aligned(64)));
+	char dir[MAX_PATH];
+	int i, j, ret, limit;
+
+	if (!console_is_PSX || !loadFlashModules())
+		return 0;
+
+	xfromSync(0, NULL, NULL);
+
+	xfromGetInfo(0, 0, &mctype_PSx, NULL, NULL);
+	xfromSync(0, NULL, &ret);
+	if (mctype_PSx == 2)  //PS2 MC ?
+		time_valid = 1;
+	size_valid = 1;
+
+	strncpy(dir, getXfromRelativePath(path), sizeof(dir) - 2);
+	dir[sizeof(dir) - 2] = '\0';
+	strcat(dir, "*");
+
+	limit = (max < MAX_ENTRY - 2) ? max : MAX_ENTRY - 2;
+	xfromGetDir(0, 0, dir, 0, limit, mcDir);
+	xfromSync(0, NULL, &ret);
+	if (ret < 0)
+		return 0;
+
+	for (i = j = 0; i < ret && j < max; i++) {
+		if (mcDir[i].AttrFile & sceMcFileAttrSubdir &&
+		    (!strcmp((char *)mcDir[i].EntryName, ".") || !strcmp((char *)mcDir[i].EntryName, "..")))
+			continue;  //Skip pseudopaths "." and ".."
+		strcpy(info[j].name, (char *)mcDir[i].EntryName);
+		info[j].stats = mcDir[i];
+		j++;
+	}
+
+	return j;
+}
+//------------------------------
+//endfunc readXFROM
+//--------------------------------------------------------------
+#endif
 #ifndef LIBCDVD_LEGACY
 int readCD(const char *path, FILEINFO *info, int max)
 {
@@ -1029,6 +1084,10 @@ int getDir(const char *path, FILEINFO *info)
 
 	if (!strncmp(path, "mc", 2))
 		n = readMC(path, info, max);
+#ifdef XFROM
+	else if (!strncmp(path, "xfrom", 5))
+		n = readXFROM(path, info, max);
+#endif
 	else if (!strncmp(path, "hdd", 3))
 		n = readHDD(path, info, max);
 #ifdef DVRP
@@ -1258,14 +1317,6 @@ int getDir(const char *path, FILEINFO *info)
 				}
 			}
 		}
-	}
-#endif
-#ifdef XFROM
-	else if (!strncmp(path, "xfrom", 5)) {
-		if (!console_is_PSX)
-			return 0;
-		loadFlashModules();
-		n = readGENERIC(path, info, max);
 	}
 #endif
 	else if (!strncmp(path, "vmc", 3))

@@ -23,7 +23,11 @@
 
 static int isMemoryCardLikePath(const char *path)
 {
-	return (!strncmp(path, "mc", 2) || !strncmp(path, "vmc", 3));
+	return (!strncmp(path, "mc", 2) || !strncmp(path, "vmc", 3)
+#ifdef XFROM
+	        || !strncmp(path, "xfrom", 5)
+#endif
+	        );
 }
 
 static int applyMcInfoToMcPath(const char *path, const sceMcTblGetDir *info)
@@ -97,6 +101,43 @@ static int applyMcInfoToVmcPath(const char *path, const sceMcTblGetDir *info)
 #endif
 	return ret;
 }
+
+#ifdef XFROM
+static const char *getXfromRelativePath(const char *path)
+{
+	const char *relative_path = strchr(path, ':');
+
+	if (relative_path == NULL)
+		return path;
+	relative_path++;
+	if (*relative_path == '/')
+		relative_path++;
+	return relative_path;
+}
+
+static int applyMcInfoToXfromPath(const char *path, const sceMcTblGetDir *info)
+{
+	int dummy, ret = 0;
+
+	if (strncmp(path, "xfrom", 5))
+		return -1;
+
+	xfromGetInfo(0, 0, &dummy, &dummy, &dummy);
+	xfromSync(0, NULL, &dummy);
+	xfromSetFileInfo(0, 0, getXfromRelativePath(path), info, MC_SFI);
+	xfromSync(0, NULL, &ret);
+#if FILEOP_TRACE
+	printf("[XFROM_STAT] setinfo path='%s' attr=0x%x reserve1=0x%x reserve2=0x%x size=%u "
+	       "ctime=%04d-%02d-%02d %02d:%02d:%02d mtime=%04d-%02d-%02d %02d:%02d:%02d ret=%d\n",
+	       path, info->AttrFile, info->Reserve1, info->Reserve2, info->FileSizeByte,
+	       info->_Create.Year, info->_Create.Month, info->_Create.Day,
+	       info->_Create.Hour, info->_Create.Min, info->_Create.Sec,
+	       info->_Modify.Year, info->_Modify.Month, info->_Modify.Day,
+	       info->_Modify.Hour, info->_Modify.Min, info->_Modify.Sec, ret);
+#endif
+	return ret;
+}
+#endif
 
 // getGameTitle below is used to extract the real save title of
 // an MC gamesave folder. Normally this is held in the icon.sys
@@ -482,6 +523,13 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 				//correct timestamps and attributes (requires MC-specific functions)
 				if (!strncmp(out, "mc", 2))
 					psu_restore_apply_entry_stats_to_mc(out, &files[0].stats, MC_SFI);
+#ifdef XFROM
+				else if (!strncmp(out, "xfrom", 5)) {
+					strcpy(tmp, out);
+					strncat(tmp, (const char *)files[0].stats.EntryName, 32);
+					applyMcInfoToXfromPath(tmp, &files[0].stats);
+				}
+#endif
 			}                                 //ends main for loop of valid PM_PSU_RESTORE mode
 			genClose(PM_file[recurses + 1]);  //Close the PSU file
 			                                  //Finally fix the stats of the containing folder
@@ -534,6 +582,12 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 				}
 			} else if (!strncmp(out, "vmc", 3)) {               //Handle folder copied to VMC
 				applyMcInfoToVmcPath(out, &file.stats);
+#ifdef XFROM
+			} else if (!strncmp(out, "xfrom", 5)) {             //Handle folder copied to XFROM
+				if (!isMemoryCardLikePath(in))                  //Handle folder copied from non-MC/non-VMC/non-XFROM
+					file.stats.AttrFile = MC_ATTR_norm_folder;  //normalize MC folder attribute
+				applyMcInfoToXfromPath(out, &file.stats);
+#endif
 			} else {                                            //Handle folder copied to non-MC
 				if (!strncmp(out, "host", 4) || !strncmp(out, "udpfs", 5)) {  //for files copied to host/udpfs: we skip Chstat
 				} else if (!strncmp(out, "mass", 4)) {  //for files copied to mass: we skip Chstat
@@ -561,6 +615,10 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 			applyMcInfoToMcPath(out, &file.stats);
 		} else if ((PM_flag[recurses + 1] == PM_PSU_RESTORE) && !strncmp(out, "vmc", 3)) {
 			applyMcInfoToVmcPath(out, &file.stats);
+#ifdef XFROM
+		} else if ((PM_flag[recurses + 1] == PM_PSU_RESTORE) && !strncmp(out, "xfrom", 5)) {
+			applyMcInfoToXfromPath(out, &file.stats);
+#endif
 		}
 		//the return code below is used if there were no errors copying a folder
 		return 0;
@@ -738,9 +796,9 @@ non_PSU_RESTORE_init:
 		sprintf(tmp, "\n%s : ", LNG(Remain_Size));
 		strcat(progress, tmp);
 		if (size <= 1024)
-			sprintf(tmp, "%lu %s", (unsigned long)size, LNG(bytes));  // bytes
+			sprintf(tmp, "%llu %s", (unsigned long long)size, LNG(bytes));  // bytes
 		else
-			sprintf(tmp, "%.0f %s", (double)size / 1024.0, LNG(Kbytes));  // Kbytes
+			sprintf(tmp, "%llu %s", (unsigned long long)(size / 1024), LNG(Kbytes));  // Kbytes
 		strcat(progress, tmp);
 
 		sprintf(tmp, "\n%s: ", LNG(Current_Speed));
@@ -767,7 +825,7 @@ non_PSU_RESTORE_init:
 
 		sprintf(tmp, "\n\n%s: ", LNG(Written_Total));
 		strcat(progress, tmp);
-		sprintf(tmp, "%.0f %s", (double)written_size / 1024.0, LNG(Kbytes));  //Kbytes
+		sprintf(tmp, "%llu %s", (unsigned long long)(written_size / 1024), LNG(Kbytes));  //Kbytes
 		strcat(progress, tmp);
 
 		sprintf(tmp, "\n%s: ", LNG(Average_Speed));
@@ -892,6 +950,12 @@ copy_file_data_done:
 		}
 	} else if (!strncmp(out, "vmc", 3)) {             //Handle file copied to VMC
 		applyMcInfoToVmcPath(out, &file.stats);
+#ifdef XFROM
+	} else if (!strncmp(out, "xfrom", 5)) {           //Handle file copied to XFROM
+		if (!isMemoryCardLikePath(in))                //Handle file copied from non-MC/non-VMC/non-XFROM
+			file.stats.AttrFile = MC_ATTR_norm_file;  //normalize MC file attribute
+		applyMcInfoToXfromPath(out, &file.stats);
+#endif
 	} else {                                          //Handle file copied to non-MC
 		if (!strncmp(out, "host", 4) || !strncmp(out, "udpfs", 5)) {  //for files copied to host/udpfs: we skip Chstat
 		} else if (!strncmp(out, "mass", 4)) {  //for files copied to mass: we skip Chstat

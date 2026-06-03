@@ -5,6 +5,20 @@
 
 #define IOCTL_RENAME 0xFEEDC0DE
 
+#ifdef XFROM
+static const char *getXfromRelativePath(const char *path)
+{
+	const char *relative_path = strchr(path, ':');
+
+	if (relative_path == NULL)
+		return path;
+	relative_path++;
+	if (*relative_path == '/')
+		relative_path++;
+	return relative_path;
+}
+#endif
+
 u64 getFileSize(const char *path, const FILEINFO *file)
 {
 	iox_stat_t stat;
@@ -181,7 +195,12 @@ int delete (const char *path, const FILEINFO *file)
 			mcSync(0, NULL, NULL);
 			mcDelete(dir[2] - '0', 0, &dir[4]);
 			mcSync(0, NULL, &ret);
-
+#ifdef XFROM
+		} else if (!strncmp(dir, "xfrom", 5)) {
+			xfromSync(0, NULL, NULL);
+			xfromDelete(0, 0, getXfromRelativePath(dir));
+			xfromSync(0, NULL, &ret);
+#endif
 		} else if (!strncmp(path, "hdd", 3) || !strncmp(path, "dvr_hdd", 7)) {
 			ret = fileXioRmdir(hdddir);
 		} else if (!strncmp(path, "vmc", 3)) {
@@ -196,6 +215,12 @@ int delete (const char *path, const FILEINFO *file)
 			mcSync(0, NULL, NULL);
 			mcDelete(dir[2] - '0', 0, &dir[4]);
 			mcSync(0, NULL, &ret);
+#ifdef XFROM
+		} else if (!strncmp(path, "xfrom", 5)) {
+			xfromSync(0, NULL, NULL);
+			xfromDelete(0, 0, getXfromRelativePath(dir));
+			xfromSync(0, NULL, &ret);
+#endif
 		} else if (!strncmp(path, "hdd", 3) || !strncmp(path, "dvr_hdd", 7)) {
 			ret = fileXioRemove(hdddir);
 		} else if (!strncmp(path, "vmc", 3)) {
@@ -267,6 +292,34 @@ int Rename(const char *path, const FILEINFO *file, const char *name)
 					ret = -EEXIST;
 			}
 		}
+#ifdef XFROM
+	} else if (!strncmp(path, "xfrom", 5)) {
+		sprintf(oldPath, "%s%s", path, file->name);
+		sprintf(newPath, "%s%s", path, name);
+		if ((test = fileXioDopen(newPath)) >= 0) {  //Does folder of same name exist ?
+			fileXioDclose(test);
+			ret = -EEXIST;
+		} else if ((test = fileXioOpen(newPath, FIO_O_RDONLY, 0)) >= 0) {  //Does file of same name exist ?
+			fileXioClose(test);
+			ret = -EEXIST;
+		} else {  //No file/folder of the same name exists
+			xfromGetInfo(0, 0, &mctype_PSx, NULL, NULL);
+			xfromSync(0, NULL, &test);
+			if (mctype_PSx == 2)  //PS2 MC ?
+				snprintf((char *)file->stats.EntryName, 32, "%.31s", name);
+			xfromSetFileInfo(0, 0, getXfromRelativePath(oldPath), &file->stats, 0x0010);  //Fix file stats
+			xfromSync(0, NULL, &ret);
+			if (ret == -4)
+				ret = -EEXIST;
+			else if (mctype_PSx != 2) {  //PS1 MC !
+				snprintf((char *)file->stats.EntryName, 32, "%.31s", name);
+				xfromSetFileInfo(0, 0, getXfromRelativePath(oldPath), &file->stats, 0x0010);  //Fix file stats
+				xfromSync(0, NULL, &ret);
+				if (ret == -4)
+					ret = -EEXIST;
+			}
+		}
+#endif
 #if defined(ETH) || defined(UDPFS)
 	} else if (!strncmp(path, "host", 4) || !strncmp(path, "udpfs", 5)) {
 		snprintf(oldPath, sizeof(oldPath), "%s%s", path, file->name);
@@ -335,6 +388,16 @@ int newdir(const char *path, const char *name)
 		mcSync(0, NULL, &ret);
 		if (ret == -4)
 			ret = -EEXIST;  //return fileXio error code for pre-existing folder
+#ifdef XFROM
+	} else if (!strncmp(path, "xfrom", 5)) {
+		snprintf(dir, sizeof(dir), "%s%s", getXfromRelativePath(path), name);
+		genLimObjName(dir, 0);
+		xfromSync(0, NULL, NULL);
+		xfromMkDir(0, 0, dir);
+		xfromSync(0, NULL, &ret);
+		if (ret == -4)
+			ret = -EEXIST;  //return fileXio error code for pre-existing folder
+#endif
 #if defined(ETH) || defined(UDPFS)
 	} else if (!strncmp(path, "host", 4) || !strncmp(path, "udpfs", 5)) {
 		strcpy(dir, path);

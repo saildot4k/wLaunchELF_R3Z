@@ -2,6 +2,7 @@
 //File name:    elf.c
 //--------------------------------------------------------------
 #include "launchelf.h"
+#include <elf-loader.h>
 
 #define MAX_PATH 1025
 
@@ -289,6 +290,35 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 	        (handoff_path != NULL) ? handoff_path : "",
 	        (party != NULL) ? party : "");
 	DPRINTF("RunLoaderElf: loader target='%s'\n", exec_target);
+
+	if (exec_kind == 1) {
+#ifdef DVRP
+		const int is_dvr_pfs = ((!strncmp(party, "dvr_hdd0:", 9)) && (!strncmp(filename, "dvr_pfs0:", 9)));
+#endif
+		const int is_hdd_pfs = ((!strncmp(party, "hdd0:", 5)) && (!strncmp(filename, "pfs0:", 5)));
+		int ret;
+
+		if (is_hdd_pfs) {
+			if (0 > fileXioMount("pfs0:", party, FIO_MT_RDONLY)) {
+				unmountParty(0);
+				if (0 > fileXioMount("pfs0:", party, FIO_MT_RDONLY))
+					return;
+			}
+#ifdef DVRP
+		} else if (is_dvr_pfs) {
+			if (0 > fileXioMount("dvr_pfs0:", party, FIO_MT_RDONLY)) {
+				unmountDVRPParty(0);
+				if (0 > fileXioMount("dvr_pfs0:", party, FIO_MT_RDONLY))
+					return;
+			}
+#endif
+		}
+
+		DPRINTF("RunLoaderElf: elf-loader2 target='%s' party='%s'\n", filename, party);
+		ret = LoadELFFromFileWithPartition(filename, (party != NULL && party[0] != '\0') ? party : NULL, 0, NULL);
+		DPRINTF("RunLoaderElf: elf-loader2 returned %d\n", ret);
+		exit(126);
+	}
 
 	if ((!strncmp(party, "hdd0:", 5)) && (!strncmp(filename, "pfs0:", 5))) {
 		if (0 > fileXioMount("pfs0:", party, FIO_MT_RDONLY)) {

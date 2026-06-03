@@ -1261,6 +1261,13 @@ int getFilePath(char *out, int cnfmode)
 					mcSync(0, NULL, &ret);
 					freeSpace = mcfreeSpace * ((mctype_PSx == 1) ? 8192 : 1024);
 					vfreeSpace = TRUE;
+#ifdef XFROM
+				} else if (!strncmp(path, "xfrom", 5)) {
+					xfromGetInfo(0, 0, &mctype_PSx, &mcfreeSpace, NULL);
+					xfromSync(0, NULL, &ret);
+					freeSpace = mcfreeSpace * ((mctype_PSx == 1) ? 8192 : 1024);
+					vfreeSpace = TRUE;
+#endif
 				} else if (!strncmp(path, "hdd", 3) && strcmp(path, "hdd0:/")) {
 					u64 ZoneFree, ZoneSize;
 					char pfs_str[6];
@@ -1390,7 +1397,7 @@ int getFilePath(char *out, int cnfmode)
 					printXY(tmp, x + 4, y, color, TRUE, name_limit);
 				if (file_show > 0) {
 					//					unsigned int size = files[top+i].stats.fileSizeByte;
-					unsigned long long size = ((unsigned long long)files[top + i].stats.Reserve2 << 32) | files[top + i].stats.FileSizeByte;
+					u64 size = ((u64)files[top + i].stats.Reserve2 << 32) | files[top + i].stats.FileSizeByte;
 					int scale = 0;  //0==Bytes, 1==KBytes, 2==MBytes, 3==GB
 					char scale_s[6] = " KMGTP";
 					PS2TIME timestamp = *(PS2TIME *)&files[top + i].stats._Modify;
@@ -1409,9 +1416,7 @@ int getFilePath(char *out, int cnfmode)
 							scale++;
 							size /= 1024;
 						}
-						//						sprintf(tmp, "%5u%cB", size, scale_s[scale]);
-						//size shouldn't be over 99999, and seems sprintf doesn't support unsigned long long (%llu crashes)
-						sprintf(tmp, "%5u%cB", (unsigned)size, scale_s[scale]);
+						sprintf(tmp, "%5llu%cB", (unsigned long long)size, scale_s[scale]);
 					}
 
 					if (!time_valid || !(top + i))
@@ -1674,9 +1679,16 @@ static void submenu_func_GetSize(char *mess, char *path, FILEINFO *files)
 			mcSync(0, NULL, &ret);
 			sprintf(mess + text_pos, " %s=%d%n", LNG(mctype), mctype_PSx, &text_inc);
 			text_pos += text_inc;
+#ifdef XFROM
+		} else if (!strncmp(path, "xfrom", 5)) {
+			xfromGetInfo(0, 0, &mctype_PSx, NULL, NULL);
+			xfromSync(0, NULL, &ret);
+			sprintf(mess + text_pos, " %s=%d%n", LNG(mctype), mctype_PSx, &text_inc);
+			text_pos += text_inc;
+#endif
 		}
 		//sprintf(mess+text_pos, " mcTsz=%d%n", files[sel].stats.fileSizeByte, &text_inc);
-		unsigned long long size = ((unsigned long long)files[sel].stats.Reserve2 << 32) | files[sel].stats.FileSizeByte;
+		u64 size = ((u64)files[sel].stats.Reserve2 << 32) | files[sel].stats.FileSizeByte;
 		//Max length is 20 characters+NULL
 		char sizeC[21] = {0};
 		char *sizeP = &sizeC[21];

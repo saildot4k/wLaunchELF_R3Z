@@ -102,7 +102,8 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 #ifdef XFROM
 		if (!console_is_PSX)
 			goto ELFnotFound;
-		loadFlashModules();
+		if (!loadFlashModules())
+			goto ELFnotFound;
 		if ((t = checkELFheader(path)) <= 0)
 			goto ELFnotFound;
 		strcpy(fullpath, path);

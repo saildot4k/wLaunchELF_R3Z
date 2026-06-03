@@ -1,9 +1,9 @@
 #include "launchelf.h"
 #include "gui_colors.h"
 
-static unsigned long hextoul(const char *string)
+static u32 hextou32(const char *string)
 {
-	unsigned long value;
+	u32 value;
 	char c;
 
 	value = 0;
@@ -54,21 +54,21 @@ size_t storeGuiColorsCNF(char *cnf_buf)
 int scanGuiColorsCNF(char *name, char *value)
 {
 	if (!strcmp(name, "GUI_Col_1_ABGR"))
-		setting->color[COLOR_BACKGR] = hextoul(value);
+		setting->color[COLOR_BACKGR] = hextou32(value);
 	else if (!strcmp(name, "GUI_Col_2_ABGR"))
-		setting->color[COLOR_FRAME] = hextoul(value);
+		setting->color[COLOR_FRAME] = hextou32(value);
 	else if (!strcmp(name, "GUI_Col_3_ABGR"))
-		setting->color[COLOR_SELECT] = hextoul(value);
+		setting->color[COLOR_SELECT] = hextou32(value);
 	else if (!strcmp(name, "GUI_Col_4_ABGR"))
-		setting->color[COLOR_TEXT] = hextoul(value);
+		setting->color[COLOR_TEXT] = hextou32(value);
 	else if (!strcmp(name, "GUI_Col_5_ABGR"))
-		setting->color[COLOR_GRAPH1] = hextoul(value);
+		setting->color[COLOR_GRAPH1] = hextou32(value);
 	else if (!strcmp(name, "GUI_Col_6_ABGR"))
-		setting->color[COLOR_GRAPH2] = hextoul(value);
+		setting->color[COLOR_GRAPH2] = hextou32(value);
 	else if (!strcmp(name, "GUI_Col_7_ABGR"))
-		setting->color[COLOR_GRAPH3] = hextoul(value);
+		setting->color[COLOR_GRAPH3] = hextou32(value);
 	else if (!strcmp(name, "GUI_Col_8_ABGR"))
-		setting->color[COLOR_GRAPH4] = hextoul(value);
+		setting->color[COLOR_GRAPH4] = hextou32(value);
 	else if (!strcmp(name, "TV_mode"))
 		setting->TV_mode = atoi(value);
 	else if (!strcmp(name, "Screen_Offset_X"))

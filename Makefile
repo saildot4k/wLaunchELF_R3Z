@@ -45,7 +45,7 @@ EE_MATH_LIB := -lmf
 endif
 
 EE_LIBS = -lgskit -ldmakit -lmc -lhdd -lkbd $(EE_MATH_LIB) \
-			-lcdvd -lc -lfileXio -lpatches -lpoweroff -ldebug
+			-lcdvd -lc -lfileXio -lpatches -lpoweroff -ldebug -lelf-loader2
 EE_CFLAGS := -mgpopt -G10240 -G0 -DNEWLIB_PORT_AWARE -D_EE
 
 # Locate bin2s across old/new PS2SDK layouts and PATH.
@@ -83,7 +83,7 @@ endif
 ifeq ($(XFROM),1)
     HAS_XFROM = -XFROM
     EE_CFLAGS += -DXFROM
-    EE_OBJS += xfromman_irx.o extflash_irx.o
+    EE_OBJS += xfromman_irx.o xfromserv_irx.o extflash_irx.o
 endif
 
 ifeq ($(DS34),1)
