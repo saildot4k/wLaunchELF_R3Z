@@ -620,9 +620,12 @@ int genFixPath(const char *inp_path, char *gen_path)
 		}
 		//Generate standard path to the block device (i.e. hddN:/partition results in hddN:partition)
 		sprintf(party, "%s%s", hdd_device, loc_path);
-		if (nparties == 0 || strcmp(hddPartyListDevice, hdd_device)) {
+		if (nparties == 0) {
 			//No partitions recognized? Load modules & populate partition list.
 			loadHddModules();
+			setPartyListForDevice(hdd_device);
+		} else if (strcmp(hddPartyListDevice, hdd_device)) {
+			//The HDD stack is already loaded; refresh only the selected unit's partition list.
 			setPartyListForDevice(hdd_device);
 		}
 		//Mount the partition.
@@ -730,8 +733,10 @@ int readHDD(const char *path, FILEINFO *info, int max)
 	if (getHddDeviceFromPath(path, hdd_device) < 0)
 		return 0;
 
-	if (nparties == 0 || strcmp(hddPartyListDevice, hdd_device)) {
+	if (nparties == 0) {
 		loadHddModules();
+		setPartyListForDevice(hdd_device);
+	} else if (strcmp(hddPartyListDevice, hdd_device)) {
 		setPartyListForDevice(hdd_device);
 	}
 

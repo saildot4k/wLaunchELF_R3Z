@@ -1378,6 +1378,10 @@ int loadAtaModules(void)
 {
 	int needs_feedback;
 
+	if ((block_storage_stack_mode & BLOCK_STACK_ATA) &&
+	    have_ata_bd && ps2dev9_loaded && have_bdm && have_bdmfs)
+		return 1;
+
 	needs_feedback = (!have_ata_bd ||
 	                  !ps2dev9_loaded ||
 	                  !have_bdm ||
@@ -1464,6 +1468,9 @@ int loadHddModules(void)
 #ifdef DVRP
 	switchPsxHddDriverStack(0);
 #endif
+	if ((block_storage_stack_mode & BLOCK_STACK_HDD) && have_HDD_modules)
+		return 1;
+
 	switchBlockStorageStack(BLOCK_STACK_HDD);
 	ensureCoreIoStackReady();
 	if (!have_HDD_modules) {
