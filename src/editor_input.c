@@ -3,44 +3,199 @@
 //--------------------------------------------------------------
 #include "editor_private.h"
 
-const int WFONTS = 20,  // Virtual KeyBoard Width.
-    HFONTS = 5;                // Virtual KeyBoard Height.
-char *KEY = "  01ABCDEFGHIJKLM:; "
-                   "  23NOPQRSTUVWXYZ., "
-                   "  45abcdefghijklm() "
-                   "  67nopqrstuvwxyz[] "
-                   "  89+-=!#\\/?$%&@_^' ";  // Virtual KeyBoard Matrix.
+const int WFONTS = VKEY_EDITOR_COLS,  // Virtual KeyBoard Width.
+    HFONTS = VKEY_LAYOUT_ROWS;        // Virtual KeyBoard Height.
 
+
+const unsigned char EditorSpecialChars[] = {
+    0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA7, 0xA8, 0xAA, 0xAB, 0xAC,
+    0xAE, 0xAF, 0xB0, 0xB1, 0xB2, 0xB3, 0xB4, 0xB5, 0xB7, 0xB8,
+    0xB9, 0xBA, 0xBF,
+    0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8,
+    0xC9, 0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xCF, 0xD0, 0xD1,
+    0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD8, 0xD9, 0xDA, 0xDB,
+    0xDC, 0xDD, 0xDE, 0xDF, 0xE0, 0xE1, 0xE2, 0xE3, 0xE4,
+    0xE5, 0xE6, 0xE7, 0xE8, 0xE9, 0xEA, 0xEB, 0xEC, 0xED,
+    0xEE, 0xEF, 0xF0, 0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6,
+    0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF,
+};
+const int EditorSpecialCharCount = sizeof(EditorSpecialChars) / sizeof(EditorSpecialChars[0]);
+
+static int editorSpecialKeyboardLayoutIndex(int editor_index)
+{
+	int layout_index;
+
+	layout_index = getVirtualKeyboardEditorLayoutIndex(editor_index);
+	if (layout_index < 0 || layout_index >= EditorSpecialCharCount)
+		return -1;
+	return layout_index;
+}
+
+int isEditorSpecialKeyboardKey(int editor_index)
+{
+	int col;
+
+	if (editor_index < 0 || editor_index >= VKEY_EDITOR_SIZE)
+		return 0;
+	col = editor_index % VKEY_EDITOR_COLS;
+	if (col < 2 || col >= VKEY_EDITOR_COLS - 1)
+		return 1;
+	return editorSpecialKeyboardLayoutIndex(editor_index) >= 0;
+}
+
+unsigned char getEditorSpecialKeyboardChar(int editor_index)
+{
+	int layout_index;
+
+	layout_index = editorSpecialKeyboardLayoutIndex(editor_index);
+	if (layout_index < 0)
+		return 0;
+	return EditorSpecialChars[layout_index];
+}
+
+static int editorSpecialKeyboardNextInRow(int row, int col)
+{
+	int offset;
+	int left;
+	int right;
+	int index;
+
+	if (row < 0 || row >= VKEY_LAYOUT_ROWS)
+		return -1;
+	for (offset = 0; offset < VKEY_EDITOR_COLS; offset++) {
+		left = col - offset;
+		right = col + offset;
+		if (left >= 0) {
+			index = row * VKEY_EDITOR_COLS + left;
+			if (isEditorSpecialKeyboardKey(index))
+				return index;
+		}
+		if (right < VKEY_EDITOR_COLS && right != left) {
+			index = row * VKEY_EDITOR_COLS + right;
+			if (isEditorSpecialKeyboardKey(index))
+				return index;
+		}
+	}
+	return -1;
+}
+
+static int editorSpecialKeyboardNextCharInRow(int row, int editor_col)
+{
+	int layout_col;
+	int index;
+	int left;
+	int right;
+	int offset;
+
+	if (row < 0 || row >= VKEY_LAYOUT_ROWS)
+		return -1;
+	layout_col = editor_col - 2;
+	if (layout_col < 0)
+		layout_col = 0;
+	else if (layout_col >= VKEY_LAYOUT_COLS)
+		layout_col = VKEY_LAYOUT_COLS - 1;
+	for (offset = 0; offset < VKEY_LAYOUT_COLS; offset++) {
+		left = layout_col - offset;
+		right = layout_col + offset;
+		if (left >= 0) {
+			index = row * VKEY_EDITOR_COLS + left + 2;
+			if (editorSpecialKeyboardLayoutIndex(index) >= 0)
+				return index;
+		}
+		if (right < VKEY_LAYOUT_COLS && right != left) {
+			index = row * VKEY_EDITOR_COLS + right + 2;
+			if (editorSpecialKeyboardLayoutIndex(index) >= 0)
+				return index;
+		}
+	}
+	return -1;
+}
+
+int getEditorSpecialKeyboardNextKey(int editor_index, int dx, int dy)
+{
+	int row;
+	int col;
+	int next;
+	int tries;
+
+	if (!isEditorSpecialKeyboardKey(editor_index)) {
+		if (editor_index >= 0 && editor_index < VKEY_EDITOR_SIZE)
+			editor_index = editorSpecialKeyboardNextInRow(editor_index / VKEY_EDITOR_COLS, editor_index % VKEY_EDITOR_COLS);
+		else
+			editor_index = editorSpecialKeyboardNextInRow(0, 0);
+	}
+	if (editor_index < 0)
+		return 0;
+
+	row = editor_index / VKEY_EDITOR_COLS;
+	col = editor_index % VKEY_EDITOR_COLS;
+	if (dx != 0) {
+		for (tries = 0; tries < VKEY_EDITOR_COLS; tries++) {
+			col = (col + dx + VKEY_EDITOR_COLS) % VKEY_EDITOR_COLS;
+			next = row * VKEY_EDITOR_COLS + col;
+			if (isEditorSpecialKeyboardKey(next))
+				return next;
+		}
+	} else if (dy != 0) {
+		for (tries = 0; tries < VKEY_LAYOUT_ROWS; tries++) {
+			row = (row + dy + VKEY_LAYOUT_ROWS) % VKEY_LAYOUT_ROWS;
+			if (col >= 2 && col < VKEY_EDITOR_COLS - 1)
+				next = editorSpecialKeyboardNextCharInRow(row, col);
+			else
+				next = editorSpecialKeyboardNextInRow(row, col);
+			if (next >= 0)
+				return next;
+		}
+	}
+	return editor_index;
+}
+
+static void editorPrepareSingleCharInsert(void)
+{
+	if (TextMode[Active_Window] == OTHER && TextBuffer[Active_Window][Editor_Cur] == '\n' && Editor_Cur > 0 && TextBuffer[Active_Window][Editor_Cur - 1] == '\r') {
+		Editor_Cur -= 1;  //Entry at LF of CRLF must work at CR instead
+	}
+	if (Editor_Insert || TextBuffer[Active_Window][Editor_Cur] == '\0') {
+		ins1 = 1, ins2 = 0, ins3 = 1, ins4 = 0, ins5 = 1;  //Insert char normally
+	} else {
+		if (TextMode[Active_Window] == OTHER && TextBuffer[Active_Window][Editor_Cur] == '\r' && TextBuffer[Active_Window][Editor_Cur + 1] == '\n') {  //OWrite char at CRLF
+			ins1 = 0, ins2 = 0, ins3 = 1, ins4 = 2, ins5 = 1;                                                                                          //OWrite at CR of CRLF
+		} else {                                                                                                                                       //OWrite return at normal char
+			ins1 = 0, ins2 = 0, ins3 = 1, ins4 = 1, ins5 = 1;                                                                                          //OWrite normal char
+		}
+	}
+}
 
 void editorVirtualKeyboardEntry(void)
 {
 	int i, Operation;
+	unsigned char symbol_char = '\0';
 
 	Operation = 0;
 
 	if (new_pad & PAD_UP) {  // Virtual KeyBoard move up.
-		if (KeyBoard_Cur >= WFONTS)
-			KeyBoard_Cur -= WFONTS;
+		if (KeyBoard_Special)
+			KeyBoard_Cur = getEditorSpecialKeyboardNextKey(KeyBoard_Cur, 0, -1);
 		else
-			KeyBoard_Cur += WFONTS * (HFONTS - 1);
+			KeyBoard_Cur = getVirtualKeyboardEditorNextKey(setting->virtual_keyboard_layout, KeyBoard_Cur, 0, -1);
 		//ends Virtual KeyBoard move up.
 	} else if (new_pad & PAD_DOWN) {  // Virtual KeyBoard move down.
-		if (KeyBoard_Cur < WFONTS * (HFONTS - 1))
-			KeyBoard_Cur += WFONTS;
+		if (KeyBoard_Special)
+			KeyBoard_Cur = getEditorSpecialKeyboardNextKey(KeyBoard_Cur, 0, 1);
 		else
-			KeyBoard_Cur -= WFONTS * (HFONTS - 1);
+			KeyBoard_Cur = getVirtualKeyboardEditorNextKey(setting->virtual_keyboard_layout, KeyBoard_Cur, 0, 1);
 		//ends Virtual KeyBoard move down.
 	} else if (new_pad & PAD_LEFT) {  // Virtual KeyBoard move left.
-		if (!KeyBoard_Cur)
-			KeyBoard_Cur = WFONTS * HFONTS - 1;
+		if (KeyBoard_Special)
+			KeyBoard_Cur = getEditorSpecialKeyboardNextKey(KeyBoard_Cur, -1, 0);
 		else
-			KeyBoard_Cur--;
+			KeyBoard_Cur = getVirtualKeyboardEditorNextKey(setting->virtual_keyboard_layout, KeyBoard_Cur, -1, 0);
 		//ends Virtual KeyBoard move left.
 	} else if (new_pad & PAD_RIGHT) {  // Virtual KeyBoard move right.
-		if (KeyBoard_Cur == WFONTS * HFONTS - 1)
-			KeyBoard_Cur = 0;
+		if (KeyBoard_Special)
+			KeyBoard_Cur = getEditorSpecialKeyboardNextKey(KeyBoard_Cur, 1, 0);
 		else
-			KeyBoard_Cur++;
+			KeyBoard_Cur = getVirtualKeyboardEditorNextKey(setting->virtual_keyboard_layout, KeyBoard_Cur, 1, 0);
 		//ends Virtual KeyBoard move right.
 	} else if (new_pad & PAD_L2) {  // Text move left.
 		if (Editor_Cur > 0)
@@ -51,6 +206,9 @@ void editorVirtualKeyboardEntry(void)
 	} else if (new_pad & PAD_SELECT) {  // Virtual KeyBoard Exit.
 		Rows_Num += 6;
 		KeyBoard_Active = 0;
+		KeyBoard_Special = 0;
+	} else if (new_pad & PAD_SQUARE) {  // Virtual KeyBoard CAPS.
+		KeyBoard_Caps = !KeyBoard_Caps;
 	} else if ((!swapKeys && new_pad & PAD_CROSS) || (swapKeys && new_pad & PAD_CIRCLE)) {  // Virtual KeyBoard Backspace
 		if (Editor_Cur > 0) {
 			if (TextMode[Active_Window] == OTHER && TextBuffer[Active_Window][Editor_Cur] == '\n' && TextBuffer[Active_Window][Editor_Cur - 1] == '\r') {
@@ -168,6 +326,8 @@ void editorVirtualKeyboardEntry(void)
 		} else if (KeyBoard_Cur == 2 * WFONTS - 1) {  // Virtual KeyBoard Return Mode CR/LF, LF, CR.
 			if ((Editor_RetMode++) >= 4)
 				Editor_RetMode = OTHER;
+		} else if (KeyBoard_Cur == 4 * WFONTS - 1) {  // Virtual KeyBoard special layout toggle.
+			KeyBoard_Special = !KeyBoard_Special;
 		} else if (KeyBoard_Cur == 5 * WFONTS - 1) {  // Virtual KeyBoard RETURN.
 
 			if (TextMode[Active_Window] == OTHER && TextBuffer[Active_Window][Editor_Cur] == '\n' && Editor_Cur > 0 && TextBuffer[Active_Window][Editor_Cur - 1] == '\r') {
@@ -191,23 +351,15 @@ void editorVirtualKeyboardEntry(void)
 			}
 			Operation = 2;
 			//ends Virtual KeyBoard RETURN.
-		} else {  // Virtual KeyBoard Any other char + Space + Tabulation.
-			if (TextMode[Active_Window] == OTHER && TextBuffer[Active_Window][Editor_Cur] == '\n' && Editor_Cur > 0 && TextBuffer[Active_Window][Editor_Cur - 1] == '\r') {
-				Editor_Cur -= 1;  //Entry at LF of CRLF must work at CR instead
-			}
-			if (Editor_Insert || TextBuffer[Active_Window][Editor_Cur] == '\0') {
-				ins1 = 1, ins2 = 0, ins3 = 1, ins4 = 0, ins5 = 1;  //Insert char normally
-			} else {
-				if (TextMode[Active_Window] == OTHER && TextBuffer[Active_Window][Editor_Cur] == '\r' && TextBuffer[Active_Window][Editor_Cur + 1] == '\n') {  //OWrite char at CRLF
-					ins1 = 0, ins2 = 0, ins3 = 1, ins4 = 2, ins5 = 1;                                                                                          //OWrite at CR of CRLF
-				} else {                                                                                                                                       //OWrite return at normal char
-					ins1 = 0, ins2 = 0, ins3 = 1, ins4 = 1, ins5 = 1;                                                                                          //OWrite normal char
-				}
-			}
+		} else {  // Virtual KeyBoard Any other char + Tabulation.
+			editorPrepareSingleCharInsert();
 			if (KeyBoard_Cur == 3 * WFONTS - 1)  // Tabulation.
 				Operation = 3;
-			else if (KeyBoard_Cur == 4 * WFONTS - 1)  // Space.
-				Operation = 4;
+			else if (KeyBoard_Special) {
+				symbol_char = getEditorSpecialKeyboardChar(KeyBoard_Cur);
+				if (symbol_char != '\0')
+					Operation = 6;
+			}
 			else  // Any other char.
 				Operation = 5;
 		}
@@ -257,11 +409,11 @@ void editorVirtualKeyboardEntry(void)
 		case 3:  // Tabulation.
 			TextBuffer[Active_Window][Editor_Cur + ins2] = '\t';
 			goto common;
-		case 4:  // Space.
-			TextBuffer[Active_Window][Editor_Cur + ins2] = ' ';
-			goto common;
 		case 5:  // Any Char.
-			TextBuffer[Active_Window][Editor_Cur + ins2] = KEY[KeyBoard_Cur];
+			TextBuffer[Active_Window][Editor_Cur + ins2] = getVirtualKeyboardEditorChar(setting->virtual_keyboard_layout, KeyBoard_Cur, KeyBoard_Caps);
+			goto common;
+			case 6:  // Special keyboard char.
+			TextBuffer[Active_Window][Editor_Cur + ins2] = (char)symbol_char;
 			goto common;
 		common:
 			TextBuffer[Active_Window][Editor_Cur + ins3] = '\0';

@@ -346,8 +346,9 @@ void saveConfig(char *mainMsg, char *CNF)
 	        "CDROM_Disable_GameID = %d\r\n"
 	        "Menu_Title = %s\r\n"
 	        "Init_Delay = %d\r\n"
-	        "USBKBD_USED = %d\r\n"
 	        "REBOOT_IOP_ELFLOAD = %d\r\n"
+	        "VirtualKeyboardLayout = %s\r\n"
+	        "USBKBD_USED = %d\r\n"
 	        "USBKBD_FILE = %s\r\n"
 	        "KBDMAP_FILE = %s\r\n"
 	        "Menu_Show_Titles = %d\r\n"
@@ -369,8 +370,9 @@ void saveConfig(char *mainMsg, char *CNF)
 	        setting->cdrom_disable_gameid, //cdrom_disable_gameid
 	        setting->Menu_Title,       //Menu_Title
 	        setting->Init_Delay,       //Init_Delay
-	        setting->usbkbd_used,      //USBKBD_USED
 	        setting->reboot_iop_elf_load,
+	        getVirtualKeyboardLayoutConfigName(setting->virtual_keyboard_layout),
+	        setting->usbkbd_used,      //USBKBD_USED
 	        setting->usbkbd_file,      //USBKBD_FILE
 	        setting->kbdmap_file,      //KBDMAP_FILE
 	        setting->Show_Titles,      //Menu_Show_Titles
@@ -531,6 +533,7 @@ void initConfig(void)
 	setting->usbkbd_used = DEF_USBKBD_USED;
 	setting->language = DEF_LANGUAGE;
 	setting->reboot_iop_elf_load = DEF_STARTUP_RESET_IOP_ELFOAD;
+	setting->virtual_keyboard_layout = DEF_VIRTUAL_KEYBOARD_LAYOUT;
 	setting->Show_Titles = DEF_SHOW_TITLES;
 	setting->PathPad_Lock = DEF_PATHPAD_LOCK;
 	setting->PSU_HugeNames = DEF_PSU_HUGENAMES;
@@ -678,6 +681,10 @@ int loadConfig(char *mainMsg, char *CNF)
 			setting->usbkbd_used = atoi(value);
 		else if (!strcmp(name, "REBOOT_IOP_ELFLOAD"))
 			setting->reboot_iop_elf_load = atoi(value);
+		else if (!stricmp(name, "VirtualKeyboardLayout") || !stricmp(name, "Virtual_Keyboard_Layout") || !stricmp(name, "VKEY_Layout")) {
+			int layout = getVirtualKeyboardLayoutByConfigName(value);
+			setting->virtual_keyboard_layout = (layout >= 0) ? layout : DEF_VIRTUAL_KEYBOARD_LAYOUT;
+		}
 		else if (!strcmp(name, "USBKBD_FILE"))
 			strcpy(setting->usbkbd_file, value);
 		else if (!strcmp(name, "KBDMAP_FILE"))

@@ -349,3 +349,6 @@ lang(347, Lock_Main_LaunchKey_PathPad_Paths, "Bloquear caminhos principais Launc
 lang(348, Disable_Icons_in_File_Browser, "Desactivar icones no gestor de ficheiros")
 lang(349, Language, "Idioma")
 lang(350, Reboot_IOP, "Reiniciar IOP")
+lang(351, Virtual_Keyboard_Layout, "Layout teclado virtual")
+lang(352, CAPS, "CAPS")
+lang(353, SPECIAL, "ESPECIAL")

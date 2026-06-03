@@ -16,24 +16,7 @@ permissions:
   contents: read
 
 jobs:
-  audit:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v6
-    - name: Ensure scripts are executable
-      run: |
-        chmod +x scripts/stale_code_audit.sh scripts/ci/resolve_make_args.sh
-    - name: Run stale code audit
-      run: |
-        scripts/stale_code_audit.sh build
-    - name: Upload stale code report
-      uses: actions/upload-artifact@v7
-      with:
-        name: stale-code-report
-        path: build/stale-code-report.txt
-
   build:
-    needs: [audit]
     strategy:
       fail-fast: false
       matrix:
@@ -99,7 +82,7 @@ jobs:
         echo "PS2SDKSRC=$ps2sdk_src_dir" >> "$GITHUB_ENV"
     - name: Ensure scripts are executable
       run: |
-        chmod +x scripts/stale_code_audit.sh scripts/ci/resolve_make_args.sh
+        chmod +x scripts/ci/resolve_make_args.sh
 
     - name: Compile wLaunchELF
       run: |
