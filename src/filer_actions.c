@@ -241,9 +241,8 @@ int Rename(const char *path, const FILEINFO *file, const char *name)
 		return -1;
 
 	if (!strncmp(path, "hdd", 3)) {
-		sprintf(party, "hdd0:%s", &path[6]);
-		*strchr(party, '/') = 0;
-		sprintf(oldPath, "pfs0:%s", strchr(&path[6], '/') + 1);
+		if (getHddParty(path, NULL, party, oldPath) < 0)
+			return -1;
 		sprintf(newPath, "%s%s", oldPath, name);
 		strcat(oldPath, file->name);
 

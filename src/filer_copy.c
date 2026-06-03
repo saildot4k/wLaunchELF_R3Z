@@ -30,6 +30,16 @@ static int isMemoryCardLikePath(const char *path)
 	        );
 }
 
+static int isHddRootPath(const char *path)
+{
+	return (!strncmp(path, "hdd", 3) && path[3] >= '0' && path[3] <= '9' && path[4] == ':' && path[5] == '/' && path[6] == '\0');
+}
+
+static int isHddCommonParty(const char *party)
+{
+	return (!strncmp(party, "hdd", 3) && party[3] >= '0' && party[3] <= '9' && !strcmp(party + 4, ":__common"));
+}
+
 static int applyMcInfoToMcPath(const char *path, const sceMcTblGetDir *info)
 {
 	int dummy, mctype, ret = 0;
@@ -157,7 +167,7 @@ int filerGetGameTitle(const char *path, const FILEINFO *file, unsigned char *out
 	out[0] = '\0';  //Start by making an empty result string, for failures
 
 	//Avoid title usage in browser root or partition list
-	if (path[0] == 0 || !strcmp(path, "hdd0:/") || !strcmp(path, "dvr_hdd0:/"))
+	if (path[0] == 0 || isHddRootPath(path) || !strcmp(path, "dvr_hdd0:/"))
 		return -1;
 
 	if (!strncmp(path, "hdd", 3)) {
@@ -476,8 +486,8 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 				return -1;  //return error for failure to create destination folder
 			}
 
-			//Set save folder attributes for __common partition when copying to hdd0 to make it show up in the HDD-OSD Browser
-			if (!strncmp(outParty, "hdd0:__common", 13) && !(file.stats.AttrFile & sceMcFileAttrPDAExec)) {
+			//Set save folder attributes for __common partition when copying to HDD to make it show up in the HDD-OSD Browser
+			if (isHddCommonParty(outParty) && !(file.stats.AttrFile & sceMcFileAttrPDAExec)) {
 				//Calculate the out level
 				ret = 0;
 				for (i = 0; i <= strlen(out); i++) {

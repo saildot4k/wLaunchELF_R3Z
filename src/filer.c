@@ -51,6 +51,7 @@ int file_sort = 1;  //dlanor: 0==none, 1==name, 2==title, 3==mtime
 int size_valid = 0;
 int time_valid = 0;
 char parties[MAX_PARTITIONS][MAX_PART_NAME+1];
+static char hddPartyListDevice[6];
 char clipPath[MAX_PATH], LastDir[MAX_NAME], marks[MAX_ENTRY];
 FILEINFO clipFiles[MAX_ENTRY];
 int fileMode = FIO_S_IRUSR | FIO_S_IWUSR | FIO_S_IXUSR | FIO_S_IRGRP | FIO_S_IWGRP | FIO_S_IXGRP | FIO_S_IROTH | FIO_S_IWOTH | FIO_S_IXOTH;
@@ -375,15 +376,57 @@ exit:
 //------------------------------
 //endfunc readCD
 //--------------------------------------------------------------
-void setPartyList(void)
+static int getHddDeviceFromPath(const char *path, char *device)
+{
+	if (strncmp(path, "hdd", 3) || path[3] < '0' || path[3] > '9' || path[4] != ':')
+		return -1;
+
+	if (device != NULL) {
+		memcpy(device, path, 5);
+		device[5] = '\0';
+	}
+	return 0;
+}
+
+static int isHddRootPath(const char *path)
+{
+	return (getHddDeviceFromPath(path, NULL) >= 0 && path[5] == '/' && path[6] == '\0');
+}
+
+static int isAtaPath(const char *path)
+{
+	return (!strncmp(path, "ata", 3) && ((path[3] >= '0' && path[3] <= '9' && path[4] == ':') || path[3] == ':'));
+}
+
+static const char *canonicalizeAtaPath(const char *path, char *buffer)
+{
+	if (!strncmp(path, "ata:", 4)) {
+		if (path[4] == '\0')
+			strcpy(buffer, "ata0:/");
+		else
+			snprintf(buffer, MAX_PATH, "ata0:%s", path + 4);
+		return buffer;
+	}
+	if (!strncmp(path, "ata", 3) && path[3] >= '0' && path[3] <= '9' && path[4] == ':' && path[5] == '\0') {
+		snprintf(buffer, MAX_PATH, "ata%c:/", path[3]);
+		return buffer;
+	}
+
+	return path;
+}
+
+static void setPartyListForDevice(const char *device)
 {
 	iox_dirent_t dirEnt;
 	int hddFd;
 
 	nparties = 0;
 
-	if ((hddFd = fileXioDopen("hdd0:")) < 0)
+	hddPartyListDevice[0] = '\0';
+
+	if ((hddFd = fileXioDopen(device)) < 0)
 		return;
+	snprintf(hddPartyListDevice, sizeof(hddPartyListDevice), "%s", device);
 	while (fileXioDread(hddFd, &dirEnt) > 0) {
 		if (nparties >= MAX_PARTITIONS)
 			break;
@@ -418,6 +461,11 @@ void setPartyList(void)
 		}
 	}
 	fileXioDclose(hddFd);
+}
+
+void setPartyList(void)
+{
+	setPartyListForDevice("hdd0:");
 }
 #ifdef DVRP
 void setDVRPPartyList(void)
@@ -484,7 +532,8 @@ void setDVRPPartyList(void)
 //--------------------------------------------------------------
 int genFixPath(const char *inp_path, char *gen_path)
 {
-	char uLE_path[MAX_PATH], loc_path[MAX_PATH], party[MAX_NAME], *p;
+	char uLE_path[MAX_PATH], loc_path[MAX_PATH], ata_path[MAX_PATH], hdd_device[6], party[MAX_NAME], *p;
+	const char *canonical_path;
 	char *pathSep;
 	int part_ix;
 
@@ -536,12 +585,15 @@ int genFixPath(const char *inp_path, char *gen_path)
 		makeHostPath(gen_path, uLE_path);
 	}
 #endif
-	else if (!strncmp(uLE_path, "ata", 3)) {  //if using ATA BDM path
+	else if (isAtaPath(uLE_path)) {  //if using ATA BDM path
 #ifdef EXFAT
 		loadAtaModules();
 #endif
-		if (pathSep && (pathSep - uLE_path < 7) && pathSep[-1] == ':')
-			strcpy(gen_path + (pathSep - uLE_path), pathSep + 1);
+		canonical_path = canonicalizeAtaPath(uLE_path, ata_path);
+		strcpy(gen_path, canonical_path);
+		pathSep = strchr(gen_path, '/');
+		if (pathSep && (pathSep - gen_path < 7) && pathSep[-1] == ':')
+			strcpy(gen_path + (pathSep - gen_path), pathSep + 1);
 
 #ifdef MX4SIO
 	} else if (!strncmp(uLE_path, "mx4sio", 6)) {
@@ -554,24 +606,24 @@ int genFixPath(const char *inp_path, char *gen_path)
 	} else if (!strncmp(uLE_path, "mmce", 4)) {
 		loadMmceModules();
 #endif
-	} else if (!strncmp(uLE_path, "hdd0:/", 6)) {  //If using HDD path
+	} else if (getHddDeviceFromPath(uLE_path, hdd_device) >= 0 && uLE_path[5] == '/') {  //If using HDD path
 		//Get path on HDD unit, LaunchELF's format (e.g. hdd0:/partition/path/to/file)
 		strcpy(loc_path, uLE_path + 6);
 		if ((p = strchr(loc_path, '/')) != NULL) {
 			//Extract path to file within partition. Make a new path, relative to the filesystem root.
-			//hdd0:/partition/path/to/file becomes pfs0:/path/to/file.
+			//hddN:/partition/path/to/file becomes pfs0:/path/to/file.
 			sprintf(gen_path, "pfs0:%s", p);
-			*p = 0;  //null-terminate the block device path (hdd0:/partition).
+			*p = 0;  //null-terminate the block device path (hddN:/partition).
 		} else {
 			//Otherwise, default to /
 			strcpy(gen_path, "pfs0:/");
 		}
-		//Generate standard path to the block device (i.e. hdd0:/partition results in hdd0:partition)
-		sprintf(party, "hdd0:%s", loc_path);
-		if (nparties == 0) {
+		//Generate standard path to the block device (i.e. hddN:/partition results in hddN:partition)
+		sprintf(party, "%s%s", hdd_device, loc_path);
+		if (nparties == 0 || strcmp(hddPartyListDevice, hdd_device)) {
 			//No partitions recognized? Load modules & populate partition list.
 			loadHddModules();
-			setPartyList();
+			setPartyListForDevice(hdd_device);
 		}
 		//Mount the partition.
 		if ((part_ix = mountParty(party)) >= 0)
@@ -672,15 +724,18 @@ int readVMC(const char *path, FILEINFO *info, int max)
 int readHDD(const char *path, FILEINFO *info, int max)
 {
 	iox_dirent_t dirbuf;
-	char party[MAX_PATH], dir[MAX_PATH];
+	char hdd_device[6], party[MAX_PATH], dir[MAX_PATH];
 	int i = 0, fd, ret;
 
-	if (nparties == 0) {
+	if (getHddDeviceFromPath(path, hdd_device) < 0)
+		return 0;
+
+	if (nparties == 0 || strcmp(hddPartyListDevice, hdd_device)) {
 		loadHddModules();
-		setPartyList();
+		setPartyListForDevice(hdd_device);
 	}
 
-	if (!strcmp(path, "hdd0:/")) {
+	if (isHddRootPath(path)) {
 		unmountHddPartiesNotNeededByClipboard();
 		for (i = 0; i < nparties; i++) {
 			strcpy(info[i].name, parties[i]);
@@ -1118,65 +1173,51 @@ int getDir(const char *path, FILEINFO *info)
 			scan_USB_mass();
 		n = readGENERICWithFirstOpenRetry(usb_path, info, max, 2000);
 	}
-	else if (!strncmp(path, "ata", 3)) {
+	else if (isAtaPath(path)) {
+		char ata_path[MAX_PATH];
+		const char *read_path;
 #ifdef EXFAT
 		u64 wait_start;
 		u64 backoff_start;
 		int dd;
 		int is_ata_root;
 		int wait_budget_ms;
-		int ata0_ready;
 		int path_ready;
 
 		loadAtaModules();
-		is_ata_root = (!strcmp(path, "ata:/") || !strcmp(path, "ata:"));
+		read_path = canonicalizeAtaPath(path, ata_path);
+		is_ata_root = (!strncmp(read_path, "ata", 3) && read_path[3] >= '0' && read_path[3] <= '9' && read_path[4] == ':' &&
+		               (read_path[5] == '\0' || (read_path[5] == '/' && read_path[6] == '\0')));
 		wait_budget_ms = is_ata_root ? 2000 : 750;
+#else
+		read_path = canonicalizeAtaPath(path, ata_path);
 #endif
-		n = readGENERIC(path, info, max);
+		n = readGENERIC(read_path, info, max);
 #ifdef EXFAT
 		// First browse after loading ATA_BD can race module/device readiness.
-		// Retry briefly so ata:/ populates on first open instead of requiring re-entry.
+		// Retry briefly so ataN:/ populates on first open instead of requiring re-entry.
 		if (n == 0 && wait_budget_ms > 0) {
-			if (is_ata_root)
-				n = readGENERIC("ata0:/", info, max);
-			if (n == 0) {
-				wait_start = Timer();
-				while (Timer() < wait_start + wait_budget_ms) {
-					path_ready = 0;
-					ata0_ready = 0;
+			wait_start = Timer();
+			while (Timer() < wait_start + wait_budget_ms) {
+				path_ready = 0;
 
-					dd = fileXioDopen(path);
-					if (dd >= 0) {
-						fileXioDclose(dd);
-						path_ready = 1;
-					}
+				dd = fileXioDopen(read_path);
+				if (dd >= 0) {
+					fileXioDclose(dd);
+					path_ready = 1;
+				}
 
-					// bdmfs exposes typed volumes as ata0:, ata1:, etc.
-					// Probe ata0:/ too, to wait for first mount to settle.
-					if (is_ata_root) {
-						dd = fileXioDopen("ata0:/");
-						if (dd >= 0) {
-							fileXioDclose(dd);
-							ata0_ready = 1;
-						}
-					}
+				if (path_ready) {
+					n = readGENERIC(read_path, info, max);
+					if (n > 0)
+						break;
+					if (!is_ata_root)
+						break;
+				}
 
-					if (path_ready || ata0_ready) {
-						n = 0;
-						if (path_ready)
-							n = readGENERIC(path, info, max);
-						if ((n == 0) && is_ata_root && ata0_ready)
-							n = readGENERIC("ata0:/", info, max);
-						if (n > 0)
-							break;
-						if (!is_ata_root)
-							break;
-					}
-
-					// Avoid tight spinning while IOP-side BDM mount events settle.
-					backoff_start = Timer();
-					while (Timer() < backoff_start + 100) {
-					}
+				// Avoid tight spinning while IOP-side BDM mount events settle.
+				backoff_start = Timer();
+				while (Timer() < backoff_start + 100) {
 				}
 			}
 		}
@@ -1372,11 +1413,15 @@ int setFileList(const char *path, const char *ext, FILEINFO *files, int cnfmode)
 		if (!hide_hdd_ata_devices) {
 			strcpy(files[nfiles].name, "hdd0:");
 			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+			strcpy(files[nfiles].name, "hdd1:");
+			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
 		}
 
 #ifdef EXFAT
 		if (allow_usb_devices && !hide_hdd_ata_devices) {
-			strcpy(files[nfiles].name, "ata:");
+			strcpy(files[nfiles].name, "ata0:");
+			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+			strcpy(files[nfiles].name, "ata1:");
 			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
 		}
 #endif
@@ -1490,7 +1535,7 @@ int setFileList(const char *path, const char *ext, FILEINFO *files, int cnfmode)
 					files[i].title[0] = 0;
 			}
 		}
-		if (!strcmp(path, "hdd0:/") || !strcmp(path, "dvr_hdd0:/"))
+		if (isHddRootPath(path) || !strcmp(path, "dvr_hdd0:/"))
 			vfreeSpace = FALSE;
 		else if (nfiles > 1)
 			sort(&files[1], 0, nfiles - 2);

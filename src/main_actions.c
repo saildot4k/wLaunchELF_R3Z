@@ -34,6 +34,11 @@ static void CleanUp(void)
 //------------------------------
 //endfunc CleanUp
 //---------------------------------------------------------------------------
+static int isHddLaunchPath(const char *path)
+{
+	return (!strncmp(path, "hdd", 3) && path[3] >= '0' && path[3] <= '9' && path[4] == ':' && path[5] == '/');
+}
+
 // Execute. Execute an action. May be called recursively.
 // For any path specified, its device must be accessible.
 //------------------------------
@@ -72,12 +77,12 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		if ((x < 0) || (x > 1) || !vmcMounted[x])
 			goto ELFnotFound;
 		goto CheckELF_path;
-	} else if (!strncmp(path, "hdd0:/", 6)) {
+	} else if (isHddLaunchPath(path)) {
 		loadHddModules();
 		if ((t = checkELFheader(path)) <= 0)
 			goto ELFnotFound;
 		//coming here means the ELF is fine
-		snprintf(party, sizeof(party), "hdd0:%s", path + 6);
+		snprintf(party, sizeof(party), "hdd%c:%s", path[3], path + 6);
 		p = strchr(party, '/');
 		snprintf(fullpath, sizeof(fullpath), "pfs0:%s", p);
 		*p = 0;
@@ -154,10 +159,13 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		if ((t = checkELFheader(path)) <= 0)
 			goto ELFnotFound;
 		party[0] = 0;
-		strcpy(fullpath, path);
-		pathSep = strchr(path, '/');
-		if (pathSep && (pathSep - path < 7) && pathSep[-1] == ':')
-			strcpy(fullpath + (pathSep - path), pathSep + 1);
+		if (!strncmp(path, "ata:", 4))
+			snprintf(fullpath, sizeof(fullpath), "ata0:%s", path + 4);
+		else
+			strcpy(fullpath, path);
+		pathSep = strchr(fullpath, '/');
+		if (pathSep && (pathSep - fullpath < 7) && pathSep[-1] == ':')
+			strcpy(fullpath + (pathSep - fullpath), pathSep + 1);
 		goto ELFchecked;
 	} else if (!strncmp(path, "mass", 4)) {
 		char *pathSep;

@@ -880,13 +880,13 @@ static void getExternalFilePath(const char *argPath, char *filePath)
 		if (pathSep && (pathSep - argPath < 7) && pathSep[-1] == ':')
 			strcpy(filePath + (pathSep - argPath), pathSep + 1);
 
-	} else if (!strncmp(argPath, "hdd0:/", 6)) {
+	} else if (!strncmp(argPath, "hdd", 3) && argPath[3] >= '0' && argPath[3] <= '9' && argPath[4] == ':' && argPath[5] == '/') {
 		//Loading some module from HDD
 		char party[MAX_PATH];
 		char *p;
 
 		loadHddModules();
-		sprintf(party, "hdd0:%s", argPath + 6);
+		sprintf(party, "hdd%c:%s", argPath[3], argPath + 6);
 		p = strchr(party, '/');
 		sprintf(filePath, "pfs0:%s", p);
 		*p = 0;

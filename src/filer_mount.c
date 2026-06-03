@@ -151,7 +151,7 @@ static int getHddPartyFromPath(const char *path, char *party, size_t party_size)
 	const char *start;
 	const char *end;
 
-	if (strncmp(path, "hdd0:/", 6))
+	if (strncmp(path, "hdd", 3) || path[3] < '0' || path[3] > '9' || path[4] != ':' || path[5] != '/')
 		return 0;
 	start = path + 6;
 	if (start[0] == '\0')
@@ -161,7 +161,7 @@ static int getHddPartyFromPath(const char *path, char *party, size_t party_size)
 		end = start + strlen(start);
 	if (end <= start)
 		return 0;
-	snprintf(party, party_size, "hdd0:%.*s", (int)(end - start), start);
+	snprintf(party, party_size, "hdd%c:%.*s", path[3], (int)(end - start), start);
 	return 1;
 }
 static int clipboardUsesHddParty(const char *party)

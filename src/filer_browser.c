@@ -7,6 +7,16 @@
 #include "filer_shared.h"
 #include "init.h"
 
+static int isHddBrowserPath(const char *path)
+{
+	return (!strncmp(path, "hdd", 3) && path[3] >= '0' && path[3] <= '9' && path[4] == ':' && path[5] == '/');
+}
+
+static int isHddRootPath(const char *path)
+{
+	return (isHddBrowserPath(path) && path[6] == '\0');
+}
+
 static const char *getRootDeviceLabel(const char *name)
 {
 	if (!strcmp(name, "mc0:"))
@@ -29,9 +39,15 @@ static const char *getRootDeviceLabel(const char *name)
 #endif
 	if (!strcmp(name, "hdd0:"))
 		return "hdd0:/";
+	if (!strcmp(name, "hdd1:"))
+		return "hdd1:/";
 #ifdef EXFAT
 	if (!strcmp(name, "ata:"))
-		return "ata:/";
+		return "ata0:/";
+	if (!strcmp(name, "ata0:"))
+		return "ata0:/";
+	if (!strcmp(name, "ata1:"))
+		return "ata1:/";
 #endif
 	if (!strcmp(name, "cdfs:"))
 		return "cdfs:/";
@@ -69,7 +85,11 @@ static void formatBrowserPathForDisplay(const char *path, char *display_path)
 		return;
 	}
 
-	if (!strncmp(path, "hdd0:/", 6)) {
+	if (isHddBrowserPath(path)) {
+		char hdd_device[6];
+
+		memcpy(hdd_device, path, 5);
+		hdd_device[5] = '\0';
 		partition = path + 6; // after "hdd0:/"
 		if (partition[0] == '\0') {
 			snprintf(display_path, MAX_PATH, "%s", path);
@@ -86,7 +106,7 @@ static void formatBrowserPathForDisplay(const char *path, char *display_path)
 		}
 
 		if (part_len > 0) {
-			snprintf(display_path, MAX_PATH, "hdd0:%.*s:pfs:%s", part_len, partition, subpath);
+			snprintf(display_path, MAX_PATH, "%s%.*s:pfs:%s", hdd_device, part_len, partition, subpath);
 			return;
 		}
 	}
@@ -129,7 +149,7 @@ static int isTitleCfgPathEligible(const char *path, int menu_disabled)
 	        (!strncmp(path, "mx4sio", 6)) ||
 #endif
 	        (!strncmp(path, "ata", 3)) ||
-	        (!strncmp(path, "hdd0:/", 6) && !menu_disabled));
+	        (isHddBrowserPath(path) && !menu_disabled));
 }
 
 enum {
@@ -234,7 +254,7 @@ static int menu(const char *path, FILEINFO *file)
 				)
 		write_disabled = 1;
 
-	if ((!strcmp(path, "hdd0:/") || !strcmp(path, "dvr_hdd0:/")) || path[0] == 0)  //No menu cmds in partition/device lists
+	if ((isHddRootPath(path) || !strcmp(path, "dvr_hdd0:/")) || path[0] == 0)  //No menu cmds in partition/device lists
 		menu_disabled = 1;
 
 	if (menu_disabled) {
@@ -1197,43 +1217,43 @@ int getFilePath(char *out, int cnfmode)
 					}
 //#endif //TMANIP
 
-					else if (ret == TITLE_CFG) {
-						make_title_cfg(path, &files[browser_sel], msg0);
-						browser_pushed = FALSE;
-						browser_repos = TRUE;  // TEST
-						browser_cd = TRUE;     //TEST
+				else if (ret == TITLE_CFG) {
+					make_title_cfg(path, &files[browser_sel], msg0);
+					browser_pushed = FALSE;
+					browser_repos = TRUE;  // TEST
+					browser_cd = TRUE;     //TEST
+				}
+				   //R1 menu handling is completed above
+			} else if ((!swapKeys && new_pad & PAD_CROSS) || (swapKeys && new_pad & PAD_CIRCLE)) {
+				if (browser_sel != 0 && strcmp(files[browser_sel].name, ".") && strcmp(files[browser_sel].name, "..") && path[0] != 0 && (!isHddRootPath(path) && strcmp(path, "dvr_hdd0:/"))) {
+					if (marks[browser_sel]) {
+						marks[browser_sel] = FALSE;
+						nmarks--;
+					} else {
+						marks[browser_sel] = TRUE;
+						nmarks++;
 					}
-					   //R1 menu handling is completed above
-				} else if ((!swapKeys && new_pad & PAD_CROSS) || (swapKeys && new_pad & PAD_CIRCLE)) {
-					if (browser_sel != 0 && strcmp(files[browser_sel].name, ".") && strcmp(files[browser_sel].name, "..") && path[0] != 0 && (strcmp(path, "hdd0:/") && strcmp(path, "dvr_hdd0:/"))) {
-						if (marks[browser_sel]) {
-							marks[browser_sel] = FALSE;
+				}
+				browser_sel++;
+				if (browser_sel >= browser_nfiles)
+					browser_sel = 0;
+				skipRootSpacerSelection(path, files, browser_nfiles, &browser_sel, 1);
+			} else if (new_pad & PAD_SQUARE) {
+				if (path[0] != 0 && (!isHddRootPath(path) && strcmp(path, "dvr_hdd0:/"))) {
+					for (i = 1; i < browser_nfiles; i++) {
+						if (marks[i]) {
+							marks[i] = FALSE;
 							nmarks--;
 						} else {
-							marks[browser_sel] = TRUE;
+							marks[i] = TRUE;
 							nmarks++;
 						}
 					}
-					browser_sel++;
-					if (browser_sel >= browser_nfiles)
-						browser_sel = 0;
-					skipRootSpacerSelection(path, files, browser_nfiles, &browser_sel, 1);
-				} else if (new_pad & PAD_SQUARE) {
-					if (path[0] != 0 && (strcmp(path, "hdd0:/") && strcmp(path, "dvr_hdd0:/"))) {
-						for (i = 1; i < browser_nfiles; i++) {
-							if (marks[i]) {
-								marks[i] = FALSE;
-								nmarks--;
-							} else {
-								marks[i] = TRUE;
-								nmarks++;
-							}
-						}
-					}
-				} else if (new_pad & PAD_SELECT) {  //Leaving the browser ?
-					unmountAll();
-					return rv;
 				}
+			} else if (new_pad & PAD_SELECT) {  //Leaving the browser ?
+				unmountAll();
+				return rv;
+			}
 			}
 		}  //ends pad response section
 
@@ -1268,7 +1288,7 @@ int getFilePath(char *out, int cnfmode)
 					freeSpace = mcfreeSpace * ((mctype_PSx == 1) ? 8192 : 1024);
 					vfreeSpace = TRUE;
 #endif
-				} else if (!strncmp(path, "hdd", 3) && strcmp(path, "hdd0:/")) {
+				} else if (!strncmp(path, "hdd", 3) && !isHddRootPath(path)) {
 					u64 ZoneFree, ZoneSize;
 					char pfs_str[6];
 

@@ -122,6 +122,35 @@ static int classifyExecByExtension(const char *path)
 	return -1;
 }
 
+static int parseUsbMassPathUnit(const char *path, const char *prefix, int prefix_len, int *unit, const char **suffix)
+{
+	if (strncmp(path, prefix, prefix_len))
+		return 0;
+
+	if (path[prefix_len] == ':') {
+		*unit = 0;
+		*suffix = path + prefix_len + 1;
+		return 1;
+	}
+	if (path[prefix_len] >= '0' && path[prefix_len] <= '9' && path[prefix_len + 1] == ':') {
+		*unit = path[prefix_len] - '0';
+		*suffix = path + prefix_len + 2;
+		return 1;
+	}
+
+	return 0;
+}
+
+static int isHddPartyPath(const char *path)
+{
+	return (!strncmp(path, "hdd", 3) && path[3] >= '0' && path[3] <= '9' && path[4] == ':');
+}
+
+static int isHddBrowserPath(const char *path)
+{
+	return (isHddPartyPath(path) && path[5] == '/');
+}
+
 static const char *normalizeExecArg0Path(const char *path, char *buffer, size_t buffer_size)
 {
 	const char *suffix;
@@ -130,31 +159,17 @@ static const char *normalizeExecArg0Path(const char *path, char *buffer, size_t 
 	if (path == NULL || path[0] == '\0' || buffer == NULL || buffer_size == 0)
 		return path;
 
-	if (strncmp(path, "usb", 3))
-		return path;
-
-	if (path[3] == ':')
-		suffix = path + 4;
-	else if (path[3] >= '0' && path[3] <= '9' && path[4] == ':') {
-		unit = path[3] - '0';
-		suffix = path + 5;
-	} else
+	if (!parseUsbMassPathUnit(path, "usb", 3, &unit, &suffix) &&
+	    !parseUsbMassPathUnit(path, "mass", 4, &unit, &suffix))
 		return path;
 
 	if (*suffix == '\0')
 		suffix = "/";
 
-	if (*suffix != '/') {
-		if (unit == 0)
-			snprintf(buffer, buffer_size, "mass:/%s", suffix);
-		else
-			snprintf(buffer, buffer_size, "mass%d:/%s", unit, suffix);
-	} else {
-		if (unit == 0)
-			snprintf(buffer, buffer_size, "mass:%s", suffix);
-		else
-			snprintf(buffer, buffer_size, "mass%d:%s", unit, suffix);
-	}
+	if (*suffix != '/')
+		snprintf(buffer, buffer_size, "mass%d:/%s", unit, suffix);
+	else
+		snprintf(buffer, buffer_size, "mass%d:%s", unit, suffix);
 
 	return buffer;
 }
@@ -295,7 +310,7 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 #ifdef DVRP
 		const int is_dvr_pfs = ((!strncmp(party, "dvr_hdd0:", 9)) && (!strncmp(filename, "dvr_pfs0:", 9)));
 #endif
-		const int is_hdd_pfs = ((!strncmp(party, "hdd0:", 5)) && (!strncmp(filename, "pfs0:", 5)));
+		const int is_hdd_pfs = (isHddPartyPath(party) && (!strncmp(filename, "pfs0:", 5)));
 		int ret;
 
 		if (is_hdd_pfs) {
@@ -320,7 +335,7 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 		exit(126);
 	}
 
-	if ((!strncmp(party, "hdd0:", 5)) && (!strncmp(filename, "pfs0:", 5))) {
+	if (isHddPartyPath(party) && (!strncmp(filename, "pfs0:", 5))) {
 		if (0 > fileXioMount("pfs0:", party, FIO_MT_RDONLY)) {
 			//Some error occurred, it could be due to something else having used pfs0
 			unmountParty(0);  //So we try unmounting pfs0, to try again
@@ -329,7 +344,7 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 		}
 
 		//If a path to a file on PFS is specified, change it to the standard format.
-		//hdd0:partition:pfs:path/to/file
+		//hddN:partition:pfs:path/to/file
 		if (strncmp(filename, "pfs0:", 5) == 0) {
 			sprintf(bootpath, "%s:pfs:%s", party, &filename[5]);
 		} else {
@@ -337,7 +352,7 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 		}
 
 		argv[0] = exec_target;
-		if ((handoff_path != NULL) && !strncmp(handoff_path, "hdd0:/", 6))
+		if ((handoff_path != NULL) && isHddBrowserPath(handoff_path))
 			argv[1] = (char *)handoff_path;
 		else
 			argv[1] = bootpath;
