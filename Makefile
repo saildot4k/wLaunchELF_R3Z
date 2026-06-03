@@ -95,7 +95,7 @@ else
 endif
 
 ifeq ($(DVRP),1)
-    EE_OBJS += dvrdrv_irx.o dvrfile_irx.o
+    EE_OBJS += ps2atad_irx.o dvrdrv_irx.o dvrfile_irx.o
     EE_CFLAGS += -DDVRP
     HAS_DVRP = -DVRP
 endif

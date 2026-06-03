@@ -554,6 +554,9 @@ $(EE_ASM_DIR)ps2fs_irx.s: $(PS2SDK)/iop/irx/ps2fs.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ps2fs_irx
 	
 ifeq ($(DVRP),1)
+$(EE_ASM_DIR)ps2atad_irx.s: $(PS2SDK)/iop/irx/ps2atad.irx | $(EE_ASM_DIR)
+	$(BIN2S) $< $@ ps2atad_irx
+
 $(EE_ASM_DIR)dvrdrv_irx.s:iop/__precompiled/dvrdrv.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ dvrdrv_irx
 

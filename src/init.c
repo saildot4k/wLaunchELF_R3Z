@@ -59,6 +59,7 @@ IMPORT_BIN2C(ds34bt_irx);
 #endif
 
 #ifdef DVRP
+IMPORT_BIN2C(ps2atad_irx);
 IMPORT_BIN2C(dvrdrv_irx);
 IMPORT_BIN2C(dvrfile_irx);
 #endif
@@ -140,6 +141,7 @@ static u8 have_mx4sio = 0;
 
 #ifdef DVRP
 static u8 have_DVRP_HDD_modules = 0;
+static u8 have_ps2atad = 0;
 static u8 have_dvrdrv = 0;
 static u8 have_dvrfile = 0;
 #endif
@@ -228,6 +230,7 @@ static int loadAtaBlockDriver(void);
 static void pauseAfterAtaBlockDriverLoad(void);
 #endif
 #ifdef DVRP
+static int load_ps2atad_stack(void);
 static void switchPsxHddDriverStack(int use_dvr_stack);
 #endif
 #ifdef DS34
@@ -394,6 +397,60 @@ static int load_ps2hdd_stack(int with_ata_bd)
 //------------------------------
 //endfunc load_ps2hdd_stack
 //---------------------------------------------------------------------------
+#ifdef DVRP
+static int load_ps2atad_stack(void)
+{
+	int ret, ID __attribute__((unused));
+	static char hddarg[] = "-o"
+	                       "\0"
+	                       "4"
+	                       "\0"
+	                       "-n"
+	                       "\0"
+	                       "20";
+	static char pfsarg[] = "-m"
+	                       "\0"
+	                       "4"
+	                       "\0"
+	                       "-o"
+	                       "\0"
+	                       "10"
+	                       "\0"
+	                       "-n"
+	                       "\0"
+	                       "40";
+
+	load_ps2dev9();
+	if (!ps2dev9_loaded) {
+		DPRINTF(" [ATAD]: skipping load because DEV9 failed to initialize\n");
+		return 0;
+	}
+
+	if (!have_ps2atad) {
+		ID = SifExecModuleBuffer(ps2atad_irx, size_ps2atad_irx, 0, NULL, &ret);
+		DPRINTF(" [PS2ATAD]: ID=%d, ret=%d\n", ID, ret);
+		have_ps2atad = (ID >= 0 && ret >= 0);
+	}
+	if (!have_ps2atad)
+		return 0;
+
+	if (!have_ps2hdd) {
+		ID = SifExecModuleBuffer(ps2hdd_irx, size_ps2hdd_irx, sizeof(hddarg), hddarg, &ret);
+		DPRINTF(" [PS2HDD]: ID=%d, ret=%d\n", ID, ret);
+		have_ps2hdd = (ID >= 0 && ret >= 0);
+	}
+	if (have_ps2hdd && !have_ps2fs) {
+		ID = SifExecModuleBuffer(ps2fs_irx, size_ps2fs_irx, sizeof(pfsarg), pfsarg, &ret);
+		DPRINTF(" [PS2FS]: ID=%d, ret=%d\n", ID, ret);
+		have_ps2fs = (ID >= 0 && ret >= 0);
+	}
+
+	return (have_ps2hdd && have_ps2fs);
+}
+//------------------------------
+//endfunc load_ps2atad_stack
+//---------------------------------------------------------------------------
+#endif
 #ifdef XFROM
 IMPORT_BIN2C(extflash_irx);
 IMPORT_BIN2C(xfromman_irx);
@@ -505,19 +562,23 @@ static void load_ps2dvr(void)
 {
 	int ret, ID __attribute__((unused));
 
-	if (!have_dvrdrv || !have_dvrfile || !have_ps2hdd || !have_ps2fs)
+	if (!have_dvrdrv || !have_dvrfile || !have_ps2atad || !have_ps2hdd || !have_ps2fs)
 		showLoadingModulesMsg("dvr");
 
-	load_ps2hdd_stack(0);
+	if (!load_ps2atad_stack()) {
+		DPRINTF(" [DVR]: skipping load because ATAD/HDD stack failed to initialize\n");
+		return;
+	}
+
 	if (!have_dvrdrv) {
 		ID = SifExecModuleBuffer(dvrdrv_irx, size_dvrdrv_irx, 0, NULL, &ret);
 		DPRINTF(" [DVRDRV]: ID=%d, ret=%d\n", ID, ret);
-		have_dvrdrv = 1;
+		have_dvrdrv = (ID >= 0 && ret >= 0);
 	}
-	if (!have_dvrfile) {
+	if (have_dvrdrv && !have_dvrfile) {
 		ID = SifExecModuleBuffer(dvrfile_irx, size_dvrfile_irx, 0, NULL, &ret);
 		DPRINTF(" [DVRFILE]: ID=%d, ret=%d\n", ID, ret);
-		have_dvrfile = 1;
+		have_dvrfile = (ID >= 0 && ret >= 0);
 	}
 }
 //------------------------------
@@ -1184,15 +1245,24 @@ static void switchBlockStorageStack(int target_mode)
 #ifdef DVRP
 static void switchPsxHddDriverStack(int use_dvr_stack)
 {
+	int block_stack_active;
+
 	if (!console_is_PSX)
 		return;
 
+	block_stack_active = (block_storage_stack_mode != BLOCK_STACK_NONE || have_ps2hdd || have_ps2fs);
+#ifdef EXFAT
+	block_stack_active = (block_stack_active || have_ata_bd);
+#endif
+
 	if (use_dvr_stack) {
-		if (!have_HDD_modules)
+		if (have_DVRP_HDD_modules)
+			return;
+		if (!have_HDD_modules && !block_stack_active && !have_ps2atad && !have_dvrdrv && !have_dvrfile)
 			return;
 		DPRINTF("Switching PSX HDD stack (hdd0:/ -> dvr_hdd0:/), resetting IOP\n");
 	} else {
-		if (!have_DVRP_HDD_modules)
+		if (!have_DVRP_HDD_modules && !have_ps2atad && !have_dvrdrv && !have_dvrfile)
 			return;
 		DPRINTF("Switching PSX HDD stack (dvr_hdd0:/ -> hdd0:/), resetting IOP\n");
 	}
@@ -1445,8 +1515,13 @@ int loadDVRPHddModules(void)
 		showLoadingModulesMsg("dvr_hdd");
 		setupPowerOff();
 		load_ps2dvr();
-		//sceCdNoticeGameStart(0, NULL); //shouldn't this be done by the bootloader?
-		have_DVRP_HDD_modules = TRUE;
+		have_DVRP_HDD_modules = (have_dvrdrv && have_dvrfile);
+		if (have_DVRP_HDD_modules) {
+			sceCdNoticeGameStart(0, NULL);
+		} else {
+			DPRINTF(" [DVR_HDD]: stack incomplete (ATAD=%d HDD=%d FS=%d DVRDRV=%d DVRFILE=%d)\n",
+			        have_ps2atad, have_ps2hdd, have_ps2fs, have_dvrdrv, have_dvrfile);
+		}
 	}
 	return have_DVRP_HDD_modules;
 }
@@ -1589,6 +1664,7 @@ void Reset()
 	#endif
 #ifdef DVRP
 	have_DVRP_HDD_modules = 0;
+	have_ps2atad = 0;
 	have_dvrdrv = 0;
 	have_dvrfile = 0;
 #endif
