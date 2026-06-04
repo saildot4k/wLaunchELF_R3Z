@@ -300,6 +300,8 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 	if (selected_path != NULL && selected_path[0] != '\0')
 		handoff_path = normalizeExecArg0Path(selected_path, exec_arg0, sizeof(exec_arg0));
 	snprintf(exec_target, sizeof(exec_target), "%s", filename);
+	if (exec_kind == 1 && handoff_path != NULL && !strncmp(handoff_path, "mass", 4))
+		snprintf(exec_target, sizeof(exec_target), "%s", handoff_path);
 	DPRINTF("RunLoaderElf: exec_kind=%d reboot_iop=%d target='%s' handoff='%s' party='%s'\n",
 	        exec_kind, reboot_iop_elf_load, filename,
 	        (handoff_path != NULL) ? handoff_path : "",
@@ -329,8 +331,12 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 #endif
 		}
 
-		DPRINTF("RunLoaderElf: elf-loader2 target='%s' party='%s'\n", filename, party);
-		ret = LoadELFFromFileWithPartition(filename, (party != NULL && party[0] != '\0') ? party : NULL, 0, NULL);
+		DPRINTF("RunLoaderElf: elf-loader2 target='%s' party='%s'\n", exec_target, party);
+		ret = LoadELFFromFileWithPartition(exec_target, (party != NULL && party[0] != '\0') ? party : NULL, 0, NULL);
+		if (ret < 0 && strcmp(exec_target, filename) != 0) {
+			DPRINTF("RunLoaderElf: elf-loader2 retry legacy target='%s' party='%s'\n", filename, party);
+			ret = LoadELFFromFileWithPartition(filename, (party != NULL && party[0] != '\0') ? party : NULL, 0, NULL);
+		}
 		DPRINTF("RunLoaderElf: elf-loader2 returned %d\n", ret);
 		exit(126);
 	}
