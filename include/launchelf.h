@@ -237,6 +237,18 @@ enum VIRTUAL_KEYBOARD_LAYOUT {
 #define VKEY_EDITOR_COLS (VKEY_LAYOUT_COLS + 3)
 #define VKEY_EDITOR_SIZE (VKEY_EDITOR_COLS * VKEY_LAYOUT_ROWS)
 
+enum HIDE_HDD_MODE {
+	HIDE_HDD_SHOW_ALL = 0,
+	HIDE_HDD_HDD1,
+	HIDE_HDD_HDD01,
+	HIDE_HDD_ATA1,
+	HIDE_HDD_ATA01,
+	HIDE_HDD_HDD1_ATA1,
+	HIDE_HDD_HDD01_ATA01,
+
+	HIDE_HDD_COUNT
+};
+
 typedef struct
 {
 	char CNF_Path[MAX_PATH];
@@ -280,6 +292,7 @@ typedef struct
 	int language;
 	int reboot_iop_elf_load;
 	int virtual_keyboard_layout;
+	int Hide_Hdd;
 	int Show_Titles;
 	int PathPad_Lock;
 	int PSU_HugeNames;

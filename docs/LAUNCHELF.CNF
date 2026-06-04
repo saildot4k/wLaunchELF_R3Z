@@ -220,6 +220,18 @@ Init_Delay = 0
 # ----------------------------------------------------------------------
 VirtualKeyboardLayout = qwerty
 # ----------------------------------------------------------------------
+# Hide_Hdd controls which HDD/ATA root devices are hidden in FileBrowser.
+# This can be changed from the "Startup Settings" submenu. Values are:
+# 0 => Show All
+# 1 => hide hdd1
+# 2 => hide hdd0 and hdd1
+# 3 => hide ata1
+# 4 => hide ata0 and ata1
+# 5 => hide hdd1 and ata1 (default if omitted)
+# 6 => hide hdd0, hdd1, ata0, and ata1
+# ----------------------------------------------------------------------
+Hide_Hdd = 5
+# ----------------------------------------------------------------------
 # USBKBD_USED allows you to disable initialization of the USB keyboard
 # driver. This is mainly useful when you need to test some specific
 # software without any USB drivers active. For example, when testing
