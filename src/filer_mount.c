@@ -3,6 +3,10 @@
 //--------------------------------------------------------------
 #include "filer_internal.h"
 
+#ifndef FILEOP_TRACE
+#define FILEOP_TRACE 1
+#endif
+
 int mountParty(const char *party)
 {
 	int i, j;
@@ -27,8 +31,12 @@ int mountParty(const char *party)
 				break;
 			}
 		}
-		if (j < 0)
+		if (j < 0) {
+#if FILEOP_TRACE
+			printf("[HDD_MOUNT] no-slot %s\n", party);
+#endif
 			return -1;  //no usable mountpoint available
+		}
 		unmountParty(j);
 	}
 	//Here j is the index of a free PFS mountpoint
@@ -41,20 +49,34 @@ int mountParty(const char *party)
 	strcpy(pfs_str, "pfs0:");
 
 	pfs_str[3] = '0' + i;
-		if (fileXioMount(pfs_str, party, FIO_MT_RDWR) < 0) {                 //if FTP stole it
+	{
+		int mount_ret = fileXioMount(pfs_str, party, FIO_MT_RDWR);
+		if (mount_ret < 0) {                                                  //if FTP stole it
+#if FILEOP_TRACE
+			printf("[HDD_MOUNT] mount-failed %s:pfs%d:/ ret=%d\n", party, i, mount_ret);
+#endif
 			for (i = 0; i < MOUNT_LIMIT; i++) {                               //for loop to kill FTP partition mountpoints
 				if ((i != latestMount) && (Party_vmcIndex[i] < 0)) {  //if unneeded by uLE
 					unmountParty(i);                                  //unmount partition mountpoint
 					pfs_str[3] = '0' + i;                             //prepare to reuse that mountpoint
-					if (fileXioMount(pfs_str, party, FIO_MT_RDWR) >= 0)
+					mount_ret = fileXioMount(pfs_str, party, FIO_MT_RDWR);
+					if (mount_ret >= 0)
 						break;  //break from the loop on successful mount
+#if FILEOP_TRACE
+					printf("[HDD_MOUNT] retry-failed %s:pfs%d:/ ret=%d\n", party, i, mount_ret);
+#endif
 				}               //ends if unneeded by uLE
 			}                   //ends for loop to kill FTP partition mountpoints
 			//Here i indicates what happened above with the following meanings:
 			//0..MOUNT_LIMIT-1==Success, MOUNT_LIMIT==Failure
-			if (i >= MOUNT_LIMIT)
+			if (i >= MOUNT_LIMIT) {
+#if FILEOP_TRACE
+				printf("[HDD_MOUNT] failed %s\n", party);
+#endif
 				return -1;
+			}
 		}  //ends if clause for mountpoints stolen by FTP
+	}
 	strcpy(mountedParty[i], party);
 return_i:
 	latestMount = i;
@@ -64,10 +86,21 @@ void unmountParty(int party_ix)
 {
 	char pfs_str[6];
 
+	if (party_ix < 0 || party_ix >= MOUNT_LIMIT) {
+#if FILEOP_TRACE
+		printf("[HDD_MOUNT] unmount-invalid index=%d\n", party_ix);
+#endif
+		return;
+	}
+
 	strcpy(pfs_str, "pfs0:");
 	pfs_str[3] += party_ix;
-	if (fileXioUmount(pfs_str) < 0)
+	if (fileXioUmount(pfs_str) < 0) {
+#if FILEOP_TRACE
+		printf("[HDD_MOUNT] unmount-failed %s:pfs%d:/\n", mountedParty[party_ix], party_ix);
+#endif
 		return;  //leave variables unchanged if unmount failed (remember true state)
+	}
 	if (party_ix < MOUNT_LIMIT) {
 		mountedParty[party_ix][0] = 0;
 	}

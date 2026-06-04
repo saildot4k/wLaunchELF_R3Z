@@ -334,6 +334,10 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 		if (pfsin < 0)
 			return -1;
 		in[3] = pfsin + '0';
+#if FILEOP_TRACE
+		printf("[FILEOP] hdd-map src %s:pfs%d:%s recurse=%d\n",
+		       inParty, pfsin, in + 5, recurses);
+#endif
 #ifdef DVRP
 	} else if (!strncmp(inPath, "dvr_hdd", 7)) {
 		if (getHddDVRPParty(inPath, &file, inParty, in) < 0)
@@ -354,6 +358,10 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 		if (pfsout < 0)
 			return -1;
 		out[3] = pfsout + '0';
+#if FILEOP_TRACE
+		printf("[FILEOP] hdd-map dst %s:pfs%d:%s recurse=%d\n",
+		       outParty, pfsout, out + 5, recurses);
+#endif
 #ifdef DVRP
 	} else if (!strncmp(outPath, "dvr_hdd", 7)) {
 		if (getHddDVRPParty(outPath, &newfile, outParty, out) < 0)
