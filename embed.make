@@ -547,7 +547,14 @@ endif
 iop/ps2ftpd.irx: iop/oldlibs/ps2ftpd
 	$(MAKE) -C $<
 
-$(EE_ASM_DIR)ps2hdd_irx.s: $(PS2SDK)/iop/irx/ps2hdd-osd.irx | $(EE_ASM_DIR)
+LOCAL_PS2HDD_OSD_IRX := iop/ps2hdd_osd/ps2hdd-osd.irx
+PS2HDD_OSD_SOURCE ?= $(LOCAL_PS2HDD_OSD_IRX)
+PS2HDD_OSD_DEPS := $(wildcard iop/ps2hdd_osd/*.[ch]) iop/ps2hdd_osd/imports.lst iop/ps2hdd_osd/Makefile
+
+$(LOCAL_PS2HDD_OSD_IRX): $(PS2HDD_OSD_DEPS)
+	$(MAKE) -C iop/ps2hdd_osd
+
+$(EE_ASM_DIR)ps2hdd_irx.s: $(PS2HDD_OSD_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ps2hdd_irx
 
 $(EE_ASM_DIR)ps2fs_irx.s: $(PS2SDK)/iop/irx/ps2fs.irx | $(EE_ASM_DIR)

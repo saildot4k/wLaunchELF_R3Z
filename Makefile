@@ -324,6 +324,7 @@ clean:
 	$(MAKE) -C iop/AllowDVDV clean
 	$(MAKE) -C iop/oldlibs/libcdvd clean
 	$(MAKE) -C iop/oldlibs/ps2ftpd clean
+	$(MAKE) -C iop/ps2hdd_osd clean
 	@rm -f githash.h $(EE_BIN) $(EE_BIN_PKD)
 	@rm -rf $(EE_OBJS_DIR)
 	@rm -rf $(EE_ASM_DIR)
