@@ -16,19 +16,19 @@ enum {
 	DEF_COLOR3 = GS_SETREG_RGBA(0, 204, 255, 0),  //Select
 #endif
 	DEF_COLOR4 = GS_SETREG_RGBA(255, 255, 255, 0),  //Text
-	DEF_COLOR5 = GS_SETREG_RGBA(255, 255, 0, 0),      //Graph1
-	DEF_COLOR6 = GS_SETREG_RGBA(0, 255, 0, 0),        //Graph2
-	DEF_COLOR7 = GS_SETREG_RGBA(64, 64, 64, 0),       //Graph3
-	DEF_COLOR8 = GS_SETREG_RGBA(128, 128, 128, 0),    //Graph4
+	DEF_COLOR5 = GS_SETREG_RGBA(255, 255, 0, 0),      //Folders
+	DEF_COLOR6 = GS_SETREG_RGBA(0, 255, 0, 0),        //ELFs
+	DEF_COLOR7 = GS_SETREG_RGBA(64, 64, 64, 0),       //Unknown
+	DEF_COLOR8 = GS_SETREG_RGBA(128, 128, 128, 0),    //TextEditor
 #else
 	DEF_COLOR1 = GS_SETREG_RGBA(128, 128, 128, 0),  //Backgr
 	DEF_COLOR2 = GS_SETREG_RGBA(64, 64, 64, 0),     //Frame
 	DEF_COLOR3 = GS_SETREG_RGBA(96, 0, 0, 0),       //Select
 	DEF_COLOR4 = GS_SETREG_RGBA(0, 0, 0, 0),        //Text
-	DEF_COLOR5 = GS_SETREG_RGBA(96, 96, 0, 0),      //Graph1
-	DEF_COLOR6 = GS_SETREG_RGBA(0, 96, 0, 0),       //Graph2
-	DEF_COLOR7 = GS_SETREG_RGBA(224, 224, 224, 0),  //Graph3
-	DEF_COLOR8 = GS_SETREG_RGBA(0, 0, 0, 0),        //Graph4
+	DEF_COLOR5 = GS_SETREG_RGBA(96, 96, 0, 0),      //Folders
+	DEF_COLOR6 = GS_SETREG_RGBA(0, 96, 0, 0),       //ELFs
+	DEF_COLOR7 = GS_SETREG_RGBA(224, 224, 224, 0),  //Unknown
+	DEF_COLOR8 = GS_SETREG_RGBA(0, 0, 0, 0),        //TextEditor
 #endif //CUSTOM_COLORS
 	DEF_MENU_FRAME = TRUE,
 	DEF_SWAPKEYS = FALSE,

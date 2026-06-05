@@ -103,7 +103,7 @@ Menu_Hide_Paths = 1
 # And finally, I chose some new default values that I've been working on
 # for a while. The effects of these settings are as follows:
 #
-# Normal text is fully black, while the background is half-level white.
+# Text is fully black, while the background is half-level white.
 # Border, submenus, and LaunchELF title text use a medium grey colour,
 # with half the brightness of the background, while alerts and progress
 # messages use a clear but subdued red colour.
@@ -327,9 +327,10 @@ PSU_NoOverwrite = 0
 # In icon mode the FileBrowser will display a small icon in front of
 # every file or folder name, with different shapes for folder vs file.
 # The icons will reuse colours already defined as follows:
-# Folders use Color5=='Graph1', ELFs use Color6=='Graph2', and other
-# files will all use Color7=='Graph3'. By default these colours will
-# be setup as yellow, green, and white, but can be changed in GUI colors.
+# Folders use Color5=='Folders', ELFs use Color6=='ELFs', text editor
+# file types use Color8=='TextEditor', and other files use
+# Color7=='Unknown'. By default these colours will be setup as yellow,
+# green, white, and black, but can be changed in GUI colors.
 # In icon mode objects marked for operations are displayed differently
 # by switching to a slightly different icon definition (with a 'hole').
 # But if FB_NoIcons is set non-zero then the FileBrowser will revert
