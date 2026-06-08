@@ -279,10 +279,11 @@ int copy(char *outPath, const char *inPath, FILEINFO file, int recurses)
 	iox_stat_t iox_stat;
 	char out[MAX_PATH], in[MAX_PATH], tmp[MAX_PATH],
 	    progress[MAX_PATH * 4],
-	    *buff = NULL, inParty[MAX_NAME], outParty[MAX_NAME];
+	    *buff = NULL, *buff2 = NULL, *copyBuff, inParty[MAX_NAME], outParty[MAX_NAME];
 	int nfiles, i;
 	u64 size = 0;
 	int ret = -1, pfsout = -1, pfsin = -1, in_fd = -1, out_fd = -1, buffSize, bytesRead, bytesWritten;
+	int buffCount = 1, buffIndex = 0;
 	int dummy;
 	int speed = 0;
 	int remain_time = 0, TimeDiff = 0;
@@ -774,13 +775,21 @@ non_PSU_RESTORE_init:
 			genRemove(out);
 		goto copy_file_exit_mem_err;
 	}
+	buff2 = (char *)memalign(64, buffSize);
+	if (buff2 != NULL)
+		buffCount = 2;
+#if FILEOP_TRACE
+	else if (trace_net_copy || trace_vmc_copy)
+		printf("[FILEOP] copy-double-buffer fallback in=%s out=%s buff=%d\n",
+		       in, out, buffSize);
+#endif
 
 	old_size = written_size;  //Note initial progress data pos
 	OldTime = Timer();        //Note initial progress time
 #if FILEOP_TRACE
 	if (trace_net_copy || trace_vmc_copy) {
-		printf("[FILEOP] copy-start in=%s out=%s size=%llu buff=%d mode=%d recurse=%d\n",
-		       in, out, (unsigned long long)size, buffSize, PM_flag[recurses], recurses);
+		printf("[FILEOP] copy-start in=%s out=%s size=%llu buff=%d buffers=%d mode=%d recurse=%d\n",
+		       in, out, (unsigned long long)size, buffSize, buffCount, PM_flag[recurses], recurses);
 	}
 #endif
 
@@ -879,13 +888,14 @@ non_PSU_RESTORE_init:
 				goto copy_file_exit;  // go deal with it
 			}
 			}
-			bytesRead = genRead(in_fd, buff, buffSize);
-			bytesWritten = (bytesRead == buffSize) ? genWrite(out_fd, buff, buffSize) : 0;
+			copyBuff = (buffIndex == 0) ? buff : buff2;
+			bytesRead = genRead(in_fd, copyBuff, buffSize);
+			bytesWritten = (bytesRead == buffSize) ? genWrite(out_fd, copyBuff, buffSize) : 0;
 #if FILEOP_TRACE
 			chunk_remaining_before = size;
 			if (trace_net_copy || trace_vmc_copy) {
-				printf("[FILEOP] copy-chunk in=%s out=%s idx=%u req=%d read=%d write=%d remain_before=%llu\n",
-				       in, out, trace_chunk_index, buffSize, bytesRead, bytesWritten,
+				printf("[FILEOP] copy-chunk in=%s out=%s idx=%u buf=%d req=%d read=%d write=%d remain_before=%llu\n",
+				       in, out, trace_chunk_index, buffIndex, buffSize, bytesRead, bytesWritten,
 				       (unsigned long long)chunk_remaining_before);
 			}
 #endif
@@ -904,6 +914,8 @@ non_PSU_RESTORE_init:
 			}
 			size -= buffSize;
 			written_size += buffSize;
+			if (buffCount > 1)
+				buffIndex ^= 1;
 #if FILEOP_TRACE
 			trace_chunk_index++;
 			if (trace_net_copy || trace_vmc_copy) {
@@ -998,6 +1010,7 @@ copy_file_data_done:
 //The code below is also used for all errors in copying a file,
 //but those cases are distinguished by a negative value in 'ret'
 copy_file_exit:
+	free(buff2);
 	free(buff);
 copy_file_exit_mem_err:
 #if FILEOP_TRACE
