@@ -21,6 +21,8 @@
 #define FILEOP_TRACE 1
 #endif
 
+#define TRANSFER_ETA_UPDATE_MS 1000
+
 static int isMemoryCardLikePath(const char *path)
 {
 	return (!strncmp(path, "mc", 2) || !strncmp(path, "vmc", 3)
@@ -38,6 +40,47 @@ static int isHddRootPath(const char *path)
 static int isHddCommonParty(const char *party)
 {
 	return (!strncmp(party, "hdd", 3) && party[3] >= '0' && party[3] <= '9' && !strcmp(party + 4, ":__common"));
+}
+
+static int calcTransferSpeed(u64 bytes, int millis)
+{
+	u64 bytes_per_second;
+
+	if (millis <= 0)
+		return -1;
+	if (bytes == 0)
+		return 0;
+
+	bytes_per_second = (bytes * 1000ULL) / (u64)millis;
+	if (bytes_per_second > 0x7fffffffULL)
+		return 0x7fffffff;
+	return (int)bytes_per_second;
+}
+
+static int calcRemainingTime(u64 remaining_size, int bytes_per_second)
+{
+	u64 time_left;
+
+	if (bytes_per_second <= 0)
+		return -1;
+
+	time_left = remaining_size / (u64)bytes_per_second;
+	return (time_left > 0x7fffffffULL) ? 0x7fffffff : (int)time_left;
+}
+
+static int smoothTransferSpeed(int previous_speed, int sample_speed)
+{
+	u64 smoothed_speed;
+
+	if (sample_speed <= 0)
+		return sample_speed;
+	if (previous_speed <= 0)
+		return sample_speed;
+
+	smoothed_speed = ((u64)previous_speed * 3ULL + (u64)sample_speed) / 4ULL;
+	if (smoothed_speed > 0x7fffffffULL)
+		return 0x7fffffff;
+	return (int)smoothed_speed;
 }
 
 static int applyMcInfoToMcPath(const char *path, const sceMcTblGetDir *info)
@@ -286,9 +329,12 @@ int copy(char *outPath, const char *inPath, FILEINFO file, int recurses)
 	int buffCount = 1, buffIndex = 0;
 	int dummy;
 	int speed = 0;
-	int remain_time = 0, TimeDiff = 0;
+	int remain_time = -1, TimeDiff = 0;
+	int eta_sample_speed = -1, smooth_speed = -1, EtaTimeDiff = 0;
 	u64 old_size = 0, SizeDiff = 0;
+	u64 eta_old_size = 0, EtaSizeDiff = 0;
 	u64 OldTime = 0LL;
+	u64 EtaOldTime = 0LL;
 	mcT_header *mcT_head_p = (mcT_header *)&file.stats;
 	int psu_pad_size = 0, PSU_restart_f = 0;
 	char *cp, *np;
@@ -296,6 +342,7 @@ int copy(char *outPath, const char *inPath, FILEINFO file, int recurses)
 	int trace_vmc_copy = 0;
 	unsigned int trace_chunk_index = 0;
 	u64 chunk_remaining_before = 0;
+	u64 CurrentTime = 0LL;
 
 	if (recurses + 1 >= MAX_RECURSE)
 		return -1;
@@ -786,6 +833,8 @@ non_PSU_RESTORE_init:
 
 	old_size = written_size;  //Note initial progress data pos
 	OldTime = Timer();        //Note initial progress time
+	eta_old_size = old_size;
+	EtaOldTime = OldTime;
 #if FILEOP_TRACE
 	if (trace_net_copy || trace_vmc_copy) {
 		printf("[FILEOP] copy-start in=%s out=%s size=%llu buff=%d buffers=%d mode=%d recurse=%d\n",
@@ -798,24 +847,32 @@ non_PSU_RESTORE_init:
 		if (size < (u64)buffSize)
 			buffSize = (int)size;  //Adjust effective buffer size to remaining data
 
-		TimeDiff = Timer() - OldTime;
-		OldTime = Timer();
+		CurrentTime = Timer();
+		TimeDiff = CurrentTime - OldTime;
+		OldTime = CurrentTime;
 		SizeDiff = written_size - old_size;
 		old_size = written_size;
-		if (SizeDiff) {                                     //if anything was written this time
-			speed = (int)((SizeDiff * 1000ULL) / TimeDiff);  //calc real speed
-			if (speed > 0) {                                 //calc time remaining for that speed
-				u64 time_left = size / (u64)speed;
-				remain_time = (time_left > 0x7fffffffULL) ? 0x7fffffff : (int)time_left;
-			} else {
-				remain_time = -1;
-			}
+		if (SizeDiff) {  //if anything was written this time
+			speed = calcTransferSpeed(SizeDiff, TimeDiff);
 		} else if (TimeDiff) {                     //if nothing written though time passed
 			speed = 0;                             //set speed as zero
-			remain_time = -1;                      //set time remaining as unknown
 		} else {                                   //if nothing written and no time passed
 			speed = -1;                            //set speed as unknown
-			remain_time = -1;                      //set time remaining as unknown
+		}
+
+		if (CurrentTime - EtaOldTime >= TRANSFER_ETA_UPDATE_MS) {
+			EtaTimeDiff = CurrentTime - EtaOldTime;
+			EtaSizeDiff = written_size - eta_old_size;
+			EtaOldTime = CurrentTime;
+			eta_old_size = written_size;
+			eta_sample_speed = calcTransferSpeed(EtaSizeDiff, EtaTimeDiff);
+			if (eta_sample_speed > 0) {
+				smooth_speed = smoothTransferSpeed(smooth_speed, eta_sample_speed);
+				remain_time = calcRemainingTime(size, smooth_speed);
+			} else if (eta_sample_speed == 0) {
+				smooth_speed = 0;
+				remain_time = -1;
+			}
 		}
 
 		sprintf(progress, "%s : %s", LNG(Pasting_file), file.name);
@@ -858,10 +915,10 @@ non_PSU_RESTORE_init:
 		sprintf(tmp, "\n%s: ", LNG(Average_Speed));
 		strcat(progress, tmp);
 		TimeDiff = Timer() - PasteTime;
-		if (TimeDiff == 0)
+		speed = calcTransferSpeed(written_size, TimeDiff);
+		if (speed == -1)
 			strcpy(tmp, LNG(Unknown));
 		else {
-			speed = (int)((written_size * 1000ULL) / TimeDiff);  //calc real speed
 			if (speed <= 1024)
 				sprintf(tmp, "%d %s/sec", speed, LNG(bytes));  // bytes/sec
 			else
