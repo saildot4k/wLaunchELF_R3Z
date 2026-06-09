@@ -471,6 +471,9 @@ typedef struct
 #define MOUNT_LIMIT 4
 extern char mountedParty[MOUNT_LIMIT][MAX_NAME];
 extern int latestMount;
+#ifdef DVRP
+extern int latestDVRPMount;
+#endif
 extern int vmcMounted[2];
 extern int vmc_PartyIndex[2];            //PFS index for each VMC, unless -1
 extern int Party_vmcIndex[MOUNT_LIMIT];  //VMC index for each PFS, unless -1
