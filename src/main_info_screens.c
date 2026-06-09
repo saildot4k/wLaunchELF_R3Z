@@ -115,9 +115,14 @@ void Show_build_info(void)
 
 			PrintPos(-1, hpos,
 #ifdef ETH
-			         " ETH:1"
+			         " ETH=1"
 #else
-			         " ETH:0"
+			         " ETH=0"
+#endif
+#ifdef UDPFS
+			         " UDPFS=1"
+#else
+			         " UDPFS=0"
 #endif
 			         , COLOR_TEXT);
 			PrintPos(-1, hpos,
