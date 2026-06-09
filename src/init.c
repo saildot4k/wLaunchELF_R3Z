@@ -906,6 +906,7 @@ static void getExternalFilePath(const char *argPath, char *filePath)
 		p = strchr(party, '/');
 		sprintf(filePath, "dvr_pfs0:%s", p);
 		*p = 0;
+		filePath[7] = (getDVRPPartyMountIndex(party) == 1) ? '1' : '0';
 		mountDVRPParty(party);
 
 #endif

@@ -107,6 +107,18 @@ void unmountParty(int party_ix)
 	if (latestMount == party_ix)
 		latestMount = -1;
 }
+
+int getDVRPPartyMountIndex(const char *party)
+{
+	if (party == NULL)
+		return -1;
+	if (strcmp(party, "dvr_hdd0:__xdata") == 0)
+		return 1;
+	if (strcmp(party, "dvr_hdd0:__xcontents") == 0)
+		return 0;
+	return -1;
+}
+
 #ifdef DVRP
 int mountDVRPParty(const char *party)
 {
@@ -117,11 +129,8 @@ int mountDVRPParty(const char *party)
 			goto return_i;
 	}
 
-	if (strcmp(party, "dvr_hdd0:__xdata") == 0) {
-		i = 1;
-	} else if (strcmp(party, "dvr_hdd0:__xcontents") == 0) {
-		i = 0;
-	} else {
+	i = getDVRPPartyMountIndex(party);
+	if (i < 0) {
 		return -1;
 	}
 	strcpy(mountedDVRPParty[i], party);
@@ -141,9 +150,6 @@ void unmountDVRPParty(int party_ix)
 void unmountAll(void)
 {
 	char pfs_str[6];
-#ifdef DVRP
-	char dvr_pfs_str[10];
-#endif
 	char vmc_str[6];
 	int i;
 
@@ -168,11 +174,8 @@ void unmountAll(void)
 	}
 	latestMount = -1;
 #ifdef DVRP
-	strcpy(dvr_pfs_str, "dvr_pfs0:");
 	for (i = 0; i < MOUNT_LIMIT; i++) {
 		if (mountedDVRPParty[i][0] != 0) {
-			dvr_pfs_str[7] = '0' + i;
-			fileXioUmount(dvr_pfs_str);
 			mountedDVRPParty[i][0] = 0;
 		}
 	}

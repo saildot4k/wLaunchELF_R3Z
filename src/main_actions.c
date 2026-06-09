@@ -97,8 +97,13 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		//coming here means the ELF is fine
 		snprintf(party, sizeof(party), "dvr_hdd0:%s", path + 10);
 		p = strchr(party, '/');
-		snprintf(fullpath, sizeof(fullpath), "dvr_pfs0:%s", p);
-		*p = 0;
+		if (p != NULL) {
+			snprintf(fullpath, sizeof(fullpath), "dvr_pfs0:%s", p);
+			*p = 0;
+			fullpath[7] = (getDVRPPartyMountIndex(party) == 1) ? '1' : '0';
+		} else {
+			snprintf(fullpath, sizeof(fullpath), "dvr_pfs%d:/", (getDVRPPartyMountIndex(party) == 1) ? 1 : 0);
+		}
 		goto ELFchecked;
 #else
 		goto ELFnotFound;

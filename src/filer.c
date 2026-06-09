@@ -671,6 +671,8 @@ int genFixPath(const char *inp_path, char *gen_path)
 		}
 		//Generate standard path to the block device (i.e. dvr_hdd0:/partition results in hdd0:partition)
 		sprintf(party, "dvr_hdd0:%s", loc_path);
+		//If partition is __xdata, use dvr_pfs1:
+		gen_path[7] = (getDVRPPartyMountIndex(party) == 1) ? '1' : '0';
 		if (ndvrpparties == 0) {
 			//No partitions recognized? Load modules & populate partition list.
 			loadDVRPHddModules();

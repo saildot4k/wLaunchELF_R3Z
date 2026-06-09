@@ -500,6 +500,7 @@ int genRmdir(char *path);
 int genCmpFileExt(const char *filename, const char *extension);
 int mountParty(const char *party);
 void unmountParty(int party_ix);
+int getDVRPPartyMountIndex(const char *party);
 #ifdef DVRP
 void unmountDVRPParty(int party_ix);
 int mountDVRPParty(const char *party);
