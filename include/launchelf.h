@@ -481,8 +481,10 @@ extern int nparties;                     //Clearing this causes FileBrowser to r
 extern unsigned char *elisaFnt;
 char *PathPad_menu(const char *path);
 int getFilePath(char *out, const int cnfmode);
-#if defined(ETH) || defined(UDPFS)
+#ifdef ETH
 void initHOST(void);
+#endif
+#if defined(ETH) || defined(UDPFS)
 char *makeHostPath(char *dp, char *sp);
 #endif
 int ynDialog(const char *message);

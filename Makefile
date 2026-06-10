@@ -4,8 +4,8 @@
 MMCE ?= 1
 DS34 ?= 0
 TMANIP ?= 1
-ETH ?= 1
-UDPFS ?= 0
+ETH ?= 0
+UDPFS ?= 1
 EXFAT ?= 1
 DVRP ?= 1
 IOP_RESET ?= 1
@@ -16,7 +16,7 @@ SIO2MAN ?= 0
 PPC_UART ?= 0
 SIO_DEBUG ?= 0
 DEBUG ?= 0
-LCDVD ?= LEGACY#or LATEST
+LCDVD ?= LATEST#or LEGACY
 # ----------------------------- #
 .SILENT:
 
@@ -146,14 +146,11 @@ ifeq ($(IOP_RESET),0)
 endif
 
 ifeq ($(ETH),1)
-ifeq ($(UDPFS),1)
-    $(error ETH and UDPFS cannot be enabled together. Choose one network stack.)
-endif
-endif
-
-ifeq ($(ETH),1)
     EE_OBJS += ps2smap_irx.o ps2ftpd_irx.o ps2host_irx.o ps2netfs_irx.o ps2ip_irx.o
     EE_CFLAGS += -DETH
+ifeq ($(UDPFS),1)
+    HAS_ETH = -ETH
+endif
 endif
 
 ifeq ($(UDPFS),1)
@@ -245,12 +242,12 @@ all-psx-no-ds34:
 all-psx-ds34:
 	$(MAKE) all DS34=1 DVRP=1 XFROM=1 EE_OBJS_DIR=$(PSX_DS34_OBJ_DIR) EE_ASM_DIR=$(PSX_DS34_ASM_DIR)
 
-all-ci-variants: all-no-psx-no-ds34 all-no-psx-ds34 all-psx-no-ds34 all-psx-ds34
+all-ci-variants: all-psx-no-ds34 all-psx-ds34
 
 # CI profile helpers (kept aligned with .github/workflows/compile.yml).
 CI_RESOLVE_SCRIPT := scripts/ci/resolve_make_args.sh
 CI_STALE_AUDIT_SCRIPT := scripts/stale_code_audit.sh
-CI_PSX_PROFILE ?= no-psx
+CI_PSX_PROFILE ?= psx
 CI_PAD_PROFILE ?= no-ds34
 CI_STORAGE_PROFILE ?= all
 
@@ -260,10 +257,10 @@ ci-build-profile:
 	$(MAKE) rebuild $$FLAGS
 
 ci-build-storage-matrix:
-	$(MAKE) ci-build-profile CI_PSX_PROFILE=no-psx CI_PAD_PROFILE=no-ds34 CI_STORAGE_PROFILE=usb
-	$(MAKE) ci-build-profile CI_PSX_PROFILE=no-psx CI_PAD_PROFILE=no-ds34 CI_STORAGE_PROFILE=mmce
-	$(MAKE) ci-build-profile CI_PSX_PROFILE=no-psx CI_PAD_PROFILE=no-ds34 CI_STORAGE_PROFILE=mx4sio
-	$(MAKE) ci-build-profile CI_PSX_PROFILE=no-psx CI_PAD_PROFILE=no-ds34 CI_STORAGE_PROFILE=minimal
+	$(MAKE) ci-build-profile CI_PSX_PROFILE=psx CI_PAD_PROFILE=no-ds34 CI_STORAGE_PROFILE=usb
+	$(MAKE) ci-build-profile CI_PSX_PROFILE=psx CI_PAD_PROFILE=no-ds34 CI_STORAGE_PROFILE=mmce
+	$(MAKE) ci-build-profile CI_PSX_PROFILE=psx CI_PAD_PROFILE=no-ds34 CI_STORAGE_PROFILE=mx4sio
+	$(MAKE) ci-build-profile CI_PSX_PROFILE=psx CI_PAD_PROFILE=no-ds34 CI_STORAGE_PROFILE=minimal
 
 stale-audit:
 	$(CI_STALE_AUDIT_SCRIPT) build
@@ -271,7 +268,8 @@ stale-audit:
 info:
 	$(info available build options:)
 	$(info   EXFAT		enable BDM and EXFAT support for it)
-	$(info   ETH		include network features?)
+	$(info   ETH		include host/netfs network stack)
+	$(info   UDPFS		include UDPFS network stack)
 	$(info   DS34		include PS3/PS4 controller support)
 	$(info   MX4SIO		support for SDCard connected to memory card slot 2)
 	$(info   MMCE		support for direct SDCard access on SD2PSX or memcardpro2)
@@ -285,7 +283,7 @@ info:
 	$(info   all-ds34-off		builds without DS34 in isolated obj dirs)
 	$(info   all-ds34-on		builds with DS34 in isolated obj dirs)
 	$(info   all-ds34-variants	builds both DS34 variants)
-	$(info   all-ci-variants	builds 4 artifacts (PSX stuff off/on x DS34 off/on))
+	$(info   all-ci-variants	builds PSX DS34 off/on artifacts)
 	$(info   ci-build-profile	uses scripts/ci/resolve_make_args.sh profiles)
 	$(info   ci-build-storage-matrix	quick storage-stack coverage build set)
 	$(info   stale-audit		generates build/stale-code-report.txt)
@@ -344,7 +342,7 @@ info2:
 	$(info EE_BIN = $(EE_BIN))
 	$(info EE_BIN_PKD = $(EE_BIN_PKD))
 	$(info EE_OBJS = $(EE_OBJS))
-	$(info TMANIP=$(TMANIP), SIO_DEBUG=$(SIO_DEBUG), DS34=$(DS34), ETH=$(ETH))
+	$(info TMANIP=$(TMANIP), SIO_DEBUG=$(SIO_DEBUG), DS34=$(DS34), ETH=$(ETH), UDPFS=$(UDPFS))
 	$(info EXFAT=$(EXFAT), XFROM=$(XFROM), UDPTTY=$(UDPTTY), MX4SIO=$(MX4SIO))
 	$(info MMCE=$(MMCE), IOP_RESET=$(IOP_RESET))
 

@@ -21,14 +21,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - variant_name: "ALL-NO-PSX-NO-DS34"
-            psx_profile: "no-psx"
-            pad_profile: "no-ds34"
-            storage_profile: "all"
-          - variant_name: "ALL-NO-PSX-DS34"
-            psx_profile: "no-psx"
-            pad_profile: "ds34"
-            storage_profile: "all"
           - variant_name: "ALL-PSX-NO-DS34"
             psx_profile: "psx"
             pad_profile: "no-ds34"
