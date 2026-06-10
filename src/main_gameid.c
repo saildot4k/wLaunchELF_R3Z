@@ -88,6 +88,13 @@ void displayRetroGemGameID(const char *gameID, int frames)
 		gsKit_sync_flip(gid_gs);
 	}
 
+	for (frame = 0; frame < 2; frame++) {
+		gsKit_clear(gid_gs, GS_SETREG_RGBA(0x00, 0x00, 0x00, 0x00));
+		gsKit_queue_exec(gid_gs);
+		gsKit_finish();
+		gsKit_sync_flip(gid_gs);
+	}
+
 	gsKit_deinit_global(gid_gs);
 }
 
@@ -172,4 +179,3 @@ int isLikelyDiscLaunch(const char *selected_path)
 		return 1;
 	return 0;
 }
-
