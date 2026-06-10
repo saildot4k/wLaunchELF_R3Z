@@ -79,6 +79,7 @@ IMPORT_BIN2C(poweroff_irx);
 IMPORT_BIN2C(loader_elf);
 IMPORT_BIN2C(iopmod_irx);
 IMPORT_BIN2C(cdvd_irx);
+IMPORT_BIN2C(xparam_irx);
 IMPORT_BIN2C(ps2kbd_irx);
 IMPORT_BIN2C(hdl_info_irx);
 IMPORT_BIN2C(mcman_irx);
@@ -834,6 +835,17 @@ void loadCdModules(void)
 }
 //------------------------------
 //endfunc loadCdModules
+//---------------------------------------------------------------------------
+void applyXPARAM(const char *gameID)
+{
+	int ret, id;
+
+	if (gameID == NULL || gameID[0] == '\0')
+		return;
+
+	id = SifExecModuleBuffer(xparam_irx, size_xparam_irx, strlen(gameID) + 1, (char *)gameID, &ret);
+	DPRINTF(" [XPARAM]: id=%d ret=%d title='%s'\n", id, ret, gameID);
+}
 //---------------------------------------------------------------------------
 int uLE_cdDiscValid(void)  //returns 1 if disc valid, else returns 0
 {
