@@ -22,6 +22,8 @@
 #endif
 
 #define TRANSFER_ETA_UPDATE_MS 1000
+#define COPY_BUFFER_FAST_DEFAULT 0x100000
+#define COPY_BUFFER_PSX_FAST (COPY_BUFFER_FAST_DEFAULT * 2)
 
 static int isMemoryCardLikePath(const char *path)
 {
@@ -35,6 +37,25 @@ static int isMemoryCardLikePath(const char *path)
 static int isHddRootPath(const char *path)
 {
 	return (!strncmp(path, "hdd", 3) && path[3] >= '0' && path[3] <= '9' && path[4] == ':' && path[5] == '/' && path[6] == '\0');
+}
+
+static int isPsxFastCopyPath(const char *path)
+{
+	if (path == NULL)
+		return 0;
+	if (!strncmp(path, "hdd", 3) && (path[3] == '0' || path[3] == '1') && path[4] == ':')
+		return 1;
+	if (!strncmp(path, "ata", 3) && (path[3] == ':' || ((path[3] == '0' || path[3] == '1') && path[4] == ':')))
+		return 1;
+#ifdef DVRP
+	if (!strncmp(path, "dvr_hdd0:", 9))
+		return 1;
+#endif
+#ifdef UDPFS
+	if (!strncmp(path, "udpfs:", 6))
+		return 1;
+#endif
+	return 0;
 }
 
 static int isHddCommonParty(const char *party)
@@ -778,7 +799,7 @@ non_PSU_RESTORE_init:
        using a large block size with a slow device will result in an unresponsive UI.
        To prevent a loss in performance, these values must each be in a multiple of the device's sector/page size.
        They must also be in multiples of 64, to prevent FILEIO from doing alignment correction in software. */
-	buffSize = 0x100000;  //First assume buffer size = 1MB (good for HDD)
+	buffSize = COPY_BUFFER_FAST_DEFAULT;  //First assume buffer size = 1MB (good for HDD)
 	if (!strncmp(out, "mc", 2) || !strncmp(out, "mass", 4) || !strncmp(out, "vmc", 3))
 		buffSize = 131072;  //Use  128KB if writing to USB (Flash RAM writes) or MC (pretty slow).
 	                        //VMC contents should use the same size, as VMCs will often be stored on USB
@@ -798,6 +819,10 @@ non_PSU_RESTORE_init:
 #endif
 	        )
 		buffSize = 524288;  //Use 512KB reading from USB or HOST (acceptable)
+
+	if (console_is_PSX && buffSize == COPY_BUFFER_FAST_DEFAULT &&
+	    isPsxFastCopyPath(inPath) && isPsxFastCopyPath(outPath))
+		buffSize = COPY_BUFFER_PSX_FAST;
 
 	if (size < (u64)buffSize)
 		buffSize = (int)size;
