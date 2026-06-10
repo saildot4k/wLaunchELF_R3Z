@@ -48,6 +48,10 @@ EE_LIBS = -lgskit -ldmakit -lmc -lhdd -lkbd $(EE_MATH_LIB) \
 			-lcdvd -lc -lfileXio -lpatches -lpoweroff -ldebug -lelf-loader2
 EE_CFLAGS := -mgpopt -G10240 -G0 -DNEWLIB_PORT_AWARE -D_EE
 
+ifneq ($(DEBUG), 0)
+    EE_CFLAGS += -DULE_DEBUG_BUILD
+endif
+
 # Locate bin2s across old/new PS2SDK layouts and PATH.
 BIN2S_TOOL ?=
 ifneq ($(wildcard $(PS2SDK)/bin/bin2s),)
