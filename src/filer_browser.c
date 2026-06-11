@@ -1304,7 +1304,7 @@ int getFilePath(char *out, int cnfmode)
 					char pfs_str[10];
 
 					strcpy(pfs_str, "dvr_pfs0:");
-					pfs_str[7] += latestMount;
+					pfs_str[7] += latestDVRPMount;
 					ZoneFree = fileXioDevctl(pfs_str, PFSCTL_GET_ZONE_FREE, NULL, 0, NULL, 0);
 					ZoneSize = fileXioDevctl(pfs_str, PFSCTL_GET_ZONE_SIZE, NULL, 0, NULL, 0);
 					//printf("ZoneFree==%d  ZoneSize==%d\r\n", ZoneFree, ZoneSize);

@@ -348,6 +348,7 @@ void saveConfig(char *mainMsg, char *CNF)
 	        "Init_Delay = %d\r\n"
 	        "REBOOT_IOP_ELFLOAD = %d\r\n"
 	        "VirtualKeyboardLayout = %s\r\n"
+	        "Hide_Hdd = %d\r\n"
 	        "USBKBD_USED = %d\r\n"
 	        "USBKBD_FILE = %s\r\n"
 	        "KBDMAP_FILE = %s\r\n"
@@ -372,6 +373,7 @@ void saveConfig(char *mainMsg, char *CNF)
 	        setting->Init_Delay,       //Init_Delay
 	        setting->reboot_iop_elf_load,
 	        getVirtualKeyboardLayoutConfigName(setting->virtual_keyboard_layout),
+	        setting->Hide_Hdd,
 	        setting->usbkbd_used,      //USBKBD_USED
 	        setting->usbkbd_file,      //USBKBD_FILE
 	        setting->kbdmap_file,      //KBDMAP_FILE
@@ -534,6 +536,7 @@ void initConfig(void)
 	setting->language = DEF_LANGUAGE;
 	setting->reboot_iop_elf_load = DEF_STARTUP_RESET_IOP_ELFOAD;
 	setting->virtual_keyboard_layout = DEF_VIRTUAL_KEYBOARD_LAYOUT;
+	setting->Hide_Hdd = DEF_HIDE_HDD;
 	setting->Show_Titles = DEF_SHOW_TITLES;
 	setting->PathPad_Lock = DEF_PATHPAD_LOCK;
 	setting->PSU_HugeNames = DEF_PSU_HUGENAMES;
@@ -684,8 +687,10 @@ int loadConfig(char *mainMsg, char *CNF)
 		else if (!stricmp(name, "VirtualKeyboardLayout") || !stricmp(name, "Virtual_Keyboard_Layout") || !stricmp(name, "VKEY_Layout")) {
 			int layout = getVirtualKeyboardLayoutByConfigName(value);
 			setting->virtual_keyboard_layout = (layout >= 0) ? layout : DEF_VIRTUAL_KEYBOARD_LAYOUT;
-		}
-		else if (!strcmp(name, "USBKBD_FILE"))
+		} else if (!strcmp(name, "Hide_Hdd")) {
+			int hide_hdd = atoi(value);
+			setting->Hide_Hdd = (hide_hdd >= 0 && hide_hdd < HIDE_HDD_COUNT) ? hide_hdd : DEF_HIDE_HDD;
+		} else if (!strcmp(name, "USBKBD_FILE"))
 			strcpy(setting->usbkbd_file, value);
 		else if (!strcmp(name, "KBDMAP_FILE"))
 			strcpy(setting->kbdmap_file, value);

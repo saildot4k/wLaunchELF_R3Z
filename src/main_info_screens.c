@@ -45,7 +45,7 @@ void Show_About_uLE(void)
 {
 	char TextRow[256];
 	int event, post_event = 0;
-	int hpos = 16;
+	int hpos = 12;
 
 	event = 1;  //event = initial entry
 	//----- Start of event loop -----
@@ -61,11 +61,12 @@ void Show_About_uLE(void)
 		if (event || post_event) {  //NB: We need to update two frame buffers per event
 			clrScr(setting->color[COLOR_BACKGR]);
 			sprintf(TextRow, "About wLaunchELF %s  %s", ULE_VERSION, ULE_VERDATE);
-			PrintPos(03, hpos, TextRow, COLOR_SELECT);
+			PrintPos(01, hpos, TextRow, COLOR_SELECT);
 			sprintf(TextRow, " commit: %s", GIT_HASH);
-			PrintPos(04, hpos, TextRow, COLOR_TEXT);
-			PrintPos(05, hpos, "Mod by: R3Z3N & Codex 5.3 LLM", COLOR_TEXT);
+			PrintPos(02, hpos, TextRow, COLOR_TEXT);
+			PrintPos(03, hpos, "Mod by: R3Z3N & Codex 5.3 LLM", COLOR_TEXT);
 			PrintPos(-1, hpos, "DS3/DS4 support by Alex Parrado", COLOR_TEXT);
+			PrintPos(-1, hpos, "No thanks to: TnA Plastic of PS2 Scene and PSX-Place", COLOR_TEXT);
 			PrintPos(-1, hpos, "Project maintainers:  sp193 & AKuHAK", COLOR_TEXT);
 			PrintPos(-1, hpos, "  ", COLOR_TEXT);
 			PrintPos(-1, hpos, "uLaunchELF Project maintainers:", COLOR_TEXT);
@@ -115,9 +116,14 @@ void Show_build_info(void)
 
 			PrintPos(-1, hpos,
 #ifdef ETH
-			         " ETH:1"
+			         " ETH=1"
 #else
-			         " ETH:0"
+			         " ETH=0"
+#endif
+#ifdef UDPFS
+			         " UDPFS=1"
+#else
+			         " UDPFS=0"
 #endif
 			         , COLOR_TEXT);
 			PrintPos(-1, hpos,

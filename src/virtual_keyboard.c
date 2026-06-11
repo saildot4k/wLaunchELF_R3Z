@@ -10,7 +10,6 @@ static const char *vkey_layout_config_names[VKEY_LAYOUT_COUNT] = {
     "azerty",
     "qwertz",
     "abnt",
-    "abnt2",
 };
 
 static const char *vkey_layout_display_names[VKEY_LAYOUT_COUNT] = {
@@ -20,7 +19,6 @@ static const char *vkey_layout_display_names[VKEY_LAYOUT_COUNT] = {
     "AZERTY",
     "QWERTZ",
     "ABNT",
-    "ABNT2",
 };
 
 enum {
@@ -127,22 +125,6 @@ static const char *vkey_layout_rows[VKEY_LAYOUT_COUNT][VKEY_SHIFT_COUNT][VKEY_LA
             "    _            ",
         },
     },
-    {
-        {
-            "'1234567890-=    ",
-            "qwertyuiop'[     ",
-            "asdfghjkl;~]     ",
-            " \\zxcvbnm,.;/    ",
-            "    _            ",
-        },
-        {
-            "\"!@#$%^&*()_+    ",
-            "QWERTYUIOP`{     ",
-            "ASDFGHJKL:^}     ",
-            " |ZXCVBNM<>:?    ",
-            "    _            ",
-        },
-    },
 };
 
 int normalizeVirtualKeyboardLayout(int layout)
@@ -187,8 +169,10 @@ int getVirtualKeyboardLayoutByConfigName(const char *name)
     if (!stricmp(name, "5"))
         return VKEY_LAYOUT_ABNT;
     if (!stricmp(name, "6"))
-        return VKEY_LAYOUT_ABNT2;
+        return VKEY_LAYOUT_ABNT;
     if (!stricmp(name, "n"))
+        return VKEY_LAYOUT_ABNT;
+    if (!stricmp(name, "abnt2"))
         return VKEY_LAYOUT_ABNT;
     return -1;
 }

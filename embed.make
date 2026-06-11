@@ -52,6 +52,41 @@ ifeq ($(XFROM),1)
   endif
 endif
 
+XPARAM_SOURCE :=
+XPARAM_AUTOGEN := iop/__generated/xparam.irx
+XPARAM_SDK_ROOT :=
+XPARAM_SDK_MODULE_DIR :=
+
+ifneq ($(wildcard $(PS2SDK)/iop/irx/xparam.irx),)
+XPARAM_SOURCE := $(PS2SDK)/iop/irx/xparam.irx
+endif
+
+ifeq ($(strip $(XPARAM_SOURCE)),)
+ifneq ($(PS2SDKSRC),)
+ifneq ($(wildcard $(PS2SDKSRC)/iop/deckard/xparam/Makefile),)
+XPARAM_SDK_ROOT := $(PS2SDKSRC)
+XPARAM_SDK_MODULE_DIR := $(PS2SDKSRC)/iop/deckard/xparam
+endif
+endif
+endif
+
+ifeq ($(strip $(XPARAM_SOURCE)),)
+ifneq ($(wildcard $(PS2SDK)/iop/deckard/xparam/Makefile),)
+XPARAM_SDK_ROOT := $(PS2SDK)
+XPARAM_SDK_MODULE_DIR := $(PS2SDK)/iop/deckard/xparam
+endif
+endif
+
+ifeq ($(strip $(XPARAM_SOURCE)),)
+ifneq ($(strip $(XPARAM_SDK_MODULE_DIR)),)
+XPARAM_SOURCE := $(XPARAM_AUTOGEN)
+endif
+endif
+
+ifeq ($(strip $(XPARAM_SOURCE)),)
+$(error Missing xparam.irx. Update PS2SDK, or provide PS2SDKSRC with iop/deckard/xparam sources)
+endif
+
 # Prefer newer storage stack modules:
 # 1) installed PS2SDK IRX
 # 2) auto-build from PS2SDK sources
@@ -395,6 +430,15 @@ iop/cdvd.irx: iop/oldlibs/libcdvd
 $(EE_ASM_DIR)cdvd_irx.s: $(CDVD_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ cdvd_irx
 
+ifneq ($(filter iop/__generated/xparam.irx,$(XPARAM_SOURCE)),)
+$(XPARAM_SOURCE): | iop/__generated
+	$(MAKE) -C $(XPARAM_SDK_MODULE_DIR) PS2SDKSRC=$(XPARAM_SDK_ROOT) PS2SDK=$(XPARAM_SDK_ROOT)
+	if [ -f "$(XPARAM_SDK_MODULE_DIR)/xparam.irx" ]; then cp "$(XPARAM_SDK_MODULE_DIR)/xparam.irx" "$@"; elif [ -f "$(XPARAM_SDK_MODULE_DIR)/irx/xparam.irx" ]; then cp "$(XPARAM_SDK_MODULE_DIR)/irx/xparam.irx" "$@"; else echo "xparam.irx was not produced by $(XPARAM_SDK_MODULE_DIR)" >&2; exit 1; fi
+endif
+
+$(EE_ASM_DIR)xparam_irx.s: $(XPARAM_SOURCE) | $(EE_ASM_DIR)
+	$(BIN2S) $< $@ xparam_irx
+
 $(EE_ASM_DIR)ioptrap_irx.s: $(PS2SDK)/iop/irx/ioptrap.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ioptrap_irx
 
@@ -547,7 +591,14 @@ endif
 iop/ps2ftpd.irx: iop/oldlibs/ps2ftpd
 	$(MAKE) -C $<
 
-$(EE_ASM_DIR)ps2hdd_irx.s: $(PS2SDK)/iop/irx/ps2hdd-osd.irx | $(EE_ASM_DIR)
+LOCAL_PS2HDD_OSD_IRX := iop/ps2hdd_osd/ps2hdd-osd.irx
+PS2HDD_OSD_SOURCE ?= $(LOCAL_PS2HDD_OSD_IRX)
+PS2HDD_OSD_DEPS := $(wildcard iop/ps2hdd_osd/*.[ch]) iop/ps2hdd_osd/imports.lst iop/ps2hdd_osd/Makefile
+
+$(LOCAL_PS2HDD_OSD_IRX): $(PS2HDD_OSD_DEPS)
+	$(MAKE) -C iop/ps2hdd_osd
+
+$(EE_ASM_DIR)ps2hdd_irx.s: $(PS2HDD_OSD_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ps2hdd_irx
 
 $(EE_ASM_DIR)ps2fs_irx.s: $(PS2SDK)/iop/irx/ps2fs.irx | $(EE_ASM_DIR)

@@ -19,11 +19,36 @@ enum CONFIG_STARTUP {
 	CONFIG_STARTUP_FONT,
 	CONFIG_STARTUP_ESR,
 	CONFIG_STARTUP_OSDSYS,
+	CONFIG_STARTUP_HIDE_HDD,
 
 	CONFIG_STARTUP_RETURN,
 
 	CONFIG_STARTUP_COUNT
 };
+
+static int normalizeHideHddMode(int mode)
+{
+	while (mode < 0)
+		mode += HIDE_HDD_COUNT;
+	while (mode >= HIDE_HDD_COUNT)
+		mode -= HIDE_HDD_COUNT;
+	return mode;
+}
+
+static const char *hide_hdd_mode_names[HIDE_HDD_COUNT] = {
+	"Show All",
+	"hdd1",
+	"hdd0/1",
+	"ata1",
+	"ata0/1",
+	"hdd1 & ata1",
+	"hdd0/1 & ata0/1",
+};
+
+static const char *getHideHddModeDisplayName(int mode)
+{
+	return hide_hdd_mode_names[normalizeHideHddMode(mode)];
+}
 
 static int getConfigStartupItemY(int s)
 {
@@ -35,7 +60,7 @@ static int getConfigStartupItemY(int s)
 
 	for (i = CONFIG_STARTUP_FIRST; i < s; i++) {
 		y += FONT_HEIGHT;
-		if (i == CONFIG_STARTUP_RESET_IOP_ELFOAD || i == CONFIG_STARTUP_KBDMAP || i == CONFIG_STARTUP_OSDSYS)
+		if (i == CONFIG_STARTUP_RESET_IOP_ELFOAD || i == CONFIG_STARTUP_KBDMAP || i == CONFIG_STARTUP_OSDSYS || i == CONFIG_STARTUP_HIDE_HDD)
 			y += FONT_HEIGHT / 2;
 	}
 
@@ -109,7 +134,8 @@ void Config_Startup(void)
 					} else if (s == CONFIG_STARTUP_OSDSYS) {  //clear OSDSYS file choice
 						setting->LK_Path[SETTING_LK_OSDSYS][0] = 0;
 						setting->LK_Flag[SETTING_LK_OSDSYS] = 0;
-					}
+					} else if (s == CONFIG_STARTUP_HIDE_HDD)
+						setting->Hide_Hdd = normalizeHideHddMode(setting->Hide_Hdd - 1);
 				} else if ((swapKeys && new_pad & PAD_CROSS) || (!swapKeys && new_pad & PAD_CIRCLE)) {
 					event |= 2;  //event |= valid pad command
 					if (s == CONFIG_STARTUP_LANGUAGE) {
@@ -161,7 +187,9 @@ void Config_Startup(void)
 						}
 						if (setting->LK_Path[SETTING_LK_OSDSYS][0])
 							setting->LK_Flag[SETTING_LK_OSDSYS] = 1;
-					} else if (s == CONFIG_STARTUP_RETURN)
+					} else if (s == CONFIG_STARTUP_HIDE_HDD)
+						setting->Hide_Hdd = normalizeHideHddMode(setting->Hide_Hdd + 1);
+					else if (s == CONFIG_STARTUP_RETURN)
 						return;
 				} else if (new_pad & PAD_TRIANGLE)
 					return;
@@ -245,6 +273,11 @@ void Config_Startup(void)
 			configFormatLabelValue(c, sizeof(c), "OSDSYS kelf", (strlen(setting->LK_Path[SETTING_LK_OSDSYS]) == 0) ? LNG(DEFAULT) : setting->LK_Path[SETTING_LK_OSDSYS]);
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
+			y += FONT_HEIGHT / 2;
+
+			configFormatLabelValue(c, sizeof(c), "Hide HDD", getHideHddModeDisplayName(setting->Hide_Hdd));
+			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
+			y += FONT_HEIGHT;
 
 			y += FONT_HEIGHT / 2;
 			sprintf(c, "  %s", LNG(RETURN));
@@ -266,7 +299,7 @@ void Config_Startup(void)
 					len = sprintf(c, "\xFF"
 					                 "0:%s",
 					              LNG(Change));
-			} else if ((s == CONFIG_STARTUP_LANGUAGE) || (s == CONFIG_STARTUP_INIT_DELAY) || (s == CONFIG_STARTUP_TIMEOUT) || (s == CONFIG_STARTUP_VKEY_LAYOUT)) {  //language || Init_Delay || timeout || vkey layout
+			} else if ((s == CONFIG_STARTUP_LANGUAGE) || (s == CONFIG_STARTUP_INIT_DELAY) || (s == CONFIG_STARTUP_TIMEOUT) || (s == CONFIG_STARTUP_VKEY_LAYOUT) || (s == CONFIG_STARTUP_HIDE_HDD)) {  //language || Init_Delay || timeout || vkey layout || Hide HDD
 				if (swapKeys)
 					len = sprintf(c, "\xFF"
 					                 "1:%s \xFF"

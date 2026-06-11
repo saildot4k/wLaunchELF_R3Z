@@ -12,6 +12,26 @@
 #define MC_ATTR_norm_folder 0x8427  //Normal folder on PS2 MC
 #define MC_ATTR_norm_file 0x8497    //file (PS2/PS1) on PS2 MC
 
+static int getHideHddMode(void)
+{
+	int mode = (setting != NULL) ? setting->Hide_Hdd : HIDE_HDD_HDD1_ATA1;
+
+	return (mode >= 0 && mode < HIDE_HDD_COUNT) ? mode : HIDE_HDD_HDD1_ATA1;
+}
+
+static const unsigned char hide_hdd_unit_masks[HIDE_HDD_COUNT] = {0, 2, 3, 0, 0, 2, 3};
+static const unsigned char hide_ata_unit_masks[HIDE_HDD_COUNT] = {0, 0, 0, 2, 3, 2, 3};
+
+static int shouldShowHddDevice(int unit)
+{
+	return (unit >= 0 && unit < 2 && !(hide_hdd_unit_masks[getHideHddMode()] & (1 << unit)));
+}
+
+static int shouldShowAtaDevice(int unit)
+{
+	return (unit >= 0 && unit < 2 && !(hide_ata_unit_masks[getHideHddMode()] & (1 << unit)));
+}
+
 static void clearMcTable(sceMcTblGetDir *mcT)
 {
 	memset((void *)mcT, 0, sizeof(sceMcTblGetDir));
@@ -56,8 +76,13 @@ char clipPath[MAX_PATH], LastDir[MAX_NAME], marks[MAX_ENTRY];
 FILEINFO clipFiles[MAX_ENTRY];
 int fileMode = FIO_S_IRUSR | FIO_S_IWUSR | FIO_S_IXUSR | FIO_S_IRGRP | FIO_S_IWGRP | FIO_S_IXGRP | FIO_S_IROTH | FIO_S_IWOTH | FIO_S_IXOTH;
 
+#ifdef ULE_DEBUG_BUILD
 #ifndef FILEOP_TRACE
 #define FILEOP_TRACE 1
+#endif
+#else
+#undef FILEOP_TRACE
+#define FILEOP_TRACE 0
 #endif
 
 char cnfmode_extU[CNFMODE_CNT][4] = {
@@ -651,6 +676,8 @@ int genFixPath(const char *inp_path, char *gen_path)
 		}
 		//Generate standard path to the block device (i.e. dvr_hdd0:/partition results in hdd0:partition)
 		sprintf(party, "dvr_hdd0:%s", loc_path);
+		//If partition is __xdata, use dvr_pfs1:
+		gen_path[7] = (getDVRPPartyMountIndex(party) == 1) ? '1' : '0';
 		if (ndvrpparties == 0) {
 			//No partitions recognized? Load modules & populate partition list.
 			loadDVRPHddModules();
@@ -1005,9 +1032,9 @@ static void initUDPFS(void)
 }
 #endif
 
+#ifdef ETH
 void initHOST(void)
 {
-#ifdef ETH
 	int fd;
 
 	load_ps2host();
@@ -1023,43 +1050,22 @@ void initHOST(void)
 			host_error = 1;
 	}
 	host_ready = 1;
-#elif defined(UDPFS)
-	initUDPFS();
-#endif
 }
-//--------------------------------------------------------------
+#endif
+#ifdef ETH
 int readHOST(const char *path, FILEINFO *info, int max)
 {
 	iox_dirent_t hostcontent;
 	int hfd, rv, hostcount = 0;
 	char host_path[MAX_PATH];
 	char Win_path[MAX_PATH];
-#if defined(ETH) && defined(UDPFS)
-	const int use_udpfs = !strncmp(path, "udpfs", 5);
-#endif
 
-#if defined(ETH) && defined(UDPFS)
-	if (use_udpfs)
-		initUDPFS();
-	else
-		initHOST();
-#elif defined(UDPFS)
-	initUDPFS();
-#else
 	initHOST();
-#endif
 	snprintf(host_path, MAX_PATH, "%s", path);
 
-#ifdef ETH
-#ifdef UDPFS
-	if (!use_udpfs && !strncmp(path, "host:/", 6))
-		strcpy(host_path + 5, path + 6);
-	if (!use_udpfs && host_elflist && !strcmp(host_path, "host:")) {
-#else
 	if (!strncmp(path, "host:/", 6))
 		strcpy(host_path + 5, path + 6);
 	if (host_elflist && !strcmp(host_path, "host:")) {
-#endif
 		int size, contentptr;
 		char *elflisttxt, elflistchar;
 		char host_next[MAX_PATH];
@@ -1100,7 +1106,6 @@ int readHOST(const char *path, FILEINFO *info, int max)
 		free(elflisttxt);
 		return hostcount - 1;
 	}
-#endif
 
 	if ((hfd = fileXioDopen(makeHostPath(Win_path, host_path))) < 0)
 		return 0;
@@ -1134,8 +1139,45 @@ int readHOST(const char *path, FILEINFO *info, int max)
 	return hostcount;
 }
 #endif
+#ifdef UDPFS
+int readUDPFS(const char *path, FILEINFO *info, int max)
+{
+	iox_dirent_t dirent;
+	int fd, count = 0;
+
+	initUDPFS();
+	if ((fd = fileXioDopen(path)) < 0)
+		return 0;
+
+	while (fileXioDread(fd, &dirent) > 0) {
+		if (strcmp(dirent.name, ".") && strcmp(dirent.name, "..")) {
+			size_valid = 1;
+			time_valid = 1;
+			strcpy(info[count].name, dirent.name);
+			clearMcTable(&info[count].stats);
+
+			if (!(dirent.stat.mode & FIO_S_IFDIR))
+				info[count].stats.AttrFile = MC_ATTR_norm_file;
+			else
+				info[count].stats.AttrFile = MC_ATTR_norm_folder;
+
+			info[count].stats.FileSizeByte = dirent.stat.size;
+			info[count].stats.Reserve2 = dirent.stat.hisize;
+			memcpy((void *)&info[count].stats._Create, dirent.stat.ctime, 8);
+			memcpy((void *)&info[count].stats._Modify, dirent.stat.mtime, 8);
+			count++;
+			if (count >= max)
+				break;
+		}
+	}
+	fileXioDclose(fd);
+	strcpy(info[count].name, "\0");
+	return count;
+}
+#endif
+#endif
 //------------------------------
-//endfunc readHOST
+//endfunc readHOST/readUDPFS
 //--------------------------------------------------------------
 int getDir(const char *path, FILEINFO *info)
 {
@@ -1239,7 +1281,7 @@ int getDir(const char *path, FILEINFO *info)
 #endif
 #ifdef UDPFS
 	else if (!strncmp(path, "udpfs", 5))
-		n = readHOST(path, info, max);
+		n = readUDPFS(path, info, max);
 #endif
 #endif
 #ifdef MMCE
@@ -1375,7 +1417,7 @@ int getDir(const char *path, FILEINFO *info)
 //--------------------------------------------------------------
 int setFileList(const char *path, const char *ext, FILEINFO *files, int cnfmode)
 {
-	int nfiles, i, j, ret, allow_usb_devices, hide_hdd_ata_devices;
+	int nfiles, i, j, ret, allow_usb_devices;
 
 	size_valid = 0;
 	time_valid = 0;
@@ -1385,7 +1427,6 @@ int setFileList(const char *path, const char *ext, FILEINFO *files, int cnfmode)
 		if (USB_mass_scanned)  //if mass drives were scanned in earlier browsing
 			scan_USB_mass();   //then allow another scan here (timer dependent)
 		allow_usb_devices = ((cnfmode != USBD_IRX_CNF) && (cnfmode != USBKBD_IRX_CNF) && (cnfmode != USBMASS_IRX_CNF));
-		hide_hdd_ata_devices = shouldHideHddAtaDevices();
 
 		strcpy(files[nfiles].name, "mc0:");
 		files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
@@ -1415,17 +1456,21 @@ int setFileList(const char *path, const char *ext, FILEINFO *files, int cnfmode)
 			}
 	#endif
 
-		if (!hide_hdd_ata_devices) {
+		if (shouldShowHddDevice(0)) {
 			strcpy(files[nfiles].name, "hdd0:");
 			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+		}
+		if (shouldShowHddDevice(1)) {
 			strcpy(files[nfiles].name, "hdd1:");
 			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
 		}
 
 #ifdef EXFAT
-		if (allow_usb_devices && !hide_hdd_ata_devices) {
+		if (allow_usb_devices && shouldShowAtaDevice(0)) {
 			strcpy(files[nfiles].name, "ata0:");
 			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+		}
+		if (allow_usb_devices && shouldShowAtaDevice(1)) {
 			strcpy(files[nfiles].name, "ata1:");
 			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
 		}

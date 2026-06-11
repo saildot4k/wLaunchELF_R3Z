@@ -296,19 +296,30 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 	static char exec_target[MAX_PATH];
 	static char exec_arg0[MAX_PATH];
 	const char *handoff_path = NULL;
+#ifdef DVRP
+	int dvr_pfs_ix = -1;
+	char dvr_pfs_name[10] = "dvr_pfs0:";
+#endif
 
 	if (selected_path != NULL && selected_path[0] != '\0')
 		handoff_path = normalizeExecArg0Path(selected_path, exec_arg0, sizeof(exec_arg0));
 	snprintf(exec_target, sizeof(exec_target), "%s", filename);
+	if (exec_kind == 1 && handoff_path != NULL && !strncmp(handoff_path, "mass", 4))
+		snprintf(exec_target, sizeof(exec_target), "%s", handoff_path);
 	DPRINTF("RunLoaderElf: exec_kind=%d reboot_iop=%d target='%s' handoff='%s' party='%s'\n",
 	        exec_kind, reboot_iop_elf_load, filename,
 	        (handoff_path != NULL) ? handoff_path : "",
 	        (party != NULL) ? party : "");
 	DPRINTF("RunLoaderElf: loader target='%s'\n", exec_target);
+#ifdef DVRP
+	dvr_pfs_ix = (party != NULL) ? getDVRPPartyMountIndex(party) : -1;
+	if (dvr_pfs_ix >= 0)
+		dvr_pfs_name[7] = '0' + dvr_pfs_ix;
+#endif
 
 	if (exec_kind == 1) {
 #ifdef DVRP
-		const int is_dvr_pfs = ((!strncmp(party, "dvr_hdd0:", 9)) && (!strncmp(filename, "dvr_pfs0:", 9)));
+		const int is_dvr_pfs = (dvr_pfs_ix >= 0 && !strncmp(filename, dvr_pfs_name, 9));
 #endif
 		const int is_hdd_pfs = (isHddPartyPath(party) && (!strncmp(filename, "pfs0:", 5)));
 		int ret;
@@ -321,16 +332,20 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 			}
 #ifdef DVRP
 		} else if (is_dvr_pfs) {
-			if (0 > fileXioMount("dvr_pfs0:", party, FIO_MT_RDONLY)) {
-				unmountDVRPParty(0);
-				if (0 > fileXioMount("dvr_pfs0:", party, FIO_MT_RDONLY))
+			if (0 > fileXioMount(dvr_pfs_name, party, FIO_MT_RDONLY)) {
+				unmountDVRPParty(dvr_pfs_ix);
+				if (0 > fileXioMount(dvr_pfs_name, party, FIO_MT_RDONLY))
 					return;
 			}
 #endif
 		}
 
-		DPRINTF("RunLoaderElf: elf-loader2 target='%s' party='%s'\n", filename, party);
-		ret = LoadELFFromFileWithPartition(filename, (party != NULL && party[0] != '\0') ? party : NULL, 0, NULL);
+		DPRINTF("RunLoaderElf: elf-loader2 target='%s' party='%s'\n", exec_target, party);
+		ret = LoadELFFromFileWithPartition(exec_target, (party != NULL && party[0] != '\0') ? party : NULL, 0, NULL);
+		if (ret < 0 && strcmp(exec_target, filename) != 0) {
+			DPRINTF("RunLoaderElf: elf-loader2 retry legacy target='%s' party='%s'\n", filename, party);
+			ret = LoadELFFromFileWithPartition(filename, (party != NULL && party[0] != '\0') ? party : NULL, 0, NULL);
+		}
 		DPRINTF("RunLoaderElf: elf-loader2 returned %d\n", ret);
 		exit(126);
 	}
@@ -357,17 +372,17 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 		else
 			argv[1] = bootpath;
 #ifdef DVRP
-	} else if ((!strncmp(party, "dvr_hdd0:", 9)) && (!strncmp(filename, "dvr_pfs0:", 9))) {
-		if (0 > fileXioMount("dvr_pfs0:", party, FIO_MT_RDONLY)) {
+	} else if (dvr_pfs_ix >= 0 && !strncmp(filename, dvr_pfs_name, 9)) {
+		if (0 > fileXioMount(dvr_pfs_name, party, FIO_MT_RDONLY)) {
 			//Some error occurred, it could be due to something else having used pfs0
-			unmountDVRPParty(0);  //So we try unmounting pfs0, to try again
-			if (0 > fileXioMount("dvr_pfs0:", party, FIO_MT_RDONLY))
+			unmountDVRPParty(dvr_pfs_ix);  //So we try unmounting pfs, to try again
+			if (0 > fileXioMount(dvr_pfs_name, party, FIO_MT_RDONLY))
 				return;  //If it still fails, we have to give up...
 		}
 
 		//If a path to a file on PFS is specified, change it to the standard format.
 		//dvr_hdd0:partition:pfs:path/to/file
-		if (strncmp(filename, "dvr_pfs0:", 9) == 0) {
+		if (strncmp(filename, dvr_pfs_name, 9) == 0) {
 			sprintf(bootpath, "%s:pfs:%s", party, &filename[9]);
 		} else {
 			sprintf(bootpath, "%s:%s", party, filename);
