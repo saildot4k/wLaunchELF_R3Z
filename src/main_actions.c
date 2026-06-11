@@ -5,6 +5,7 @@
 #include "init.h"
 #include "main_actions.h"
 #include "main_gameid.h"
+#include "main_history.h"
 #include "main_info_screens.h"
 
 //CleanUp releases uLE stuff preparatory to launching some other application
@@ -256,15 +257,17 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		}
 		if (BootDiscType == 1) {  //Boot a PS1 disc
 			char disc_gameid[12];
-			int show_disc_gameid;
+			int have_disc_gameid;
 			char *args[2] = {SystemCnf_BOOT, SystemCnf_VER};
 
-			show_disc_gameid = 0;
-			if (!setting->cdrom_disable_gameid)
-				show_disc_gameid = buildLaunchGameID(SystemCnf_BOOT, disc_gameid, sizeof(disc_gameid));
+			have_disc_gameid = buildLaunchGameID(SystemCnf_BOOT, disc_gameid, sizeof(disc_gameid));
+			if (have_disc_gameid) {
+				updateOSDHistoryFile(disc_gameid);
+				applyXPARAM(disc_gameid);
+			}
 
 			CleanUp();
-			if (show_disc_gameid)
+			if (have_disc_gameid && !setting->cdrom_disable_gameid)
 				displayRetroGemGameID(disc_gameid, 2);
 			LoadExecPS2("rom0:PS1DRV", 2, args);
 			sprintf(ctx->main_msg, "PS1DRV %s", LNG(Failed));
@@ -434,11 +437,16 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		{
 			int show_launch_gameid = 0;
 			int disc_launch = isLikelyDiscLaunch(path);
+			int have_launch_gameid = 0;
 			char launch_gameid[12];
 
 			if (disc_launch) {
-				if (!setting->cdrom_disable_gameid)
-					show_launch_gameid = buildLaunchGameID(fullpath, launch_gameid, sizeof(launch_gameid));
+				have_launch_gameid = buildLaunchGameID(fullpath, launch_gameid, sizeof(launch_gameid));
+				if (have_launch_gameid) {
+					updateOSDHistoryFile(launch_gameid);
+					applyXPARAM(launch_gameid);
+				}
+				show_launch_gameid = have_launch_gameid && !setting->cdrom_disable_gameid;
 			} else if (setting->app_gameid) {
 				show_launch_gameid = buildLaunchGameID(fullpath, launch_gameid, sizeof(launch_gameid));
 			}

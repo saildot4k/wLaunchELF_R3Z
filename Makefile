@@ -4,8 +4,8 @@
 MMCE ?= 1
 DS34 ?= 0
 TMANIP ?= 1
-ETH ?= 1
-UDPFS ?= 0
+ETH ?= 0
+UDPFS ?= 1
 EXFAT ?= 1
 DVRP ?= 1
 IOP_RESET ?= 1
@@ -16,7 +16,7 @@ SIO2MAN ?= 0
 PPC_UART ?= 0
 SIO_DEBUG ?= 0
 DEBUG ?= 0
-LCDVD ?= LEGACY#or LATEST
+LCDVD ?= LATEST#or LEGACY
 # ----------------------------- #
 .SILENT:
 
@@ -28,11 +28,11 @@ else
   EE_BIN = UNC-BOOT.ELF
   EE_BIN_PKD = BOOT.ELF
 endif
-EE_OBJS = main.o main_actions.o main_boot.o main_modules.o main_menu.o main_info_screens.o main_gameid.o init.o main_startup.o main_fileops.o config.o config_screen.o config_startup.o config_network.o config_advanced.o gui.o gui_colors.o virtual_keyboard.o elf.o draw.o draw_gs.o draw_text.o loader_elf.o filer.o filer_device.o filer_mount.o filer_fileops.o filer_actions.o filer_browser.o filer_copy.o \
+EE_OBJS = main.o main_actions.o main_boot.o main_modules.o main_menu.o main_info_screens.o main_gameid.o main_history.o init.o main_startup.o main_fileops.o config.o config_screen.o config_startup.o config_network.o config_advanced.o gui.o gui_colors.o virtual_keyboard.o elf.o draw.o draw_gs.o draw_text.o loader_elf.o filer.o filer_device.o filer_mount.o filer_fileops.o filer_actions.o filer_browser.o filer_copy.o \
 	gui_sort.o gui_texteditor.o gui_hdd0_format.o psu_functions.o \
 	poweroff_irx.o iomanx_irx.o filexio_irx.o ps2dev9_irx.o \
 	ps2hdd_irx.o ps2fs_irx.o usbd_irx.o mcman_irx.o mcserv_irx.o \
-	cdvd_irx.o vmcman_irx.o ps2kbd_irx.o \
+	cdvd_irx.o xparam_irx.o vmcman_irx.o ps2kbd_irx.o \
 	hdd.o hdl_rpc.o hdl_info_irx.o editor.o editor_menu.o editor_input.o editor_rules.o editor_file.o timer.o icon.o lang.o \
 	font_uLE.o makeicon.o chkesr.o allowdvdv_irx.o
 
@@ -47,6 +47,10 @@ endif
 EE_LIBS = -lgskit -ldmakit -lmc -lhdd -lkbd $(EE_MATH_LIB) \
 			-lcdvd -lc -lfileXio -lpatches -lpoweroff -ldebug -lelf-loader2
 EE_CFLAGS := -mgpopt -G10240 -G0 -DNEWLIB_PORT_AWARE -D_EE
+
+ifneq ($(DEBUG), 0)
+    EE_CFLAGS += -DULE_DEBUG_BUILD
+endif
 
 # Locate bin2s across old/new PS2SDK layouts and PATH.
 BIN2S_TOOL ?=
@@ -146,14 +150,11 @@ ifeq ($(IOP_RESET),0)
 endif
 
 ifeq ($(ETH),1)
-ifeq ($(UDPFS),1)
-    $(error ETH and UDPFS cannot be enabled together. Choose one network stack.)
-endif
-endif
-
-ifeq ($(ETH),1)
     EE_OBJS += ps2smap_irx.o ps2ftpd_irx.o ps2host_irx.o ps2netfs_irx.o ps2ip_irx.o
     EE_CFLAGS += -DETH
+ifeq ($(UDPFS),1)
+    HAS_ETH = -ETH
+endif
 endif
 
 ifeq ($(UDPFS),1)
@@ -245,12 +246,12 @@ all-psx-no-ds34:
 all-psx-ds34:
 	$(MAKE) all DS34=1 DVRP=1 XFROM=1 EE_OBJS_DIR=$(PSX_DS34_OBJ_DIR) EE_ASM_DIR=$(PSX_DS34_ASM_DIR)
 
-all-ci-variants: all-no-psx-no-ds34 all-no-psx-ds34 all-psx-no-ds34 all-psx-ds34
+all-ci-variants: all-psx-no-ds34 all-psx-ds34
 
 # CI profile helpers (kept aligned with .github/workflows/compile.yml).
 CI_RESOLVE_SCRIPT := scripts/ci/resolve_make_args.sh
 CI_STALE_AUDIT_SCRIPT := scripts/stale_code_audit.sh
-CI_PSX_PROFILE ?= no-psx
+CI_PSX_PROFILE ?= psx
 CI_PAD_PROFILE ?= no-ds34
 CI_STORAGE_PROFILE ?= all
 
@@ -260,10 +261,10 @@ ci-build-profile:
 	$(MAKE) rebuild $$FLAGS
 
 ci-build-storage-matrix:
-	$(MAKE) ci-build-profile CI_PSX_PROFILE=no-psx CI_PAD_PROFILE=no-ds34 CI_STORAGE_PROFILE=usb
-	$(MAKE) ci-build-profile CI_PSX_PROFILE=no-psx CI_PAD_PROFILE=no-ds34 CI_STORAGE_PROFILE=mmce
-	$(MAKE) ci-build-profile CI_PSX_PROFILE=no-psx CI_PAD_PROFILE=no-ds34 CI_STORAGE_PROFILE=mx4sio
-	$(MAKE) ci-build-profile CI_PSX_PROFILE=no-psx CI_PAD_PROFILE=no-ds34 CI_STORAGE_PROFILE=minimal
+	$(MAKE) ci-build-profile CI_PSX_PROFILE=psx CI_PAD_PROFILE=no-ds34 CI_STORAGE_PROFILE=usb
+	$(MAKE) ci-build-profile CI_PSX_PROFILE=psx CI_PAD_PROFILE=no-ds34 CI_STORAGE_PROFILE=mmce
+	$(MAKE) ci-build-profile CI_PSX_PROFILE=psx CI_PAD_PROFILE=no-ds34 CI_STORAGE_PROFILE=mx4sio
+	$(MAKE) ci-build-profile CI_PSX_PROFILE=psx CI_PAD_PROFILE=no-ds34 CI_STORAGE_PROFILE=minimal
 
 stale-audit:
 	$(CI_STALE_AUDIT_SCRIPT) build
@@ -271,7 +272,8 @@ stale-audit:
 info:
 	$(info available build options:)
 	$(info   EXFAT		enable BDM and EXFAT support for it)
-	$(info   ETH		include network features?)
+	$(info   ETH		include host/netfs network stack)
+	$(info   UDPFS		include UDPFS network stack)
 	$(info   DS34		include PS3/PS4 controller support)
 	$(info   MX4SIO		support for SDCard connected to memory card slot 2)
 	$(info   MMCE		support for direct SDCard access on SD2PSX or memcardpro2)
@@ -285,7 +287,7 @@ info:
 	$(info   all-ds34-off		builds without DS34 in isolated obj dirs)
 	$(info   all-ds34-on		builds with DS34 in isolated obj dirs)
 	$(info   all-ds34-variants	builds both DS34 variants)
-	$(info   all-ci-variants	builds 4 artifacts (PSX stuff off/on x DS34 off/on))
+	$(info   all-ci-variants	builds PSX DS34 off/on artifacts)
 	$(info   ci-build-profile	uses scripts/ci/resolve_make_args.sh profiles)
 	$(info   ci-build-storage-matrix	quick storage-stack coverage build set)
 	$(info   stale-audit		generates build/stale-code-report.txt)
@@ -344,7 +346,7 @@ info2:
 	$(info EE_BIN = $(EE_BIN))
 	$(info EE_BIN_PKD = $(EE_BIN_PKD))
 	$(info EE_OBJS = $(EE_OBJS))
-	$(info TMANIP=$(TMANIP), SIO_DEBUG=$(SIO_DEBUG), DS34=$(DS34), ETH=$(ETH))
+	$(info TMANIP=$(TMANIP), SIO_DEBUG=$(SIO_DEBUG), DS34=$(DS34), ETH=$(ETH), UDPFS=$(UDPFS))
 	$(info EXFAT=$(EXFAT), XFROM=$(XFROM), UDPTTY=$(UDPTTY), MX4SIO=$(MX4SIO))
 	$(info MMCE=$(MMCE), IOP_RESET=$(IOP_RESET))
 

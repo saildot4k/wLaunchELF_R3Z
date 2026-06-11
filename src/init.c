@@ -79,6 +79,7 @@ IMPORT_BIN2C(poweroff_irx);
 IMPORT_BIN2C(loader_elf);
 IMPORT_BIN2C(iopmod_irx);
 IMPORT_BIN2C(cdvd_irx);
+IMPORT_BIN2C(xparam_irx);
 IMPORT_BIN2C(ps2kbd_irx);
 IMPORT_BIN2C(hdl_info_irx);
 IMPORT_BIN2C(mcman_irx);
@@ -179,6 +180,15 @@ enum block_storage_stack_mode {
 };
 static int block_storage_stack_mode = BLOCK_STACK_NONE;
 
+#if defined(ETH) && defined(UDPFS)
+enum network_stack_mode {
+	NETWORK_STACK_NONE = 0,
+	NETWORK_STACK_ETH,
+	NETWORK_STACK_UDPFS,
+};
+static int network_stack_mode = NETWORK_STACK_NONE;
+#endif
+
 //State of whether DEV9 was successfully loaded or not.
 static u8 ps2dev9_loaded = 0;
 
@@ -224,6 +234,9 @@ static void resetDriverStackLoadTracking(void);
 static void resetRuntimeDeviceState(void);
 static void switchStorageDriverStack(int target_mode);
 static void switchBlockStorageStack(int target_mode);
+#if defined(ETH) && defined(UDPFS)
+static void switchNetworkStack(int target_mode);
+#endif
 #ifdef EXFAT
 static int loadBdmCoreModules(void);
 static int loadAtaBlockDriver(void);
@@ -310,6 +323,9 @@ static void load_ps2ip(void)
 {
 	int ret, ID __attribute__((unused));
 
+#if defined(ETH) && defined(UDPFS)
+	switchNetworkStack(NETWORK_STACK_ETH);
+#endif
 	load_ps2dev9();
 	if (!ps2dev9_loaded) {
 		DPRINTF(" [NET]: skipping PS2IP/SMAP because DEV9 failed to initialize\n");
@@ -477,6 +493,9 @@ void load_ps2host(void)
 {
 	int ret, ID __attribute__((unused));
 
+#if defined(ETH) && defined(UDPFS)
+	switchNetworkStack(NETWORK_STACK_ETH);
+#endif
 	if (!have_ps2host || !have_ps2ip || !have_ps2smap || !ps2dev9_loaded)
 		showLoadingModulesMsg("host");
 
@@ -502,6 +521,9 @@ static void load_udpfs_stack(void)
 	int ret, ID __attribute__((unused));
 	char ministack_arg[32];
 
+#if defined(ETH) && defined(UDPFS)
+	switchNetworkStack(NETWORK_STACK_UDPFS);
+#endif
 	if (!have_udpfs_smap || !have_udpfs_ministack || !have_udpfs_ioman || !ps2dev9_loaded)
 		showLoadingModulesMsg("udpfs");
 
@@ -813,6 +835,17 @@ void loadCdModules(void)
 }
 //------------------------------
 //endfunc loadCdModules
+//---------------------------------------------------------------------------
+void applyXPARAM(const char *gameID)
+{
+	int ret, id;
+
+	if (gameID == NULL || gameID[0] == '\0')
+		return;
+
+	id = SifExecModuleBuffer(xparam_irx, size_xparam_irx, strlen(gameID) + 1, (char *)gameID, &ret);
+	DPRINTF(" [XPARAM]: id=%d ret=%d title='%s'\n", id, ret, gameID);
+}
 //---------------------------------------------------------------------------
 int uLE_cdDiscValid(void)  //returns 1 if disc valid, else returns 0
 {
@@ -1169,6 +1202,9 @@ static void resetDriverStackLoadTracking(void)
 {
 	storage_driver_stack_mode = STORAGE_STACK_DEFAULT;
 	block_storage_stack_mode = BLOCK_STACK_NONE;
+#if defined(ETH) && defined(UDPFS)
+	network_stack_mode = NETWORK_STACK_NONE;
+#endif
 }
 
 #ifdef DS34
@@ -1242,6 +1278,20 @@ static void switchBlockStorageStack(int target_mode)
 		resetRuntimeDeviceState();
 	}
 }
+
+#if defined(ETH) && defined(UDPFS)
+static void switchNetworkStack(int target_mode)
+{
+	if (network_stack_mode == target_mode)
+		return;
+
+	if (network_stack_mode != NETWORK_STACK_NONE) {
+		DPRINTF("Switching network stack (%d -> %d), resetting IOP\n", network_stack_mode, target_mode);
+		resetRuntimeDeviceState();
+	}
+	network_stack_mode = target_mode;
+}
+#endif
 
 #ifdef DVRP
 static void switchPsxHddDriverStack(int use_dvr_stack)

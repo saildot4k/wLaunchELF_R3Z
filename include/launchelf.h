@@ -1,11 +1,20 @@
 #ifndef LAUNCHELF_H
 #define LAUNCHELF_H
 #define HACK_FOLDER "BXEXEC-OPENTUNA"
-#ifndef DVRP
-#define ULE_VERSION "v4.50_R3Z"
+
+#if defined(SIO_DEBUG)
+#define ULE_VERSION_DEBUG_SUFFIX " SIO_DEBUG"
+#elif defined(POWERPC_UART)
+#define ULE_VERSION_DEBUG_SUFFIX " PPC_UART"
+#elif defined(UDPTTY)
+#define ULE_VERSION_DEBUG_SUFFIX " UDPTTY"
+#elif defined(ULE_DEBUG_BUILD)
+#define ULE_VERSION_DEBUG_SUFFIX " DEBUG"
 #else
-#define ULE_VERSION "v4.50_R3Z_dvr"
+#define ULE_VERSION_DEBUG_SUFFIX ""
 #endif
+
+#define ULE_VERSION "v4.50_R3Z" ULE_VERSION_DEBUG_SUFFIX
 //#ifndef ULE_VERDATE
 //#define ULE_VERDATE __DATE__
 //#endif
@@ -349,6 +358,7 @@ int loadDVRPHddModules(void);
 #endif
 void loadHdlInfoModule(void);
 void loadCdModules(void);
+void applyXPARAM(const char *gameID);
 int uLE_related(char *pathout, const char *pathin);
 int wleExists(const char *path);
 int IsTextEditorFileType(const char *path);
@@ -481,8 +491,10 @@ extern int nparties;                     //Clearing this causes FileBrowser to r
 extern unsigned char *elisaFnt;
 char *PathPad_menu(const char *path);
 int getFilePath(char *out, const int cnfmode);
-#if defined(ETH) || defined(UDPFS)
+#ifdef ETH
 void initHOST(void);
+#endif
+#if defined(ETH) || defined(UDPFS)
 char *makeHostPath(char *dp, char *sp);
 #endif
 int ynDialog(const char *message);

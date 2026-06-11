@@ -76,8 +76,13 @@ char clipPath[MAX_PATH], LastDir[MAX_NAME], marks[MAX_ENTRY];
 FILEINFO clipFiles[MAX_ENTRY];
 int fileMode = FIO_S_IRUSR | FIO_S_IWUSR | FIO_S_IXUSR | FIO_S_IRGRP | FIO_S_IWGRP | FIO_S_IXGRP | FIO_S_IROTH | FIO_S_IWOTH | FIO_S_IXOTH;
 
+#ifdef ULE_DEBUG_BUILD
 #ifndef FILEOP_TRACE
 #define FILEOP_TRACE 1
+#endif
+#else
+#undef FILEOP_TRACE
+#define FILEOP_TRACE 0
 #endif
 
 char cnfmode_extU[CNFMODE_CNT][4] = {
@@ -1027,9 +1032,9 @@ static void initUDPFS(void)
 }
 #endif
 
+#ifdef ETH
 void initHOST(void)
 {
-#ifdef ETH
 	int fd;
 
 	load_ps2host();
@@ -1045,43 +1050,22 @@ void initHOST(void)
 			host_error = 1;
 	}
 	host_ready = 1;
-#elif defined(UDPFS)
-	initUDPFS();
-#endif
 }
-//--------------------------------------------------------------
+#endif
+#ifdef ETH
 int readHOST(const char *path, FILEINFO *info, int max)
 {
 	iox_dirent_t hostcontent;
 	int hfd, rv, hostcount = 0;
 	char host_path[MAX_PATH];
 	char Win_path[MAX_PATH];
-#if defined(ETH) && defined(UDPFS)
-	const int use_udpfs = !strncmp(path, "udpfs", 5);
-#endif
 
-#if defined(ETH) && defined(UDPFS)
-	if (use_udpfs)
-		initUDPFS();
-	else
-		initHOST();
-#elif defined(UDPFS)
-	initUDPFS();
-#else
 	initHOST();
-#endif
 	snprintf(host_path, MAX_PATH, "%s", path);
 
-#ifdef ETH
-#ifdef UDPFS
-	if (!use_udpfs && !strncmp(path, "host:/", 6))
-		strcpy(host_path + 5, path + 6);
-	if (!use_udpfs && host_elflist && !strcmp(host_path, "host:")) {
-#else
 	if (!strncmp(path, "host:/", 6))
 		strcpy(host_path + 5, path + 6);
 	if (host_elflist && !strcmp(host_path, "host:")) {
-#endif
 		int size, contentptr;
 		char *elflisttxt, elflistchar;
 		char host_next[MAX_PATH];
@@ -1122,7 +1106,6 @@ int readHOST(const char *path, FILEINFO *info, int max)
 		free(elflisttxt);
 		return hostcount - 1;
 	}
-#endif
 
 	if ((hfd = fileXioDopen(makeHostPath(Win_path, host_path))) < 0)
 		return 0;
@@ -1156,8 +1139,45 @@ int readHOST(const char *path, FILEINFO *info, int max)
 	return hostcount;
 }
 #endif
+#ifdef UDPFS
+int readUDPFS(const char *path, FILEINFO *info, int max)
+{
+	iox_dirent_t dirent;
+	int fd, count = 0;
+
+	initUDPFS();
+	if ((fd = fileXioDopen(path)) < 0)
+		return 0;
+
+	while (fileXioDread(fd, &dirent) > 0) {
+		if (strcmp(dirent.name, ".") && strcmp(dirent.name, "..")) {
+			size_valid = 1;
+			time_valid = 1;
+			strcpy(info[count].name, dirent.name);
+			clearMcTable(&info[count].stats);
+
+			if (!(dirent.stat.mode & FIO_S_IFDIR))
+				info[count].stats.AttrFile = MC_ATTR_norm_file;
+			else
+				info[count].stats.AttrFile = MC_ATTR_norm_folder;
+
+			info[count].stats.FileSizeByte = dirent.stat.size;
+			info[count].stats.Reserve2 = dirent.stat.hisize;
+			memcpy((void *)&info[count].stats._Create, dirent.stat.ctime, 8);
+			memcpy((void *)&info[count].stats._Modify, dirent.stat.mtime, 8);
+			count++;
+			if (count >= max)
+				break;
+		}
+	}
+	fileXioDclose(fd);
+	strcpy(info[count].name, "\0");
+	return count;
+}
+#endif
+#endif
 //------------------------------
-//endfunc readHOST
+//endfunc readHOST/readUDPFS
 //--------------------------------------------------------------
 int getDir(const char *path, FILEINFO *info)
 {
@@ -1261,7 +1281,7 @@ int getDir(const char *path, FILEINFO *info)
 #endif
 #ifdef UDPFS
 	else if (!strncmp(path, "udpfs", 5))
-		n = readHOST(path, info, max);
+		n = readUDPFS(path, info, max);
 #endif
 #endif
 #ifdef MMCE

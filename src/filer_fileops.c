@@ -1,8 +1,13 @@
 #include "launchelf.h"
 #include "filer_shared.h"
 
+#ifdef ULE_DEBUG_BUILD
 #ifndef FILEOP_TRACE
 #define FILEOP_TRACE 1
+#endif
+#else
+#undef FILEOP_TRACE
+#define FILEOP_TRACE 0
 #endif
 #if FILEOP_TRACE
 #define FILEOP_TRACE_FD_SLOTS 128
