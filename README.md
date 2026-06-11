@@ -1,35 +1,38 @@
-# __wLaunchELF 4.43x_isr__
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/5e07db76c668493d888a7f9b97d79821)](https://app.codacy.com/gh/israpps/wLaunchELF_ISR?utm_source=github.com&utm_medium=referral&utm_content=israpps/wLaunchELF_ISR&utm_campaign=Badge_Grade_Settings)
-[![Automated-Build](https://github.com/israpps/wLaunchELF_ISR/actions/workflows/compile.yml/badge.svg)](https://github.com/israpps/wLaunchELF_ISR/actions/workflows/compile.yml)
+# __wLaunchELF 4.50_R3Z__
 
-[![Static Badge](https://img.shields.io/github/downloads/israpps/wLaunchELF_ISR/total?style=for-the-badge&logo=protondrive&logoColor=00CCFF&label=DOWNLOAD&labelColor=000000)](https://israpps.github.io/projects/wlaunchelf-isr)
+Based off of [wLE_ISR](https://github.com/israpps/wLaunchELF_ISR)
 
-_this uLaunchELF mod was my first PS2 project._
+# Supported devices:
+- __mc:/__ Memory Cards
+- __usb:/__ Fat/exFAT (BDM) USB
+- __mmce:/__ Multi Purpose Memory Card Emulator IE SD2PSX, PSxMemCard Gen2 or MemCard Pro 2. There are a few more varients of SD2PSX
+- __mx4sio:/__ SD card interface over memory card port. Slowe than MMCE
+- __hdd:/__ APA formatted internal HDD
+- __ata:/__ BDM hard drive, exFAT for now till more are supported
+- __cdfs:/__ CD/DVD File System
+- __udpfs:/__ Network interface used with [PCM720s UDPFSD Server](https://github.com/pcm720/udpfsdf )
 
-It features:
+Drivers are lazy loading for for maximum compatibility. MMCE and MX4SIO will incure an IOP reboot as the 2 are incompatible.
 
+Dual HDD/ATA support is built in for future development.
+
+## Features:
+- RetroGem Game ID for [PIXEL FX RetroGem](https://www.pixelfx.co/hdmi-retro-gem)
+- Writes to history file for disc launches for mmce vmc change
+- Applies deckard disc patches
+- X/0 applied per region if no config file is found so O is only default for Japan
+- Keyboard layout choices: QWERTY, DVORAK, AZERTY, QWERTZ, ABNT, ABC
+- Language files built in for English, Spanish, Italian, French, German, Polish, Portuguese, Portuguese Brazilian
+- All config options exposed in gui
+- HDD/ATA drives hidden for deckard ps2 (SCPH-75K+)
+- Xfrom/dvr_hdd0 hidden from non-PSX consoles
+- Dual hdd support
+- All drivers besides core lazy loading for faster boot and support of everything
+- Create and Extract PSU options so user knows what will happen
+- Extra file extensions for Text Editor ShortCuts
 - Timestamp manipulation feature to fix the date of any memory card folder containing any icon-based exploit _(\*tuna)_
 - Extra file extensions for Text Editor ShortCuts
-- ~`100kb` smaller that it´s original counterpart (wLE 41e4ebe) (this was possible thanks to CI with ps2dev:v1.0 toolchain)
 - Support for PS3/PS4 Dualshocks thanks to Alex Parrado
-#### this mod has proven to be excellent for HDD, USB and MC management.
-
-> this mod is already bundled on any mod/project/repack made by me (and it´s auto-updated if that project is hosted here on github)
-
-### Explanation of download filenames
-
-> release filename change according to the enabled features, you may find the following words separated by `-` identifying with features that build has.
-> you may also check this inside `MISC/BuildInfo` in case you have to rename the binary
-
-- `BOOT`: Base filename, means nothing
-- `UNC`: Executable is Uncompressed
-- `COH`: Special version for PS2 `COH-H` Models (Namco System 246/256 specifically)
-- `NO_NETWORK`: Network features are disabled and network IRX drivers stripped away, with the purpose of making app smaller
-- `XFROM`: Support for accessing the [PSX-DESR](https://upload.wikimedia.org/wikipedia/commons/f/fa/Console_psx.jpg) internal flash memory.
-- `EXFAT`: Support for accessing EXFAT filesystems from BDM devices (USB & MX4SIO)
-- `DS34`: Support for PlayStation 3 and PlayStation 4 controllers over USB
-- `MX4SIO`: Support for browsing the contents of SD Cards connected via [mx4sio](https://www.google.com/search?q=mx4sio)
-- `MMCE`: Support for browsing the contents of the SDCard connected to MemcardPro2 or SD2PSX and their variants (make sure firmware of device is new enough to support the protocol)
 
 ### Build shortcuts
 
