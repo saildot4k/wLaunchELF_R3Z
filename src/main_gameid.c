@@ -88,7 +88,19 @@ void displayRetroGemGameID(const char *gameID, int frames)
 		gsKit_sync_flip(gid_gs);
 	}
 
+	for (frame = 0; frame < 2; frame++) {
+		gsKit_clear(gid_gs, GS_SETREG_RGBA(0x00, 0x00, 0x00, 0x00));
+		gsKit_queue_exec(gid_gs);
+		gsKit_finish();
+		gsKit_sync_flip(gid_gs);
+	}
+
 	gsKit_deinit_global(gid_gs);
+}
+
+static int isDiscExecPath(const char *exec_path)
+{
+	return (!strncmp(exec_path, "cdrom", 5) || !strncmp(exec_path, "cdfs", 4));
 }
 
 int buildLaunchGameID(const char *exec_path, char *gameID, size_t gameID_len)
@@ -96,19 +108,25 @@ int buildLaunchGameID(const char *exec_path, char *gameID, size_t gameID_len)
 	const char *start;
 	const char *sep;
 	size_t i;
+	int disc_exec_path;
+	int title_id_like;
 
 	if (gameID == NULL || gameID_len < 12 || exec_path == NULL || exec_path[0] == '\0')
 		return 0;
 
 	gameID[0] = '\0';
+	disc_exec_path = isDiscExecPath(exec_path);
 
-	/* Disc executables (e.g. cdrom0:\\SLUS_123.45;1) already carry a title ID. */
-	if (!strncmp(exec_path, "cdrom", 5)) {
+	/* Disc executables (e.g. cdrom0:\\SLUS_123.45;1 or cdfs:/SLUS_123.45;1) already carry a title ID. */
+	if (disc_exec_path) {
 		start = strchr(exec_path, '\\');
 		if (start == NULL)
 			start = strchr(exec_path, ':');
-		if (start != NULL)
+		if (start != NULL) {
 			start++;
+			while (*start == '/' || *start == '\\')
+				start++;
+		}
 	} else {
 		start = exec_path;
 		sep = strrchr(exec_path, '/');
@@ -125,11 +143,13 @@ int buildLaunchGameID(const char *exec_path, char *gameID, size_t gameID_len)
 	if (start == NULL || *start == '\0')
 		return 0;
 
+	title_id_like = (strlen(start) >= 11 && start[4] == '_' && (start[7] == '.' || start[8] == '.'));
+
 	for (i = 0; i < 11 && start[i] != '\0'; i++) {
 		char c = start[i];
 		if (c == ';' || c == '/' || c == '\\')
 			break;
-		if (c == '.' && strncmp(exec_path, "cdrom", 5))
+		if (c == '.' && !disc_exec_path && !title_id_like)
 			break;
 		gameID[i] = c;
 	}
@@ -155,6 +175,7 @@ int isLikelyDiscLaunch(const char *selected_path)
 		return 0;
 	if (!stricmp(selected_path, setting->Misc_PS2Disc))
 		return 1;
+	if (isDiscExecPath(selected_path))
+		return 1;
 	return 0;
 }
-

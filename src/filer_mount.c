@@ -3,8 +3,13 @@
 //--------------------------------------------------------------
 #include "filer_internal.h"
 
+#ifdef ULE_DEBUG_BUILD
 #ifndef FILEOP_TRACE
 #define FILEOP_TRACE 1
+#endif
+#else
+#undef FILEOP_TRACE
+#define FILEOP_TRACE 0
 #endif
 
 int mountParty(const char *party)

@@ -58,7 +58,7 @@ jobs:
     - run: |
         git config --global --add safe.directory "$GITHUB_WORKSPACE"
         git fetch --prune --unshallow
-    - name: Prepare PS2SDK source for local vmcman build
+    - name: Prepare PS2SDK source for local module builds
       run: |
         if [ -n "${PS2SDKSRC:-}" ] && [ -f "$PS2SDKSRC/Defs.make" ] && [ -f "$PS2SDKSRC/iop/Rules.make" ]; then
           echo "Using PS2SDKSRC=$PS2SDKSRC"

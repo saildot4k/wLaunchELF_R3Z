@@ -358,6 +358,7 @@ int loadDVRPHddModules(void);
 #endif
 void loadHdlInfoModule(void);
 void loadCdModules(void);
+void applyXPARAM(const char *gameID);
 int uLE_related(char *pathout, const char *pathin);
 int wleExists(const char *path);
 int IsTextEditorFileType(const char *path);

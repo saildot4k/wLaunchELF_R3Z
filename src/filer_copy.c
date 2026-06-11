@@ -17,13 +17,17 @@
 #define HDD_ATTR_save_folder 0xC4A7      //PS2 save file folder on HDD __common partition
 #define HDD_ATTR_save_prot_folder 0xC4AF //PS2 protected save file folder on HDD __common partition
 
+#ifdef ULE_DEBUG_BUILD
 #ifndef FILEOP_TRACE
 #define FILEOP_TRACE 1
+#endif
+#else
+#undef FILEOP_TRACE
+#define FILEOP_TRACE 0
 #endif
 
 #define TRANSFER_ETA_UPDATE_MS 1000
 #define COPY_BUFFER_FAST_DEFAULT 0x100000
-#define COPY_BUFFER_PSX_FAST (COPY_BUFFER_FAST_DEFAULT * 4)
 
 static int isMemoryCardLikePath(const char *path)
 {
@@ -780,7 +784,7 @@ non_PSU_RESTORE_init:
        using a large block size with a slow device will result in an unresponsive UI.
        To prevent a loss in performance, these values must each be in a multiple of the device's sector/page size.
        They must also be in multiples of 64, to prevent FILEIO from doing alignment correction in software. */
-	buffSize = console_is_PSX ? COPY_BUFFER_PSX_FAST : COPY_BUFFER_FAST_DEFAULT;  //First assume fast-device buffer size
+	buffSize = COPY_BUFFER_FAST_DEFAULT;  //First assume fast-device buffer size
 	if (!strncmp(out, "mc", 2) || !strncmp(out, "mass", 4) || !strncmp(out, "vmc", 3))
 		buffSize = 131072;  //Use  128KB if writing to USB (Flash RAM writes) or MC (pretty slow).
 	                        //VMC contents should use the same size, as VMCs will often be stored on USB
