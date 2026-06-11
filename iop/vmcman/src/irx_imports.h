@@ -24,6 +24,12 @@
 #include <intrman.h>
 #ifdef BUILDING_VMCMAN
 #include <iomanX.h>
+#ifndef I_iomanX_AddDrv
+#define I_iomanX_AddDrv DECLARE_IMPORT(20, iomanX_AddDrv)
+#endif
+#ifndef I_iomanX_DelDrv
+#define I_iomanX_DelDrv DECLARE_IMPORT(21, iomanX_DelDrv)
+#endif
 #else
 #include <ioman.h>
 #endif

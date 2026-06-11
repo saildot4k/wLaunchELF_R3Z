@@ -1,8 +1,13 @@
 #include "launchelf.h"
 #include "filer_shared.h"
 
+#ifdef ULE_DEBUG_BUILD
 #ifndef FILEOP_TRACE
 #define FILEOP_TRACE 1
+#endif
+#else
+#undef FILEOP_TRACE
+#define FILEOP_TRACE 0
 #endif
 #if FILEOP_TRACE
 #define FILEOP_TRACE_FD_SLOTS 128
@@ -35,8 +40,7 @@ static const char *fileopTraceDisplayPath(const char *path, char *display_path, 
 		}
 	}
 
-	strncpy(display_path, path, display_path_size - 1);
-	display_path[display_path_size - 1] = '\0';
+	snprintf(display_path, display_path_size, "%s", path);
 	return display_path;
 }
 
@@ -98,8 +102,7 @@ static void fileopTraceSet(int fd, const char *path, int mode, int is_dir)
 	fileop_fd_trace[slot].mode = mode;
 	if (path != NULL) {
 		fileopTraceDisplayPath(path, display_path, sizeof(display_path));
-		strncpy(fileop_fd_trace[slot].path, display_path, MAX_PATH - 1);
-		fileop_fd_trace[slot].path[MAX_PATH - 1] = '\0';
+		snprintf(fileop_fd_trace[slot].path, sizeof(fileop_fd_trace[slot].path), "%s", display_path);
 	} else {
 		fileop_fd_trace[slot].path[0] = '\0';
 	}
@@ -259,8 +262,7 @@ int genOpen(const char *path, int mode)
 	if (path == NULL || path[0] == '\0')
 		return -1;
 	DPRINTF("%s: '%s' @ %d\n", __FUNCTION__, path, mode);
-	strncpy(open_path, path, MAX_PATH - 1);
-	open_path[MAX_PATH - 1] = '\0';
+	snprintf(open_path, sizeof(open_path), "%s", path);
 #if defined(ETH) || defined(UDPFS)
 	makeHostPath(open_path, open_path);
 #endif
@@ -289,8 +291,7 @@ int genOpen(const char *path, int mode)
 	 * Path-style compatibility fallback:
 	 * try both "dev:/path" and "dev:path" when one style fails.
 	 */
-	strncpy(alt_path, open_path, MAX_PATH - 1);
-	alt_path[MAX_PATH - 1] = '\0';
+	snprintf(alt_path, sizeof(alt_path), "%s", open_path);
 	sep = strchr(alt_path, ':');
 	if (sep == NULL || sep[1] == '\0')
 		return fd;

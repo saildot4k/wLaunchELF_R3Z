@@ -60,8 +60,16 @@ int getHddDVRPParty(const char *path, const FILEINFO *file, char *party, char *d
 		/* Keep party form as "dvr_hdd0:partition" (no slash after colon). */
 		snprintf(party, MAX_NAME, "dvr_hdd0:%.*s", (int)(p - party_start), party_start);
 	}
-	if (dir != NULL)
-		snprintf(dir, MAX_PATH, "dvr_pfs0:%s", p);
+	if (dir != NULL) {
+		char party_buf[MAX_NAME];
+		int pfs_ix;
+
+		snprintf(party_buf, sizeof(party_buf), "dvr_hdd0:%.*s", (int)(p - party_start), party_start);
+		pfs_ix = getDVRPPartyMountIndex(party_buf);
+		if (pfs_ix < 0)
+			pfs_ix = 0;
+		snprintf(dir, MAX_PATH, "dvr_pfs%d:%s", pfs_ix, p);
+	}
 
 	return 0;
 }
