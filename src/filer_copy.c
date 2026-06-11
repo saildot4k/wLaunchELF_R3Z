@@ -17,9 +17,17 @@
 #define HDD_ATTR_save_folder 0xC4A7      //PS2 save file folder on HDD __common partition
 #define HDD_ATTR_save_prot_folder 0xC4AF //PS2 protected save file folder on HDD __common partition
 
+#ifdef ULE_DEBUG_BUILD
 #ifndef FILEOP_TRACE
 #define FILEOP_TRACE 1
 #endif
+#else
+#undef FILEOP_TRACE
+#define FILEOP_TRACE 0
+#endif
+
+#define TRANSFER_ETA_UPDATE_MS 1000
+#define COPY_BUFFER_FAST_DEFAULT 0x100000
 
 static int isMemoryCardLikePath(const char *path)
 {
@@ -28,6 +36,57 @@ static int isMemoryCardLikePath(const char *path)
 	        || !strncmp(path, "xfrom", 5)
 #endif
 	        );
+}
+
+static int isHddRootPath(const char *path)
+{
+	return (!strncmp(path, "hdd", 3) && path[3] >= '0' && path[3] <= '9' && path[4] == ':' && path[5] == '/' && path[6] == '\0');
+}
+
+static int isHddCommonParty(const char *party)
+{
+	return (!strncmp(party, "hdd", 3) && party[3] >= '0' && party[3] <= '9' && !strcmp(party + 4, ":__common"));
+}
+
+static int calcTransferSpeed(u64 bytes, int millis)
+{
+	u64 bytes_per_second;
+
+	if (millis <= 0)
+		return -1;
+	if (bytes == 0)
+		return 0;
+
+	bytes_per_second = (bytes * 1000ULL) / (u64)millis;
+	if (bytes_per_second > 0x7fffffffULL)
+		return 0x7fffffff;
+	return (int)bytes_per_second;
+}
+
+static int calcRemainingTime(u64 remaining_size, int bytes_per_second)
+{
+	u64 time_left;
+
+	if (bytes_per_second <= 0)
+		return -1;
+
+	time_left = remaining_size / (u64)bytes_per_second;
+	return (time_left > 0x7fffffffULL) ? 0x7fffffff : (int)time_left;
+}
+
+static int smoothTransferSpeed(int previous_speed, int sample_speed)
+{
+	u64 smoothed_speed;
+
+	if (sample_speed <= 0)
+		return sample_speed;
+	if (previous_speed <= 0)
+		return sample_speed;
+
+	smoothed_speed = ((u64)previous_speed * 3ULL + (u64)sample_speed) / 4ULL;
+	if (smoothed_speed > 0x7fffffffULL)
+		return 0x7fffffff;
+	return (int)smoothed_speed;
 }
 
 static int applyMcInfoToMcPath(const char *path, const sceMcTblGetDir *info)
@@ -157,7 +216,7 @@ int filerGetGameTitle(const char *path, const FILEINFO *file, unsigned char *out
 	out[0] = '\0';  //Start by making an empty result string, for failures
 
 	//Avoid title usage in browser root or partition list
-	if (path[0] == 0 || !strcmp(path, "hdd0:/") || !strcmp(path, "dvr_hdd0:/"))
+	if (path[0] == 0 || isHddRootPath(path) || !strcmp(path, "dvr_hdd0:/"))
 		return -1;
 
 	if (!strncmp(path, "hdd", 3)) {
@@ -269,15 +328,19 @@ int copy(char *outPath, const char *inPath, FILEINFO file, int recurses)
 	iox_stat_t iox_stat;
 	char out[MAX_PATH], in[MAX_PATH], tmp[MAX_PATH],
 	    progress[MAX_PATH * 4],
-	    *buff = NULL, inParty[MAX_NAME], outParty[MAX_NAME];
+	    *buff = NULL, *buff2 = NULL, *copyBuff, inParty[MAX_NAME], outParty[MAX_NAME];
 	int nfiles, i;
 	u64 size = 0;
 	int ret = -1, pfsout = -1, pfsin = -1, in_fd = -1, out_fd = -1, buffSize, bytesRead, bytesWritten;
+	int buffCount = 1, buffIndex = 0;
 	int dummy;
 	int speed = 0;
-	int remain_time = 0, TimeDiff = 0;
+	int remain_time = -1, TimeDiff = 0;
+	int eta_sample_speed = -1, smooth_speed = -1, EtaTimeDiff = 0;
 	u64 old_size = 0, SizeDiff = 0;
+	u64 eta_old_size = 0, EtaSizeDiff = 0;
 	u64 OldTime = 0LL;
+	u64 EtaOldTime = 0LL;
 	mcT_header *mcT_head_p = (mcT_header *)&file.stats;
 	int psu_pad_size = 0, PSU_restart_f = 0;
 	char *cp, *np;
@@ -285,6 +348,7 @@ int copy(char *outPath, const char *inPath, FILEINFO file, int recurses)
 	int trace_vmc_copy = 0;
 	unsigned int trace_chunk_index = 0;
 	u64 chunk_remaining_before = 0;
+	u64 CurrentTime = 0LL;
 
 	if (recurses + 1 >= MAX_RECURSE)
 		return -1;
@@ -324,6 +388,10 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 		if (pfsin < 0)
 			return -1;
 		in[3] = pfsin + '0';
+#if FILEOP_TRACE
+		printf("[FILEOP] hdd-map src %s:pfs%d:%s recurse=%d\n",
+		       inParty, pfsin, in + 5, recurses);
+#endif
 #ifdef DVRP
 	} else if (!strncmp(inPath, "dvr_hdd", 7)) {
 		if (getHddDVRPParty(inPath, &file, inParty, in) < 0)
@@ -344,6 +412,10 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 		if (pfsout < 0)
 			return -1;
 		out[3] = pfsout + '0';
+#if FILEOP_TRACE
+		printf("[FILEOP] hdd-map dst %s:pfs%d:%s recurse=%d\n",
+		       outParty, pfsout, out + 5, recurses);
+#endif
 #ifdef DVRP
 	} else if (!strncmp(outPath, "dvr_hdd", 7)) {
 		if (getHddDVRPParty(outPath, &newfile, outParty, out) < 0)
@@ -476,8 +548,8 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 				return -1;  //return error for failure to create destination folder
 			}
 
-			//Set save folder attributes for __common partition when copying to hdd0 to make it show up in the HDD-OSD Browser
-			if (!strncmp(outParty, "hdd0:__common", 13) && !(file.stats.AttrFile & sceMcFileAttrPDAExec)) {
+			//Set save folder attributes for __common partition when copying to HDD to make it show up in the HDD-OSD Browser
+			if (isHddCommonParty(outParty) && !(file.stats.AttrFile & sceMcFileAttrPDAExec)) {
 				//Calculate the out level
 				ret = 0;
 				for (i = 0; i <= strlen(out); i++) {
@@ -712,7 +784,7 @@ non_PSU_RESTORE_init:
        using a large block size with a slow device will result in an unresponsive UI.
        To prevent a loss in performance, these values must each be in a multiple of the device's sector/page size.
        They must also be in multiples of 64, to prevent FILEIO from doing alignment correction in software. */
-	buffSize = 0x100000;  //First assume buffer size = 1MB (good for HDD)
+	buffSize = COPY_BUFFER_FAST_DEFAULT;  //First assume fast-device buffer size
 	if (!strncmp(out, "mc", 2) || !strncmp(out, "mass", 4) || !strncmp(out, "vmc", 3))
 		buffSize = 131072;  //Use  128KB if writing to USB (Flash RAM writes) or MC (pretty slow).
 	                        //VMC contents should use the same size, as VMCs will often be stored on USB
@@ -756,13 +828,23 @@ non_PSU_RESTORE_init:
 			genRemove(out);
 		goto copy_file_exit_mem_err;
 	}
+	buff2 = (char *)memalign(64, buffSize);
+	if (buff2 != NULL)
+		buffCount = 2;
+#if FILEOP_TRACE
+	else if (trace_net_copy || trace_vmc_copy)
+		printf("[FILEOP] copy-double-buffer fallback in=%s out=%s buff=%d\n",
+		       in, out, buffSize);
+#endif
 
 	old_size = written_size;  //Note initial progress data pos
 	OldTime = Timer();        //Note initial progress time
+	eta_old_size = old_size;
+	EtaOldTime = OldTime;
 #if FILEOP_TRACE
 	if (trace_net_copy || trace_vmc_copy) {
-		printf("[FILEOP] copy-start in=%s out=%s size=%llu buff=%d mode=%d recurse=%d\n",
-		       in, out, (unsigned long long)size, buffSize, PM_flag[recurses], recurses);
+		printf("[FILEOP] copy-start in=%s out=%s size=%llu buff=%d buffers=%d mode=%d recurse=%d\n",
+		       in, out, (unsigned long long)size, buffSize, buffCount, PM_flag[recurses], recurses);
 	}
 #endif
 
@@ -771,24 +853,32 @@ non_PSU_RESTORE_init:
 		if (size < (u64)buffSize)
 			buffSize = (int)size;  //Adjust effective buffer size to remaining data
 
-		TimeDiff = Timer() - OldTime;
-		OldTime = Timer();
+		CurrentTime = Timer();
+		TimeDiff = CurrentTime - OldTime;
+		OldTime = CurrentTime;
 		SizeDiff = written_size - old_size;
 		old_size = written_size;
-		if (SizeDiff) {                                     //if anything was written this time
-			speed = (int)((SizeDiff * 1000ULL) / TimeDiff);  //calc real speed
-			if (speed > 0) {                                 //calc time remaining for that speed
-				u64 time_left = size / (u64)speed;
-				remain_time = (time_left > 0x7fffffffULL) ? 0x7fffffff : (int)time_left;
-			} else {
-				remain_time = -1;
-			}
+		if (SizeDiff) {  //if anything was written this time
+			speed = calcTransferSpeed(SizeDiff, TimeDiff);
 		} else if (TimeDiff) {                     //if nothing written though time passed
 			speed = 0;                             //set speed as zero
-			remain_time = -1;                      //set time remaining as unknown
 		} else {                                   //if nothing written and no time passed
 			speed = -1;                            //set speed as unknown
-			remain_time = -1;                      //set time remaining as unknown
+		}
+
+		if (CurrentTime - EtaOldTime >= TRANSFER_ETA_UPDATE_MS) {
+			EtaTimeDiff = CurrentTime - EtaOldTime;
+			EtaSizeDiff = written_size - eta_old_size;
+			EtaOldTime = CurrentTime;
+			eta_old_size = written_size;
+			eta_sample_speed = calcTransferSpeed(EtaSizeDiff, EtaTimeDiff);
+			if (eta_sample_speed > 0) {
+				smooth_speed = smoothTransferSpeed(smooth_speed, eta_sample_speed);
+				remain_time = calcRemainingTime(size, smooth_speed);
+			} else if (eta_sample_speed == 0) {
+				smooth_speed = 0;
+				remain_time = -1;
+			}
 		}
 
 		sprintf(progress, "%s : %s", LNG(Pasting_file), file.name);
@@ -831,10 +921,10 @@ non_PSU_RESTORE_init:
 		sprintf(tmp, "\n%s: ", LNG(Average_Speed));
 		strcat(progress, tmp);
 		TimeDiff = Timer() - PasteTime;
-		if (TimeDiff == 0)
+		speed = calcTransferSpeed(written_size, TimeDiff);
+		if (speed == -1)
 			strcpy(tmp, LNG(Unknown));
 		else {
-			speed = (int)((written_size * 1000ULL) / TimeDiff);  //calc real speed
 			if (speed <= 1024)
 				sprintf(tmp, "%d %s/sec", speed, LNG(bytes));  // bytes/sec
 			else
@@ -861,13 +951,14 @@ non_PSU_RESTORE_init:
 				goto copy_file_exit;  // go deal with it
 			}
 			}
-			bytesRead = genRead(in_fd, buff, buffSize);
-			bytesWritten = (bytesRead == buffSize) ? genWrite(out_fd, buff, buffSize) : 0;
+			copyBuff = (buffIndex == 0) ? buff : buff2;
+			bytesRead = genRead(in_fd, copyBuff, buffSize);
+			bytesWritten = (bytesRead == buffSize) ? genWrite(out_fd, copyBuff, buffSize) : 0;
 #if FILEOP_TRACE
 			chunk_remaining_before = size;
 			if (trace_net_copy || trace_vmc_copy) {
-				printf("[FILEOP] copy-chunk in=%s out=%s idx=%u req=%d read=%d write=%d remain_before=%llu\n",
-				       in, out, trace_chunk_index, buffSize, bytesRead, bytesWritten,
+				printf("[FILEOP] copy-chunk in=%s out=%s idx=%u buf=%d req=%d read=%d write=%d remain_before=%llu\n",
+				       in, out, trace_chunk_index, buffIndex, buffSize, bytesRead, bytesWritten,
 				       (unsigned long long)chunk_remaining_before);
 			}
 #endif
@@ -886,6 +977,8 @@ non_PSU_RESTORE_init:
 			}
 			size -= buffSize;
 			written_size += buffSize;
+			if (buffCount > 1)
+				buffIndex ^= 1;
 #if FILEOP_TRACE
 			trace_chunk_index++;
 			if (trace_net_copy || trace_vmc_copy) {
@@ -980,6 +1073,7 @@ copy_file_data_done:
 //The code below is also used for all errors in copying a file,
 //but those cases are distinguished by a negative value in 'ret'
 copy_file_exit:
+	free(buff2);
 	free(buff);
 copy_file_exit_mem_err:
 #if FILEOP_TRACE

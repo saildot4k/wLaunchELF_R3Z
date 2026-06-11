@@ -289,6 +289,12 @@ static void normalizeBootPath(char *path)
 	// Legacy SwapMagic path normalization: mass0:/path -> mass:/path
 	if (!strncmp(path, "mass0:", 6))
 		memmove(path + 4, path + 5, strlen(path + 5) + 1);
+
+	// Legacy ATA alias normalization: ata:/path -> ata0:/path
+	if (!strncmp(path, "ata:", 4) && strlen(path) + 1 < MAX_PATH) {
+		memmove(path + 4, path + 3, strlen(path + 3) + 1);
+		path[3] = '0';
+	}
 }
 //------------------------------
 //endfunc normalizeBootPath
@@ -388,21 +394,23 @@ enum BOOT_DEVICE prepareBootDeviceAndPath(const char *arg0, char *boot_path, siz
 		} else if (!strncmp(LaunchElfDir, "cd", 2)) {
 			boot = BOOT_DEVICE_CDVD;
 			snprintf(LaunchElfDir, sizeof(LaunchElfDir), "%s", "mc0:/SYS-CONF/");  //Default to mc0 as a writable location.
-		} else if (!strncmp(LaunchElfDir, "hdd0:", 5) && boot_path != NULL && boot_path_len > 0) {
+		} else if (!strncmp(LaunchElfDir, "hdd", 3) && LaunchElfDir[3] >= '0' && LaunchElfDir[3] <= '9' && LaunchElfDir[4] == ':' && boot_path != NULL && boot_path_len > 0) {
 			//Booting from the HDD requires special handling for HDD-based paths.
+			char hdd_prefix[7];
 			char temp[MAX_PATH];
 			char *t;
 			/* Change boot_path to contain a path to the block device.
-				Standard HDD path format: hdd0:partition:pfs:path/to/file
+				Standard HDD path format: hddN:partition:pfs:path/to/file
 				However, (older) homebrew may not use this format. */
-			snprintf(temp, sizeof(temp), "%s", boot_path + 5);  //Skip "hdd0:" when copying.
+			snprintf(hdd_prefix, sizeof(hdd_prefix), "hdd%c:/", LaunchElfDir[3]);
+			snprintf(temp, sizeof(temp), "%s", boot_path + 5);  //Skip "hddN:" when copying.
 			t = strchr(temp, ':');                              //Check if the separator between the block device & the path exists.
 				if (t != NULL) {
 					char *path_part;
 					*(t) = 0;                      //If it does, get the block device name.
 					path_part = strchr(t + 1, ':');  //Get the path to the file
 					if (path_part != NULL) {
-						buildBootBlockPath(LaunchElfDir, sizeof(LaunchElfDir), "hdd0:/", temp, path_part + 1);
+						buildBootBlockPath(LaunchElfDir, sizeof(LaunchElfDir), hdd_prefix, temp, path_part + 1);
 					}
 				}
 

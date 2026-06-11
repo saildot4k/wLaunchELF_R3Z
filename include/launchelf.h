@@ -1,11 +1,20 @@
 #ifndef LAUNCHELF_H
 #define LAUNCHELF_H
 #define HACK_FOLDER "BXEXEC-OPENTUNA"
-#ifndef DVRP
-#define ULE_VERSION "v4.50_R3Z"
+
+#if defined(SIO_DEBUG)
+#define ULE_VERSION_DEBUG_SUFFIX " SIO_DEBUG"
+#elif defined(POWERPC_UART)
+#define ULE_VERSION_DEBUG_SUFFIX " PPC_UART"
+#elif defined(UDPTTY)
+#define ULE_VERSION_DEBUG_SUFFIX " UDPTTY"
+#elif defined(ULE_DEBUG_BUILD)
+#define ULE_VERSION_DEBUG_SUFFIX " DEBUG"
 #else
-#define ULE_VERSION "v4.50_R3Z_dvr"
+#define ULE_VERSION_DEBUG_SUFFIX ""
 #endif
+
+#define ULE_VERSION "v4.50_R3Z" ULE_VERSION_DEBUG_SUFFIX
 //#ifndef ULE_VERDATE
 //#define ULE_VERDATE __DATE__
 //#endif
@@ -226,7 +235,6 @@ enum VIRTUAL_KEYBOARD_LAYOUT {
 	VKEY_LAYOUT_AZERTY,
 	VKEY_LAYOUT_QWERTZ,
 	VKEY_LAYOUT_ABNT,
-	VKEY_LAYOUT_ABNT2,
 
 	VKEY_LAYOUT_COUNT
 };
@@ -236,6 +244,18 @@ enum VIRTUAL_KEYBOARD_LAYOUT {
 #define VKEY_LAYOUT_SIZE (VKEY_LAYOUT_COLS * VKEY_LAYOUT_ROWS)
 #define VKEY_EDITOR_COLS (VKEY_LAYOUT_COLS + 3)
 #define VKEY_EDITOR_SIZE (VKEY_EDITOR_COLS * VKEY_LAYOUT_ROWS)
+
+enum HIDE_HDD_MODE {
+	HIDE_HDD_SHOW_ALL = 0,
+	HIDE_HDD_HDD1,
+	HIDE_HDD_HDD01,
+	HIDE_HDD_ATA1,
+	HIDE_HDD_ATA01,
+	HIDE_HDD_HDD1_ATA1,
+	HIDE_HDD_HDD01_ATA01,
+
+	HIDE_HDD_COUNT
+};
 
 typedef struct
 {
@@ -280,6 +300,7 @@ typedef struct
 	int language;
 	int reboot_iop_elf_load;
 	int virtual_keyboard_layout;
+	int Hide_Hdd;
 	int Show_Titles;
 	int PathPad_Lock;
 	int PSU_HugeNames;
@@ -337,6 +358,7 @@ int loadDVRPHddModules(void);
 #endif
 void loadHdlInfoModule(void);
 void loadCdModules(void);
+void applyXPARAM(const char *gameID);
 int uLE_related(char *pathout, const char *pathin);
 int wleExists(const char *path);
 int IsTextEditorFileType(const char *path);
@@ -459,6 +481,9 @@ typedef struct
 #define MOUNT_LIMIT 4
 extern char mountedParty[MOUNT_LIMIT][MAX_NAME];
 extern int latestMount;
+#ifdef DVRP
+extern int latestDVRPMount;
+#endif
 extern int vmcMounted[2];
 extern int vmc_PartyIndex[2];            //PFS index for each VMC, unless -1
 extern int Party_vmcIndex[MOUNT_LIMIT];  //VMC index for each PFS, unless -1
@@ -466,8 +491,10 @@ extern int nparties;                     //Clearing this causes FileBrowser to r
 extern unsigned char *elisaFnt;
 char *PathPad_menu(const char *path);
 int getFilePath(char *out, const int cnfmode);
-#if defined(ETH) || defined(UDPFS)
+#ifdef ETH
 void initHOST(void);
+#endif
+#if defined(ETH) || defined(UDPFS)
 char *makeHostPath(char *dp, char *sp);
 #endif
 int ynDialog(const char *message);
@@ -488,6 +515,7 @@ int genRmdir(char *path);
 int genCmpFileExt(const char *filename, const char *extension);
 int mountParty(const char *party);
 void unmountParty(int party_ix);
+int getDVRPPartyMountIndex(const char *party);
 #ifdef DVRP
 void unmountDVRPParty(int party_ix);
 int mountDVRPParty(const char *party);

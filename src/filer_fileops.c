@@ -1,8 +1,13 @@
 #include "launchelf.h"
 #include "filer_shared.h"
 
+#ifdef ULE_DEBUG_BUILD
 #ifndef FILEOP_TRACE
 #define FILEOP_TRACE 1
+#endif
+#else
+#undef FILEOP_TRACE
+#define FILEOP_TRACE 0
 #endif
 #if FILEOP_TRACE
 #define FILEOP_TRACE_FD_SLOTS 128
@@ -16,6 +21,28 @@ typedef struct
 
 static FILEOP_FD_TRACE fileop_fd_trace[FILEOP_TRACE_FD_SLOTS];
 static int fileop_fd_trace_inited = 0;
+
+static const char *fileopTraceDisplayPath(const char *path, char *display_path, size_t display_path_size)
+{
+	int pfs_index;
+
+	if (path == NULL)
+		return "<null>";
+	if (display_path == NULL || display_path_size == 0)
+		return path;
+
+	if (!strncmp(path, "pfs", 3) && path[3] >= '0' && path[3] <= '9' && path[4] == ':') {
+		pfs_index = path[3] - '0';
+		if (pfs_index >= 0 && pfs_index < MOUNT_LIMIT && mountedParty[pfs_index][0] != '\0') {
+			snprintf(display_path, display_path_size, "%s:pfs%d:%s", mountedParty[pfs_index], pfs_index, path + 5);
+			display_path[display_path_size - 1] = '\0';
+			return display_path;
+		}
+	}
+
+	snprintf(display_path, display_path_size, "%s", path);
+	return display_path;
+}
 
 static void fileopTraceInit(void)
 {
@@ -58,6 +85,7 @@ static int fileopTraceAllocSlot(void)
 static void fileopTraceSet(int fd, const char *path, int mode, int is_dir)
 {
 	int slot;
+	char display_path[MAX_PATH];
 
 	if (fd < 0)
 		return;
@@ -73,8 +101,8 @@ static void fileopTraceSet(int fd, const char *path, int mode, int is_dir)
 	fileop_fd_trace[slot].is_dir = is_dir;
 	fileop_fd_trace[slot].mode = mode;
 	if (path != NULL) {
-		strncpy(fileop_fd_trace[slot].path, path, MAX_PATH - 1);
-		fileop_fd_trace[slot].path[MAX_PATH - 1] = '\0';
+		fileopTraceDisplayPath(path, display_path, sizeof(display_path));
+		snprintf(fileop_fd_trace[slot].path, sizeof(fileop_fd_trace[slot].path), "%s", display_path);
 	} else {
 		fileop_fd_trace[slot].path[0] = '\0';
 	}
@@ -166,6 +194,9 @@ int genRmdir(char *path)
 {
 	int ret;
 	u64 t0, t1;
+#if FILEOP_TRACE
+	char log_path[MAX_PATH];
+#endif
 #if defined(ETH) || defined(UDPFS)
 	char mapped_path[MAX_PATH];
 
@@ -179,7 +210,8 @@ int genRmdir(char *path)
 	t1 = Timer();
 #if FILEOP_TRACE
 	printf("[FILEOP] rmdir path=%s ret=%d dt=%llu ms\n",
-	       path, ret, (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
+	       fileopTraceDisplayPath(path, log_path, sizeof(log_path)),
+	       ret, (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
 #endif
 	return ret;
 }
@@ -190,6 +222,9 @@ int genRemove(char *path)
 {
 	int ret;
 	u64 t0, t1;
+#if FILEOP_TRACE
+	char log_path[MAX_PATH];
+#endif
 #if defined(ETH) || defined(UDPFS)
 	char mapped_path[MAX_PATH];
 #endif
@@ -206,7 +241,8 @@ int genRemove(char *path)
 	t1 = Timer();
 #if FILEOP_TRACE
 	printf("[FILEOP] remove path=%s ret=%d dt=%llu ms\n",
-	       path, ret, (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
+	       fileopTraceDisplayPath(path, log_path, sizeof(log_path)),
+	       ret, (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
 #endif
 	return ret;
 }
@@ -218,12 +254,15 @@ int genOpen(const char *path, int mode)
 	char open_path[MAX_PATH], alt_path[MAX_PATH], *sep;
 	int fd;
 	u64 t0, t1;
+#if FILEOP_TRACE
+	char req_log_path[MAX_PATH];
+	char mapped_log_path[MAX_PATH];
+#endif
 
 	if (path == NULL || path[0] == '\0')
 		return -1;
 	DPRINTF("%s: '%s' @ %d\n", __FUNCTION__, path, mode);
-	strncpy(open_path, path, MAX_PATH - 1);
-	open_path[MAX_PATH - 1] = '\0';
+	snprintf(open_path, sizeof(open_path), "%s", path);
 #if defined(ETH) || defined(UDPFS)
 	makeHostPath(open_path, open_path);
 #endif
@@ -233,7 +272,9 @@ int genOpen(const char *path, int mode)
 	t1 = Timer();
 #if FILEOP_TRACE
 	printf("[FILEOP] open req=%s mapped=%s mode=0x%x fd=%d dt=%llu ms\n",
-	       path, open_path, mode, fd,
+	       fileopTraceDisplayPath(path, req_log_path, sizeof(req_log_path)),
+	       fileopTraceDisplayPath(open_path, mapped_log_path, sizeof(mapped_log_path)),
+	       mode, fd,
 	       (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
 #endif
 	if (fd >= 0)
@@ -250,8 +291,7 @@ int genOpen(const char *path, int mode)
 	 * Path-style compatibility fallback:
 	 * try both "dev:/path" and "dev:path" when one style fails.
 	 */
-	strncpy(alt_path, open_path, MAX_PATH - 1);
-	alt_path[MAX_PATH - 1] = '\0';
+	snprintf(alt_path, sizeof(alt_path), "%s", open_path);
 	sep = strchr(alt_path, ':');
 	if (sep == NULL || sep[1] == '\0')
 		return fd;
@@ -272,7 +312,9 @@ int genOpen(const char *path, int mode)
 	t1 = Timer();
 #if FILEOP_TRACE
 	printf("[FILEOP] open-fallback req=%s mapped=%s mode=0x%x fd=%d dt=%llu ms\n",
-	       path, alt_path, mode, fd,
+	       fileopTraceDisplayPath(path, req_log_path, sizeof(req_log_path)),
+	       fileopTraceDisplayPath(alt_path, mapped_log_path, sizeof(mapped_log_path)),
+	       mode, fd,
 	       (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
 	if (fd >= 0)
 		fileopTraceSet(fd, alt_path, mode, 0);
@@ -286,6 +328,10 @@ int genDopen(char *path)
 {
 	int fd;
 	u64 t0, t1;
+#if FILEOP_TRACE
+	char req_log_path[MAX_PATH];
+	char mapped_log_path[MAX_PATH];
+#endif
 #if defined(ETH) || defined(UDPFS)
 	char mapped_path[MAX_PATH];
 
@@ -306,7 +352,9 @@ int genDopen(char *path)
 		t1 = Timer();
 #if FILEOP_TRACE
 		printf("[FILEOP] dopen req=%s mapped=%s fd=%d dt=%llu ms\n",
-		       path, tmp, fd,
+		       fileopTraceDisplayPath(path, req_log_path, sizeof(req_log_path)),
+		       fileopTraceDisplayPath(tmp, mapped_log_path, sizeof(mapped_log_path)),
+		       fd,
 		       (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
 		if (fd >= 0)
 			fileopTraceSet(fd, tmp, 0, 1);
@@ -317,7 +365,9 @@ int genDopen(char *path)
 		t1 = Timer();
 #if FILEOP_TRACE
 		printf("[FILEOP] dopen req=%s mapped=%s fd=%d dt=%llu ms\n",
-		       path, path, fd,
+		       fileopTraceDisplayPath(path, req_log_path, sizeof(req_log_path)),
+		       fileopTraceDisplayPath(path, mapped_log_path, sizeof(mapped_log_path)),
+		       fd,
 		       (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
 		if (fd >= 0)
 			fileopTraceSet(fd, path, 0, 1);

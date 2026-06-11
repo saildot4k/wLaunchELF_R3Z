@@ -3,6 +3,15 @@
 //--------------------------------------------------------------
 #include "filer_internal.h"
 
+#ifdef ULE_DEBUG_BUILD
+#ifndef FILEOP_TRACE
+#define FILEOP_TRACE 1
+#endif
+#else
+#undef FILEOP_TRACE
+#define FILEOP_TRACE 0
+#endif
+
 int mountParty(const char *party)
 {
 	int i, j;
@@ -27,8 +36,12 @@ int mountParty(const char *party)
 				break;
 			}
 		}
-		if (j < 0)
+		if (j < 0) {
+#if FILEOP_TRACE
+			printf("[HDD_MOUNT] no-slot %s\n", party);
+#endif
 			return -1;  //no usable mountpoint available
+		}
 		unmountParty(j);
 	}
 	//Here j is the index of a free PFS mountpoint
@@ -41,20 +54,34 @@ int mountParty(const char *party)
 	strcpy(pfs_str, "pfs0:");
 
 	pfs_str[3] = '0' + i;
-		if (fileXioMount(pfs_str, party, FIO_MT_RDWR) < 0) {                 //if FTP stole it
+	{
+		int mount_ret = fileXioMount(pfs_str, party, FIO_MT_RDWR);
+		if (mount_ret < 0) {                                                  //if FTP stole it
+#if FILEOP_TRACE
+			printf("[HDD_MOUNT] mount-failed %s:pfs%d:/ ret=%d\n", party, i, mount_ret);
+#endif
 			for (i = 0; i < MOUNT_LIMIT; i++) {                               //for loop to kill FTP partition mountpoints
 				if ((i != latestMount) && (Party_vmcIndex[i] < 0)) {  //if unneeded by uLE
 					unmountParty(i);                                  //unmount partition mountpoint
 					pfs_str[3] = '0' + i;                             //prepare to reuse that mountpoint
-					if (fileXioMount(pfs_str, party, FIO_MT_RDWR) >= 0)
+					mount_ret = fileXioMount(pfs_str, party, FIO_MT_RDWR);
+					if (mount_ret >= 0)
 						break;  //break from the loop on successful mount
+#if FILEOP_TRACE
+					printf("[HDD_MOUNT] retry-failed %s:pfs%d:/ ret=%d\n", party, i, mount_ret);
+#endif
 				}               //ends if unneeded by uLE
 			}                   //ends for loop to kill FTP partition mountpoints
 			//Here i indicates what happened above with the following meanings:
 			//0..MOUNT_LIMIT-1==Success, MOUNT_LIMIT==Failure
-			if (i >= MOUNT_LIMIT)
+			if (i >= MOUNT_LIMIT) {
+#if FILEOP_TRACE
+				printf("[HDD_MOUNT] failed %s\n", party);
+#endif
 				return -1;
+			}
 		}  //ends if clause for mountpoints stolen by FTP
+	}
 	strcpy(mountedParty[i], party);
 return_i:
 	latestMount = i;
@@ -64,16 +91,39 @@ void unmountParty(int party_ix)
 {
 	char pfs_str[6];
 
+	if (party_ix < 0 || party_ix >= MOUNT_LIMIT) {
+#if FILEOP_TRACE
+		printf("[HDD_MOUNT] unmount-invalid index=%d\n", party_ix);
+#endif
+		return;
+	}
+
 	strcpy(pfs_str, "pfs0:");
 	pfs_str[3] += party_ix;
-	if (fileXioUmount(pfs_str) < 0)
+	if (fileXioUmount(pfs_str) < 0) {
+#if FILEOP_TRACE
+		printf("[HDD_MOUNT] unmount-failed %s:pfs%d:/\n", mountedParty[party_ix], party_ix);
+#endif
 		return;  //leave variables unchanged if unmount failed (remember true state)
+	}
 	if (party_ix < MOUNT_LIMIT) {
 		mountedParty[party_ix][0] = 0;
 	}
 	if (latestMount == party_ix)
 		latestMount = -1;
 }
+
+int getDVRPPartyMountIndex(const char *party)
+{
+	if (party == NULL)
+		return -1;
+	if (strcmp(party, "dvr_hdd0:__xdata") == 0)
+		return 1;
+	if (strcmp(party, "dvr_hdd0:__xcontents") == 0)
+		return 0;
+	return -1;
+}
+
 #ifdef DVRP
 int mountDVRPParty(const char *party)
 {
@@ -84,11 +134,8 @@ int mountDVRPParty(const char *party)
 			goto return_i;
 	}
 
-	if (strcmp(party, "dvr_hdd0:__xdata") == 0) {
-		i = 1;
-	} else if (strcmp(party, "dvr_hdd0:__xcontents") == 0) {
-		i = 0;
-	} else {
+	i = getDVRPPartyMountIndex(party);
+	if (i < 0) {
 		return -1;
 	}
 	strcpy(mountedDVRPParty[i], party);
@@ -108,9 +155,6 @@ void unmountDVRPParty(int party_ix)
 void unmountAll(void)
 {
 	char pfs_str[6];
-#ifdef DVRP
-	char dvr_pfs_str[10];
-#endif
 	char vmc_str[6];
 	int i;
 
@@ -135,11 +179,8 @@ void unmountAll(void)
 	}
 	latestMount = -1;
 #ifdef DVRP
-	strcpy(dvr_pfs_str, "dvr_pfs0:");
 	for (i = 0; i < MOUNT_LIMIT; i++) {
 		if (mountedDVRPParty[i][0] != 0) {
-			dvr_pfs_str[7] = '0' + i;
-			fileXioUmount(dvr_pfs_str);
 			mountedDVRPParty[i][0] = 0;
 		}
 	}
@@ -151,7 +192,7 @@ static int getHddPartyFromPath(const char *path, char *party, size_t party_size)
 	const char *start;
 	const char *end;
 
-	if (strncmp(path, "hdd0:/", 6))
+	if (strncmp(path, "hdd", 3) || path[3] < '0' || path[3] > '9' || path[4] != ':' || path[5] != '/')
 		return 0;
 	start = path + 6;
 	if (start[0] == '\0')
@@ -161,7 +202,7 @@ static int getHddPartyFromPath(const char *path, char *party, size_t party_size)
 		end = start + strlen(start);
 	if (end <= start)
 		return 0;
-	snprintf(party, party_size, "hdd0:%.*s", (int)(end - start), start);
+	snprintf(party, party_size, "hdd%c:%.*s", path[3], (int)(end - start), start);
 	return 1;
 }
 static int clipboardUsesHddParty(const char *party)

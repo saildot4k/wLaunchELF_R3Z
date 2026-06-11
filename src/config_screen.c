@@ -218,9 +218,15 @@ void Config_Screen(void)
 				else if (i == COLOR_SELECT)
 					sprintf(c, "%s", LNG(Select));
 				else if (i == COLOR_TEXT)
-					sprintf(c, "%s", LNG(Normal));
-				else if (i >= COLOR_GRAPH1)
-					sprintf(c, "%s%d", LNG(Graph), i - COLOR_GRAPH1 + 1);
+					sprintf(c, "%s", LNG(Text));
+				else if (i == COLOR_GRAPH1)
+					sprintf(c, "%s", LNG(Folders));
+				else if (i == COLOR_GRAPH2)
+					sprintf(c, "%s", LNG(ELFs));
+				else if (i == COLOR_GRAPH3)
+					sprintf(c, "%s", LNG(Unknown));
+				else if (i == COLOR_GRAPH4)
+					sprintf(c, "%s", LNG(TextEditor));
 				printXY(c, x + (space * (i + 1)) - (printXY(c, 0, 0, 0, FALSE, space - FONT_WIDTH / 2) / 2), y + FONT_HEIGHT,
 				        setting->color[COLOR_TEXT], TRUE, space - FONT_WIDTH / 2);
 				y += FONT_HEIGHT * 2;

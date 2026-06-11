@@ -5,6 +5,7 @@
 #include "init.h"
 #include "main_actions.h"
 #include "main_gameid.h"
+#include "main_history.h"
 #include "main_info_screens.h"
 
 //CleanUp releases uLE stuff preparatory to launching some other application
@@ -34,6 +35,11 @@ static void CleanUp(void)
 //------------------------------
 //endfunc CleanUp
 //---------------------------------------------------------------------------
+static int isHddLaunchPath(const char *path)
+{
+	return (!strncmp(path, "hdd", 3) && path[3] >= '0' && path[3] <= '9' && path[4] == ':' && path[5] == '/');
+}
+
 // Execute. Execute an action. May be called recursively.
 // For any path specified, its device must be accessible.
 //------------------------------
@@ -72,12 +78,12 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		if ((x < 0) || (x > 1) || !vmcMounted[x])
 			goto ELFnotFound;
 		goto CheckELF_path;
-	} else if (!strncmp(path, "hdd0:/", 6)) {
+	} else if (isHddLaunchPath(path)) {
 		loadHddModules();
 		if ((t = checkELFheader(path)) <= 0)
 			goto ELFnotFound;
 		//coming here means the ELF is fine
-		snprintf(party, sizeof(party), "hdd0:%s", path + 6);
+		snprintf(party, sizeof(party), "hdd%c:%s", path[3], path + 6);
 		p = strchr(party, '/');
 		snprintf(fullpath, sizeof(fullpath), "pfs0:%s", p);
 		*p = 0;
@@ -92,8 +98,13 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		//coming here means the ELF is fine
 		snprintf(party, sizeof(party), "dvr_hdd0:%s", path + 10);
 		p = strchr(party, '/');
-		snprintf(fullpath, sizeof(fullpath), "dvr_pfs0:%s", p);
-		*p = 0;
+		if (p != NULL) {
+			snprintf(fullpath, sizeof(fullpath), "dvr_pfs0:%s", p);
+			*p = 0;
+			fullpath[7] = (getDVRPPartyMountIndex(party) == 1) ? '1' : '0';
+		} else {
+			snprintf(fullpath, sizeof(fullpath), "dvr_pfs%d:/", (getDVRPPartyMountIndex(party) == 1) ? 1 : 0);
+		}
 		goto ELFchecked;
 #else
 		goto ELFnotFound;
@@ -154,10 +165,13 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		if ((t = checkELFheader(path)) <= 0)
 			goto ELFnotFound;
 		party[0] = 0;
-		strcpy(fullpath, path);
-		pathSep = strchr(path, '/');
-		if (pathSep && (pathSep - path < 7) && pathSep[-1] == ':')
-			strcpy(fullpath + (pathSep - path), pathSep + 1);
+		if (!strncmp(path, "ata:", 4))
+			snprintf(fullpath, sizeof(fullpath), "ata0:%s", path + 4);
+		else
+			strcpy(fullpath, path);
+		pathSep = strchr(fullpath, '/');
+		if (pathSep && (pathSep - fullpath < 7) && pathSep[-1] == ':')
+			strcpy(fullpath + (pathSep - fullpath), pathSep + 1);
 		goto ELFchecked;
 	} else if (!strncmp(path, "mass", 4)) {
 		char *pathSep;
@@ -243,15 +257,17 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		}
 		if (BootDiscType == 1) {  //Boot a PS1 disc
 			char disc_gameid[12];
-			int show_disc_gameid;
+			int have_disc_gameid;
 			char *args[2] = {SystemCnf_BOOT, SystemCnf_VER};
 
-			show_disc_gameid = 0;
-			if (!setting->cdrom_disable_gameid)
-				show_disc_gameid = buildLaunchGameID(SystemCnf_BOOT, disc_gameid, sizeof(disc_gameid));
+			have_disc_gameid = buildLaunchGameID(SystemCnf_BOOT, disc_gameid, sizeof(disc_gameid));
+			if (have_disc_gameid) {
+				updateOSDHistoryFile(disc_gameid);
+				applyXPARAM(disc_gameid);
+			}
 
 			CleanUp();
-			if (show_disc_gameid)
+			if (have_disc_gameid && !setting->cdrom_disable_gameid)
 				displayRetroGemGameID(disc_gameid, 2);
 			LoadExecPS2("rom0:PS1DRV", 2, args);
 			sprintf(ctx->main_msg, "PS1DRV %s", LNG(Failed));
@@ -421,11 +437,16 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		{
 			int show_launch_gameid = 0;
 			int disc_launch = isLikelyDiscLaunch(path);
+			int have_launch_gameid = 0;
 			char launch_gameid[12];
 
 			if (disc_launch) {
-				if (!setting->cdrom_disable_gameid)
-					show_launch_gameid = buildLaunchGameID(fullpath, launch_gameid, sizeof(launch_gameid));
+				have_launch_gameid = buildLaunchGameID(fullpath, launch_gameid, sizeof(launch_gameid));
+				if (have_launch_gameid) {
+					updateOSDHistoryFile(launch_gameid);
+					applyXPARAM(launch_gameid);
+				}
+				show_launch_gameid = have_launch_gameid && !setting->cdrom_disable_gameid;
 			} else if (setting->app_gameid) {
 				show_launch_gameid = buildLaunchGameID(fullpath, launch_gameid, sizeof(launch_gameid));
 			}

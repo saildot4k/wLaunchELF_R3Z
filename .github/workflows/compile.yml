@@ -21,19 +21,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - variant_name: "ALL-NO-PSX-NO-DS34"
-            psx_profile: "no-psx"
-            pad_profile: "no-ds34"
-            storage_profile: "all"
-          - variant_name: "ALL-NO-PSX-DS34"
-            psx_profile: "no-psx"
-            pad_profile: "ds34"
-            storage_profile: "all"
-          - variant_name: "ALL-PSX-NO-DS34"
+          - variant_name: "R3Z"
             psx_profile: "psx"
             pad_profile: "no-ds34"
             storage_profile: "all"
-          - variant_name: "ALL-PSX-DS34"
+          - variant_name: "R3Z-DS34"
             psx_profile: "psx"
             pad_profile: "ds34"
             storage_profile: "all"
@@ -66,7 +58,7 @@ jobs:
     - run: |
         git config --global --add safe.directory "$GITHUB_WORKSPACE"
         git fetch --prune --unshallow
-    - name: Prepare PS2SDK source for local vmcman build
+    - name: Prepare PS2SDK source for local module builds
       run: |
         if [ -n "${PS2SDKSRC:-}" ] && [ -f "$PS2SDKSRC/Defs.make" ] && [ -f "$PS2SDKSRC/iop/Rules.make" ]; then
           echo "Using PS2SDKSRC=$PS2SDKSRC"
@@ -105,14 +97,14 @@ jobs:
           echo "No BOOT*.ELF produced by build." >&2
           exit 1
         fi
-        cp "$1" "wLE-${{ matrix.variant_name }}.ELF"
+        cp "$1" "WLE-${{ matrix.variant_name }}.ELF"
 
     - name: Upload variants artifact ELF
       uses: actions/upload-artifact@v7
       with:
         name: "WLE-${{ matrix.variant_name }}"
         path: |
-            wLE-${{ matrix.variant_name }}.ELF
+            WLE-${{ matrix.variant_name }}.ELF
 
 ####################################################### 
   release:
@@ -132,7 +124,7 @@ jobs:
       uses: actions/download-artifact@v7
       with:
         path: WLE/
-        pattern: "WLE-ALL-*"
+        pattern: "WLE-R3Z*"
 
     - name: list
       run: |
