@@ -9,6 +9,8 @@ Based off of [wLE_ISR](https://github.com/israpps/wLaunchELF_ISR)
 - __mx4sio:/__ SD card interface over memory card port. Slowe than MMCE
 - __hdd:/__ APA formatted internal HDD
 - __ata:/__ BDM hard drive, exFAT for now till more are supported
+- __xfrom:/__ PSX DESR-XXXX flash storage
+- __dvr_hdd0:/__ PSX DESR-XXXX digital video recorder hdd partition/side
 - __cdfs:/__ CD/DVD File System
 - __udpfs:/__ Network interface used with [PCM720s UDPFSD Server](https://github.com/pcm720/udpfsdf )
 
