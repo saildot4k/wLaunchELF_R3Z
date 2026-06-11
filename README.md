@@ -35,8 +35,8 @@ Dual HDD/ATA support is built in for future development.
 - Create and Extract PSU options so user knows what will happen
 - Extra file extensions for Text Editor ShortCuts
 - Timestamp manipulation feature to fix the date of any memory card folder containing any icon-based exploit _(\*tuna)_
-- Extra file extensions for Text Editor ShortCuts
 - Support for PS3/PS4 Dualshocks thanks to Alex Parrado
+- Launch KELFs (encrypted elfs)
 
 ### Build shortcuts
 
