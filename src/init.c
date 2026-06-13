@@ -72,6 +72,7 @@ IMPORT_BIN2C(mmceman_irx);
 IMPORT_BIN2C(iomanx_irx);
 IMPORT_BIN2C(filexio_irx);
 IMPORT_BIN2C(ps2dev9_irx);
+IMPORT_BIN2C(dev9_poweroff_irx);
 IMPORT_BIN2C(vmcman_irx);
 IMPORT_BIN2C(ps2hdd_irx);
 IMPORT_BIN2C(ps2fs_irx);
@@ -203,6 +204,7 @@ extern u8 mx4sio_driver_running;
 static void delay(int count);
 static void initsbv_patches(void);
 static void load_ps2dev9(void);
+static void prepareDev9Poweroff(void);
 #ifdef ETH
 static void load_ps2ip(void);
 #endif
@@ -317,6 +319,19 @@ static void load_ps2dev9(void)
 }
 //------------------------------
 //endfunc load_ps2dev9
+//---------------------------------------------------------------------------
+static void prepareDev9Poweroff(void)
+{
+	int ret, ID __attribute__((unused));
+
+	if (!ps2dev9_loaded)
+		return;
+
+	ID = SifExecModuleBuffer(dev9_poweroff_irx, size_dev9_poweroff_irx, 0, NULL, &ret);
+	DPRINTF(" [DEV9_POWEROFF]: ID=%d, ret=%d\n", ID, ret);
+}
+//------------------------------
+//endfunc prepareDev9Poweroff
 //---------------------------------------------------------------------------
 #ifdef ETH
 static void load_ps2ip(void)
@@ -1473,6 +1488,7 @@ void closeAllAndPoweroff(void)
 #ifdef DVRP
 		fileXioDevctl("dvr_pfs:", PDIOC_CLOSEALL, NULL, 0, NULL, 0);
 #endif
+		prepareDev9Poweroff();
 		/* Switch off DEV9 */
 		while (fileXioDevctl("dev9x:", DDIOC_OFF, NULL, 0, NULL, 0) < 0) {
 		};
