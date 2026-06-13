@@ -205,6 +205,7 @@ static void delay(int count);
 static void initsbv_patches(void);
 static void load_ps2dev9(void);
 static void prepareDev9Poweroff(void);
+static void stopUsbMassForPoweroff(void);
 #ifdef ETH
 static void load_ps2ip(void);
 #endif
@@ -332,6 +333,29 @@ static void prepareDev9Poweroff(void)
 }
 //------------------------------
 //endfunc prepareDev9Poweroff
+//---------------------------------------------------------------------------
+static void stopUsbMassForPoweroff(void)
+{
+	if (!have_usb_mass)
+		return;
+
+#ifdef EXFAT
+	/*
+	 * With BDMFS active, "mass:" is the shared FAT device prefix. If ATA_BD
+	 * is mounted there, USBMASS_DEVCTL_STOP_ALL reaches ata_bd_stop(), which
+	 * sends an ATA standby command. After DEV9 shutdown that can sit until an
+	 * ATA timeout, so only use this legacy USB stop when ATA_BD is absent.
+	 */
+	if (have_ata_bd) {
+		DPRINTF(" [POWEROFF]: skipping mass stop while ATA_BD is active\n");
+		return;
+	}
+#endif
+
+	fileXioDevctl("mass:", USBMASS_DEVCTL_STOP_ALL, NULL, 0, NULL, 0);
+}
+//------------------------------
+//endfunc stopUsbMassForPoweroff
 //---------------------------------------------------------------------------
 #ifdef ETH
 static void load_ps2ip(void)
@@ -1494,8 +1518,8 @@ void closeAllAndPoweroff(void)
 		};
 	}
 
-	// As required by some (typically 2.5") HDDs, issue the SCSI STOP UNIT command to avoid causing an emergency park.
-	fileXioDevctl("mass:", USBMASS_DEVCTL_STOP_ALL, NULL, 0, NULL, 0);
+	// As required by some USB HDDs, issue the SCSI STOP UNIT command to avoid causing an emergency park.
+	stopUsbMassForPoweroff();
 
 	/* Power-off the PlayStation 2 console. */
 	poweroffShutdown();
