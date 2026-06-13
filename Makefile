@@ -30,7 +30,7 @@ else
 endif
 EE_OBJS = main.o main_actions.o main_boot.o main_modules.o main_menu.o main_info_screens.o main_gameid.o main_history.o init.o main_startup.o main_fileops.o config.o config_screen.o config_startup.o config_network.o config_advanced.o gui.o gui_colors.o virtual_keyboard.o elf.o draw.o draw_gs.o draw_text.o loader_elf.o filer.o filer_device.o filer_mount.o filer_fileops.o filer_actions.o filer_browser.o filer_copy.o \
 	gui_sort.o gui_texteditor.o gui_hdd0_format.o psu_functions.o \
-	poweroff_irx.o iomanx_irx.o filexio_irx.o ps2dev9_irx.o \
+	poweroff_irx.o iomanx_irx.o filexio_irx.o ps2dev9_irx.o dev9_poweroff_irx.o \
 	ps2hdd_irx.o ps2fs_irx.o usbd_irx.o mcman_irx.o mcserv_irx.o \
 	cdvd_irx.o xparam_irx.o vmcman_irx.o ps2kbd_irx.o \
 	hdd.o hdl_rpc.o hdl_info_irx.o editor.o editor_menu.o editor_input.o editor_rules.o editor_file.o timer.o icon.o lang.o \
@@ -327,6 +327,7 @@ clean:
 	$(MAKE) -C iop/oldlibs/libcdvd clean
 	$(MAKE) -C iop/oldlibs/ps2ftpd clean
 	$(MAKE) -C iop/ps2hdd_osd clean
+	$(MAKE) -C iop/dev9_poweroff clean
 	@rm -f githash.h $(EE_BIN) $(EE_BIN_PKD)
 	@rm -rf $(EE_OBJS_DIR)
 	@rm -rf $(EE_ASM_DIR)
