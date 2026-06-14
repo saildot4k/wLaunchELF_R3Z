@@ -205,6 +205,7 @@ static void delay(int count);
 static void initsbv_patches(void);
 static void load_ps2dev9(void);
 static void prepareDev9Poweroff(void);
+static void stopAtaBdmForPoweroff(void);
 static void stopUsbMassForPoweroff(void);
 #ifdef ETH
 static void load_ps2ip(void);
@@ -333,6 +334,23 @@ static void prepareDev9Poweroff(void)
 }
 //------------------------------
 //endfunc prepareDev9Poweroff
+//---------------------------------------------------------------------------
+static void stopAtaBdmForPoweroff(void)
+{
+#ifdef EXFAT
+	if (!have_ata_bd || !have_bdmfs)
+		return;
+
+	/*
+	 * ATA_BD is mounted through BDMFS, not PFS. Stop/unmount those block
+	 * devices before DDIOC_OFF so ata_bd_stop() can still talk to DEV9.
+	 */
+	DPRINTF(" [POWEROFF]: stopping ATA_BD before DEV9 off\n");
+	fileXioDevctl("mass:", USBMASS_DEVCTL_STOP_UNIT, NULL, 0, NULL, 0);
+#endif
+}
+//------------------------------
+//endfunc stopAtaBdmForPoweroff
 //---------------------------------------------------------------------------
 static void stopUsbMassForPoweroff(void)
 {
@@ -1523,6 +1541,7 @@ void closeAllAndPoweroff(void)
 		 * poweroff.irx callback; slow DEV9 callbacks are cleared when
 		 * HDD/ATA driver stacks load.
 		 */
+		stopAtaBdmForPoweroff();
 		/* Switch off DEV9 */
 		while (fileXioDevctl("dev9x:", DDIOC_OFF, NULL, 0, NULL, 0) < 0) {
 		};
