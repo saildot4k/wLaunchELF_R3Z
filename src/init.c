@@ -252,6 +252,7 @@ static void switchPsxHddDriverStack(int use_dvr_stack);
 #ifdef DS34
 static void stopDs34Input(void);
 #endif
+void poweroffConsole(void);
 void closeAllAndPoweroff(void);
 static void poweroffHandler(int i);
 
@@ -446,6 +447,8 @@ static int load_ps2hdd_stack(int with_ata_bd)
 		DPRINTF(" [PS2FS]: ID=%d, ret=%d\n", ID, ret);
 		have_ps2fs = (ID >= 0 && ret >= 0);
 	}
+	if (have_ps2hdd && have_ps2fs)
+		prepareDev9Poweroff();
 
 	return (have_ps2hdd && have_ps2fs);
 }
@@ -499,6 +502,8 @@ static int load_ps2atad_stack(void)
 		DPRINTF(" [PS2FS]: ID=%d, ret=%d\n", ID, ret);
 		have_ps2fs = (ID >= 0 && ret >= 0);
 	}
+	if (have_ps2hdd && have_ps2fs)
+		prepareDev9Poweroff();
 
 	return (have_ps2hdd && have_ps2fs);
 }
@@ -1483,8 +1488,10 @@ int loadAtaModules(void)
 	switchBlockStorageStack(BLOCK_STACK_ATA);
 	ensureCoreIoStackReady();
 	loadAtaBlockDriver();
-	if (have_ata_bd)
+	if (have_ata_bd) {
+		prepareDev9Poweroff();
 		block_storage_stack_mode |= BLOCK_STACK_ATA;
+	}
 	return have_ata_bd;
 }
 #endif
@@ -1512,7 +1519,11 @@ void closeAllAndPoweroff(void)
 #ifdef DVRP
 		fileXioDevctl("dvr_pfs:", PDIOC_CLOSEALL, NULL, 0, NULL, 0);
 #endif
-		prepareDev9Poweroff();
+		/*
+		 * Do not load modules here. This function is also used by the
+		 * poweroff.irx callback; slow DEV9 callbacks are cleared when
+		 * HDD/ATA driver stacks load.
+		 */
 		/* Switch off DEV9 */
 		while (fileXioDevctl("dev9x:", DDIOC_OFF, NULL, 0, NULL, 0) < 0) {
 		};
@@ -1527,10 +1538,25 @@ void closeAllAndPoweroff(void)
 //------------------------------
 //endfunc closeAllAndPoweroff
 //---------------------------------------------------------------------------
+void poweroffConsole(void)
+{
+	if (!is_early_init)
+		drawMsg(LNG(Powering_Off_Console));
+	setupPowerOff();
+	closeAllAndPoweroff();
+}
+//------------------------------
+//endfunc poweroffConsole
+//---------------------------------------------------------------------------
 static void poweroffHandler(int i)
 {
-	if (!is_early_init) drawMsg(LNG(Powering_Off_Console));
-	closeAllAndPoweroff();
+	(void)i;
+
+	/*
+	 * Match the MISC/PS2PowerOff path so the user sees the same feedback
+	 * and the same shutdown setup runs before the final poweroff.
+	 */
+	poweroffConsole();
 }
 //------------------------------
 //endfunc poweroffHandler

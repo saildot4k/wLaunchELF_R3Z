@@ -387,9 +387,7 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 #endif
 	} else if (!stricmp(path, setting->Misc_PS2PowerOff)) {
 		ctx->main_msg[0] = 0;
-		drawMsg(LNG(Powering_Off_Console));
-		setupPowerOff();
-		closeAllAndPoweroff();
+		poweroffConsole();
 		return;
 	} else if (!stricmp(path, setting->Misc_HddManager)) {
 		hddManager();
