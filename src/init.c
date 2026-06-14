@@ -252,7 +252,6 @@ static void switchPsxHddDriverStack(int use_dvr_stack);
 #ifdef DS34
 static void stopDs34Input(void);
 #endif
-void poweroffConsole(void);
 void closeAllAndPoweroff(void);
 static void poweroffHandler(int i);
 
@@ -1538,25 +1537,16 @@ void closeAllAndPoweroff(void)
 //------------------------------
 //endfunc closeAllAndPoweroff
 //---------------------------------------------------------------------------
-void poweroffConsole(void)
-{
-	if (!is_early_init)
-		drawMsg(LNG(Powering_Off_Console));
-	setupPowerOff();
-	closeAllAndPoweroff();
-}
-//------------------------------
-//endfunc poweroffConsole
-//---------------------------------------------------------------------------
 static void poweroffHandler(int i)
 {
 	(void)i;
 
 	/*
-	 * Match the MISC/PS2PowerOff path so the user sees the same feedback
-	 * and the same shutdown setup runs before the final poweroff.
+	 * poweroff.irx runs this from its callback thread. Do not draw, set up
+	 * modules, or otherwise touch UI state here; MISC/PS2PowerOff does that
+	 * before entering this same shutdown routine.
 	 */
-	poweroffConsole();
+	closeAllAndPoweroff();
 }
 //------------------------------
 //endfunc poweroffHandler

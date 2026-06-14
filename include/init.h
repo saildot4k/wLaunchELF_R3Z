@@ -11,7 +11,6 @@ int ensureUsbKeyboardReady(void);
 void loadDs34InputModules(void);
 #endif
 void setupPowerOff(void);
-void poweroffConsole(void);
 void closeAllAndPoweroff(void);
 void startKbd(void);
 void ensureCoreIoStackReady(void);
