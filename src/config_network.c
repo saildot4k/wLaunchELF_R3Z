@@ -137,9 +137,7 @@ enum CONFIG_NET {
 
 	//Settings after IP addresses
 	CONFIG_NET_AFT_IP,
-	CONFIG_NET_SAVE_OVERRIDE = CONFIG_NET_AFT_IP,
-	CONFIG_NET_SAVE_CWD,
-	CONFIG_NET_SAVE_SYSCONF,
+	CONFIG_NET_SAVE = CONFIG_NET_AFT_IP,
 	CONFIG_NET_RETURN,
 
 	CONFIG_NET_COUNT
@@ -161,6 +159,7 @@ void Config_Network(void)
 	char save_cwd_path[MAX_PATH];
 	char save_sysconf_path[MAX_PATH];
 	int has_override_path;
+	int save_target;
 
 	event = 1;  //event = initial entry
 	s = CONFIG_NET_FIRST;
@@ -175,9 +174,6 @@ void Config_Network(void)
 	configBuildSysconfPath(save_sysconf_path, sizeof(save_sysconf_path), "IPCONFIG.DAT");
 
 	while (1) {
-		if (!has_override_path && s == CONFIG_NET_SAVE_OVERRIDE)
-			s = CONFIG_NET_SAVE_CWD;
-
 		//Pad response section
 		waitPadReady(0, 0);
 		if (readpad()) {
@@ -189,16 +185,12 @@ void Config_Network(void)
 					s = CONFIG_NET_RETURN;
 					l = 1;
 				}
-				if (!has_override_path && s == CONFIG_NET_SAVE_OVERRIDE)
-					s = CONFIG_NET_GW;
 			} else if (new_pad & PAD_DOWN) {
 				event |= 2;  //event |= valid pad command
 				if (s != CONFIG_NET_COUNT - 1)
 					s++;
 				else
 					s = CONFIG_NET_FIRST;
-				if (!has_override_path && s == CONFIG_NET_SAVE_OVERRIDE)
-					s = CONFIG_NET_SAVE_CWD;
 				if (s >= CONFIG_NET_AFT_IP)
 					l = 1;
 			} else if (new_pad & PAD_LEFT) {
@@ -245,18 +237,20 @@ void Config_Network(void)
 						}
 					}
 
-					} else if ((s >= CONFIG_NET_SAVE_OVERRIDE) && (s <= CONFIG_NET_SAVE_SYSCONF)) {
-						sprintf(ip, "%i.%i.%i.%i", ipdata.ip[0], ipdata.ip[1], ipdata.ip[2], ipdata.ip[3]);
-						sprintf(netmask, "%i.%i.%i.%i", ipdata.nm[0], ipdata.nm[1], ipdata.nm[2], ipdata.nm[3]);
-						sprintf(gw, "%i.%i.%i.%i", ipdata.gw[0], ipdata.gw[1], ipdata.gw[2], ipdata.gw[3]);
+					} else if (s == CONFIG_NET_SAVE) {
+						save_target = configSaveTargetPrompt(save_override_path, save_cwd_path, save_sysconf_path, LoadedIPConfigPath, has_override_path);
+						if (save_target != CONFIG_SAVE_TARGET_CANCEL) {
+							sprintf(ip, "%i.%i.%i.%i", ipdata.ip[0], ipdata.ip[1], ipdata.ip[2], ipdata.ip[3]);
+							sprintf(netmask, "%i.%i.%i.%i", ipdata.nm[0], ipdata.nm[1], ipdata.nm[2], ipdata.nm[3]);
+							sprintf(gw, "%i.%i.%i.%i", ipdata.gw[0], ipdata.gw[1], ipdata.gw[2], ipdata.gw[3]);
 
-						if (s == CONFIG_NET_SAVE_OVERRIDE) {
-							if (has_override_path)
+							if (save_target == CONFIG_SAVE_TARGET_OVERRIDE)
 								saveNetworkSettings(NetMsg, save_override_path);
-						} else if (s == CONFIG_NET_SAVE_CWD)
-							saveNetworkSettings(NetMsg, save_cwd_path);
-						else
-							saveNetworkSettings(NetMsg, save_sysconf_path);
+							else if (save_target == CONFIG_SAVE_TARGET_CWD)
+								saveNetworkSettings(NetMsg, save_cwd_path);
+							else if (save_target == CONFIG_SAVE_TARGET_SYSCONF)
+								saveNetworkSettings(NetMsg, save_sysconf_path);
+						}
 					} else  //s == CONFIG_NET_RETURN
 						return;
 			} else if (new_pad & PAD_TRIANGLE)
@@ -300,15 +294,7 @@ void Config_Network(void)
 
 			y += FONT_HEIGHT / 2;
 
-			configFormatSavePathValue(value, sizeof(value), has_override_path ? save_override_path : "NOT SET", has_override_path ? LoadedIPConfigPath : NULL);
-			configFormatLabelValue(c, sizeof(c), "Save to override path", value);
-			printXY(c, x, y, setting->color[has_override_path ? COLOR_TEXT : COLOR_BACKGR], TRUE, 0);
-			y += FONT_HEIGHT;
-			configFormatSavePathValue(value, sizeof(value), save_cwd_path, LoadedIPConfigPath);
-			configFormatLabelValue(c, sizeof(c), LNG(Save_to), value);
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			y += FONT_HEIGHT;
-			configFormatSavePathValue(value, sizeof(value), save_sysconf_path, LoadedIPConfigPath);
+			snprintf(value, sizeof(value), "...");
 			configFormatLabelValue(c, sizeof(c), LNG(Save_to), value);
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
@@ -343,15 +329,15 @@ void Config_Network(void)
 					                 "0:%s \xFF"
 					                 "1:%s",
 					              LNG(Add), LNG(Subtract));
-				} else if ((s >= CONFIG_NET_SAVE_OVERRIDE) && (s <= CONFIG_NET_SAVE_SYSCONF)) {
+				} else if (s == CONFIG_NET_SAVE) {
 					if (swapKeys)
 						len = sprintf(c, "\xFF"
 						                 "1:%s",
-						              LNG(Save));
+						              LNG(Select));
 					else
 						len = sprintf(c, "\xFF"
 						                 "0:%s",
-						              LNG(Save));
+						              LNG(Select));
 			} else {
 				if (swapKeys)
 					len = sprintf(c, "\xFF"

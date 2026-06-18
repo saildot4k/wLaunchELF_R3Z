@@ -53,6 +53,15 @@ void configAppendPathFile(char *dst, size_t dst_size, const char *dir, const cha
 void configBuildSysconfPath(char *dst, size_t dst_size, const char *filename);
 void configEnsureSysconfDir(const char *path);
 
+enum CONFIG_SAVE_TARGET {
+	CONFIG_SAVE_TARGET_CANCEL = -1,
+	CONFIG_SAVE_TARGET_OVERRIDE,
+	CONFIG_SAVE_TARGET_CWD,
+	CONFIG_SAVE_TARGET_SYSCONF
+};
+
+int configSaveTargetPrompt(const char *save_override_path, const char *save_cwd_path, const char *save_sysconf_path, const char *loaded_path, int has_override_path);
+
 int CheckMC(void);
 
 void Config_Screen(void);
