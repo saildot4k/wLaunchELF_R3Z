@@ -7,11 +7,11 @@
 //---------------------------------------------------------------------------
 // Network settings GUI by Slam-Tilt
 //---------------------------------------------------------------------------
-static void saveNetworkSettings(char *Message)
+static void saveNetworkSettings(char *Message, const char *target_path)
 {
 	char firstline[50];
 	int out_fd, in_fd;
-	int ret = 0, i = 0, port;
+	int ret = 0, i = 0;
 	int size, sizeleft = 0;
 	char *ipconfigfile = 0;
 	char path[MAX_PATH];
@@ -21,50 +21,49 @@ static void saveNetworkSettings(char *Message)
 
 	sprintf(firstline, "%s %s %s\n\r", ip, netmask, gw);
 
+	if (target_path == NULL || target_path[0] == '\0')
+		return;
 
 
-	// This block looks at the existing ipconfig.dat and works out if there is
-	// already any data beyond the first line. If there is it will get appended to the output
-	// to new file later.
 
-	if (genFixPath("uLE:/IPCONFIG.DAT", path) >= 0)
+	// Preserve any existing data beyond the first line of the selected target.
+
+	if (genFixPath(target_path, path) >= 0)
 		in_fd = genOpen(path, FIO_O_RDONLY);
 	else
 		in_fd = -1;
 
-	if (strncmp(path, "mc", 2)) {
-		mcSync(0, NULL, NULL);
-		mcMkDir(0, 0, "SYS-CONF");
-		mcSync(0, NULL, &ret);
-	}
 	if (in_fd >= 0) {
 
 		size = genLseek(in_fd, 0, SEEK_END);
 		DPRINTF("%s: size of existing file is %ibytes\n\r", __func__, size);
 
-		ipconfigfile = (char *)memalign(64, size);
+		if (size > 0 && (ipconfigfile = (char *)memalign(64, size)) != NULL) {
+			int read_size;
 
-		genLseek(in_fd, 0, SEEK_SET);
-		genRead(in_fd, ipconfigfile, size);
-
-
-		/*for (i = 0; (ipconfigfile[i] != 0 && i <= size); i++)
-		{
-			// DPRINTF("%i-%c\n\r",i,ipconfigfile[i]);
-		}*/
-
-		sizeleft = size - i;
+			genLseek(in_fd, 0, SEEK_SET);
+			read_size = genRead(in_fd, ipconfigfile, size);
+			if (read_size > 0) {
+				size = read_size;
+				for (i = 0; i < size && ipconfigfile[i] != '\r' && ipconfigfile[i] != '\n'; i++)
+					;
+				while (i < size && (ipconfigfile[i] == '\r' || ipconfigfile[i] == '\n'))
+					i++;
+				sizeleft = size - i;
+			}
+		}
 
 		genClose(in_fd);
-	} else {
-		port = CheckMC();
-		if (port < 0)
-			port = 0;  //Default to mc0, if it fails.
-		sprintf(path, "mc%d:/SYS-CONF/IPCONFIG.DAT", port);
 	}
 
 	// Writing the data out
 
+	configEnsureSysconfDir(target_path);
+	if (genFixPath(target_path, path) < 0) {
+		if (ipconfigfile != NULL)
+			free(ipconfigfile);
+		return;
+	}
 	out_fd = genOpen(path, FIO_O_WRONLY | FIO_O_TRUNC | FIO_O_CREAT);
 	if (out_fd >= 0) {
 		mcSync(0, NULL, &ret);
@@ -78,10 +77,13 @@ static void saveNetworkSettings(char *Message)
 			mcSync(0, NULL, &ret);
 		}
 
-			snprintf(Message, MAX_PATH, "%s %.*s", LNG(Saved), MAX_PATH - 4, path);
+		snprintf(Message, MAX_PATH, "%s %.*s", LNG(Saved), MAX_PATH - 4, target_path);
+		snprintf(LoadedIPConfigPath, sizeof(LoadedIPConfigPath), "%s", target_path);
 
 		genClose(out_fd);
 	}
+	if (ipconfigfile != NULL)
+		free(ipconfigfile);
 }
 //---------------------------------------------------------------------------
 // Convert IP string to numbers
@@ -135,7 +137,9 @@ enum CONFIG_NET {
 
 	//Settings after IP addresses
 	CONFIG_NET_AFT_IP,
-	CONFIG_NET_SAVE = CONFIG_NET_AFT_IP,
+	CONFIG_NET_SAVE_OVERRIDE = CONFIG_NET_AFT_IP,
+	CONFIG_NET_SAVE_CWD,
+	CONFIG_NET_SAVE_SYSCONF,
 	CONFIG_NET_RETURN,
 
 	CONFIG_NET_COUNT
@@ -150,14 +154,25 @@ void Config_Network(void)
 	int event, post_event = 0;
 	int len;
 	char c[MAX_PATH];
+	char value[MAX_PATH];
 	data_ip_struct ipdata;
 	char NetMsg[MAX_PATH] = "";
-	char path[MAX_PATH];
+	char save_override_path[MAX_PATH];
+	char save_cwd_path[MAX_PATH];
+	char save_sysconf_path[MAX_PATH];
+	int has_override_path;
 
 	event = 1;  //event = initial entry
 	s = CONFIG_NET_FIRST;
 	l = 1;
 	ipdata = BuildOctets(ip, netmask, gw);
+	has_override_path = (setting->CNF_Path[0] != '\0');
+	if (has_override_path)
+		configAppendPathFile(save_override_path, sizeof(save_override_path), setting->CNF_Path, "IPCONFIG.DAT");
+	else
+		save_override_path[0] = '\0';
+	configAppendPathFile(save_cwd_path, sizeof(save_cwd_path), LaunchElfBootDir[0] ? LaunchElfBootDir : LaunchElfDir, "IPCONFIG.DAT");
+	configBuildSysconfPath(save_sysconf_path, sizeof(save_sysconf_path), "IPCONFIG.DAT");
 
 	while (1) {
 		//Pad response section
@@ -223,16 +238,20 @@ void Config_Network(void)
 						}
 					}
 
-				}
+					} else if ((s >= CONFIG_NET_SAVE_OVERRIDE) && (s <= CONFIG_NET_SAVE_SYSCONF)) {
+						sprintf(ip, "%i.%i.%i.%i", ipdata.ip[0], ipdata.ip[1], ipdata.ip[2], ipdata.ip[3]);
+						sprintf(netmask, "%i.%i.%i.%i", ipdata.nm[0], ipdata.nm[1], ipdata.nm[2], ipdata.nm[3]);
+						sprintf(gw, "%i.%i.%i.%i", ipdata.gw[0], ipdata.gw[1], ipdata.gw[2], ipdata.gw[3]);
 
-				else if (s == CONFIG_NET_SAVE) {
-					sprintf(ip, "%i.%i.%i.%i", ipdata.ip[0], ipdata.ip[1], ipdata.ip[2], ipdata.ip[3]);
-					sprintf(netmask, "%i.%i.%i.%i", ipdata.nm[0], ipdata.nm[1], ipdata.nm[2], ipdata.nm[3]);
-					sprintf(gw, "%i.%i.%i.%i", ipdata.gw[0], ipdata.gw[1], ipdata.gw[2], ipdata.gw[3]);
-
-					saveNetworkSettings(NetMsg);
-				} else  //s == CONFIG_NET_RETURN
-					return;
+						if (s == CONFIG_NET_SAVE_OVERRIDE) {
+							if (has_override_path)
+								saveNetworkSettings(NetMsg, save_override_path);
+						} else if (s == CONFIG_NET_SAVE_CWD)
+							saveNetworkSettings(NetMsg, save_cwd_path);
+						else
+							saveNetworkSettings(NetMsg, save_sysconf_path);
+					} else  //s == CONFIG_NET_RETURN
+						return;
 			} else if (new_pad & PAD_TRIANGLE)
 				return;
 		}
@@ -274,19 +293,16 @@ void Config_Network(void)
 
 			y += FONT_HEIGHT / 2;
 
-			uLE_related(path, "uLE:/IPCONFIG.DAT");  //Get save target.
-			{
-				int path_len;
-				int prefix_len = snprintf(c, sizeof(c), "  %s \"", LNG(Save_to));
-				if (prefix_len < 0 || prefix_len >= (int)sizeof(c))
-					c[sizeof(c) - 1] = '\0';
-				else {
-					path_len = (int)sizeof(c) - prefix_len - 2;  // room for '"' and '\0'
-					if (path_len < 0)
-						path_len = 0;
-					snprintf(c + prefix_len, sizeof(c) - prefix_len, "%.*s\"", path_len, path);
-				}
-			}
+			configFormatSavePathValue(value, sizeof(value), has_override_path ? save_override_path : LNG(NONE), has_override_path ? LoadedIPConfigPath : NULL);
+			configFormatLabelValue(c, sizeof(c), "Save to override path", value);
+			printXY(c, x, y, setting->color[has_override_path ? COLOR_TEXT : COLOR_GRAPH3], TRUE, 0);
+			y += FONT_HEIGHT;
+			configFormatSavePathValue(value, sizeof(value), save_cwd_path, LoadedIPConfigPath);
+			configFormatLabelValue(c, sizeof(c), LNG(Save_to), value);
+			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
+			y += FONT_HEIGHT;
+			configFormatSavePathValue(value, sizeof(value), save_sysconf_path, LoadedIPConfigPath);
+			configFormatLabelValue(c, sizeof(c), LNG(Save_to), value);
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 
@@ -320,15 +336,15 @@ void Config_Network(void)
 					                 "0:%s \xFF"
 					                 "1:%s",
 					              LNG(Add), LNG(Subtract));
-			} else if (s == CONFIG_NET_SAVE) {
-				if (swapKeys)
-					len = sprintf(c, "\xFF"
-					                 "1:%s",
-					              LNG(Save));
-				else
-					len = sprintf(c, "\xFF"
-					                 "0:%s",
-					              LNG(Save));
+				} else if ((s >= CONFIG_NET_SAVE_OVERRIDE) && (s <= CONFIG_NET_SAVE_SYSCONF)) {
+					if (swapKeys)
+						len = sprintf(c, "\xFF"
+						                 "1:%s",
+						              LNG(Save));
+					else
+						len = sprintf(c, "\xFF"
+						                 "0:%s",
+						              LNG(Save));
 			} else {
 				if (swapKeys)
 					len = sprintf(c, "\xFF"

@@ -32,19 +32,25 @@ void getIpConfig(void)
 	char buf[IPCONF_MAX_LEN];
 	char path[MAX_PATH];
 	char candidate[MAX_PATH];
+	char loaded_path[MAX_PATH];
 	size_t dir_len;
 	static const char ipconfig_name[] = "IPCONFIG.DAT";
 
 	fd = -1;
 	len = 0;
+	LoadedIPConfigPath[0] = '\0';
+	loaded_path[0] = '\0';
 
 	// Prefer IPCONFIG in the same directory as the launched ELF.
 	dir_len = strnlen(LaunchElfDir, sizeof(candidate));
 	if (dir_len < sizeof(candidate) && (dir_len + sizeof(ipconfig_name)) <= sizeof(candidate)) {
 		memcpy(candidate, LaunchElfDir, dir_len);
 		memcpy(candidate + dir_len, ipconfig_name, sizeof(ipconfig_name));
-		if (genFixPath(candidate, path) >= 0)
+		if (genFixPath(candidate, path) >= 0) {
 			fd = genOpen(path, FIO_O_RDONLY);
+			if (fd >= 0)
+				snprintf(loaded_path, sizeof(loaded_path), "%s", candidate);
+		}
 	}
 
 	// Fallback to SYS-CONF on memory cards, preferring current MC slot.
@@ -57,8 +63,11 @@ void getIpConfig(void)
 
 		for (port_ix = 0; port_ix < 2 && fd < 0; port_ix++) {
 			snprintf(candidate, sizeof(candidate), "mc%d:/SYS-CONF/IPCONFIG.DAT", ports_to_try[port_ix]);
-			if (genFixPath(candidate, path) >= 0)
+			if (genFixPath(candidate, path) >= 0) {
 				fd = genOpen(path, FIO_O_RDONLY);
+				if (fd >= 0)
+					snprintf(loaded_path, sizeof(loaded_path), "%s", candidate);
+			}
 		}
 	}
 
@@ -69,6 +78,7 @@ void getIpConfig(void)
 	}
 
 	if ((fd >= 0) && (len > 0)) {
+		snprintf(LoadedIPConfigPath, sizeof(LoadedIPConfigPath), "%s", loaded_path);
 		buf[len] = '\0';                          //Ensure string termination, regardless of file content
 		for (i = 0; ((c = buf[i]) != '\0'); i++)  //Clear out spaces and any CR/LF
 			if ((c == ' ') || (c == '\r') || (c == '\n'))
@@ -361,6 +371,7 @@ enum BOOT_DEVICE prepareBootDeviceAndPath(const char *arg0, char *boot_path, siz
 	char *p;
 
 	LaunchElfDir[0] = '\0';
+	LaunchElfBootDir[0] = '\0';
 	if (boot_path != NULL && boot_path_len > 0)
 		boot_path[0] = '\0';
 
@@ -456,6 +467,7 @@ enum BOOT_DEVICE prepareBootDeviceAndPath(const char *arg0, char *boot_path, siz
 	if (p != NULL)
 		*(p + 1) = 0;
 	//The above cuts away the ELF filename from LaunchElfDir, leaving a pure path
+	snprintf(LaunchElfBootDir, sizeof(LaunchElfBootDir), "%s", LaunchElfDir);
 
 	LastDir[0] = 0;
 
