@@ -81,7 +81,7 @@ void configFormatLabelValueAligned(char *dst, size_t dst_size, const char *label
 
 void configFormatSavePathValue(char *dst, size_t dst_size, const char *path, const char *loaded_path)
 {
-	static const char marker[] = " CURRENTLY LOADED";
+	static const char marker[] = " LOADED";
 	const char *suffix;
 	int path_width;
 
@@ -895,9 +895,26 @@ enum CONFIG_MAIN {
 	CONFIG_MAIN_COUNT
 };
 
+static void configFormatPromptLabel(char *dst, size_t dst_size, const char *label)
+{
+	size_t label_len;
+
+	if (dst_size == 0)
+		return;
+	if (label == NULL)
+		label = "";
+
+	label_len = strlen(label);
+	if (label_len > 0 && label[label_len - 1] == ':')
+		snprintf(dst, dst_size, "%s", label);
+	else
+		snprintf(dst, dst_size, "%s:", label);
+}
+
 static void configFormatSavePromptLine(char *dst, size_t dst_size, const char *label, const char *path, const char *loaded_path, int max_chars)
 {
-	static const char marker[] = " CURRENTLY LOADED";
+	static const char marker[] = " LOADED";
+	char label_text[MAX_PATH];
 	const char *suffix;
 	int prefix_len;
 	int path_width;
@@ -909,8 +926,9 @@ static void configFormatSavePromptLine(char *dst, size_t dst_size, const char *l
 	if (path == NULL)
 		path = "";
 
+	configFormatPromptLabel(label_text, sizeof(label_text), label);
 	suffix = (loaded_path != NULL && loaded_path[0] != '\0' && !stricmp(path, loaded_path)) ? marker : "";
-	prefix_len = snprintf(dst, dst_size, "  %s: \"", label);
+	prefix_len = snprintf(dst, dst_size, " %s \"", label_text);
 	if (prefix_len < 0 || prefix_len >= (int)dst_size) {
 		dst[dst_size - 1] = '\0';
 		return;
@@ -926,7 +944,7 @@ int configSaveTargetPrompt(const char *save_override_path, const char *save_cwd_
 {
 	enum CONFIG_SAVE_TARGET targets[4];
 	char lines[4][MAX_PATH];
-	const char *title = LNG(Save_to);
+	char title[MAX_PATH];
 	int option_count;
 	int sel;
 	int event, post_event;
@@ -939,6 +957,7 @@ int configSaveTargetPrompt(const char *save_override_path, const char *save_cwd_
 	int dh, dw, dx, dy;
 	int y;
 
+	configFormatPromptLabel(title, sizeof(title), LNG(Save_to));
 	option_count = 0;
 	if (has_override_path) {
 		targets[option_count] = CONFIG_SAVE_TARGET_OVERRIDE;
@@ -952,7 +971,7 @@ int configSaveTargetPrompt(const char *save_override_path, const char *save_cwd_
 	configFormatSavePromptLine(lines[option_count], sizeof(lines[option_count]), LNG(Save_to), save_sysconf_path, loaded_path, 0x7fffffff);
 	option_count++;
 	targets[option_count] = CONFIG_SAVE_TARGET_CANCEL;
-	snprintf(lines[option_count], sizeof(lines[option_count]), "  %s", LNG(Cancel));
+	snprintf(lines[option_count], sizeof(lines[option_count]), " %s", LNG(Cancel));
 	option_count++;
 
 	max_chars = (SCREEN_WIDTH - 2 * SCREEN_MARGIN - 2 * LINE_THICKNESS - 2 * a - 2 * FONT_WIDTH) / FONT_WIDTH;
@@ -968,6 +987,12 @@ int configSaveTargetPrompt(const char *save_override_path, const char *save_cwd_
 	}
 
 	tw = printXY(title, 0, 0, 0, FALSE, 0);
+	line_width = printXY(LNG(Config_Search_Order), 0, 0, 0, FALSE, 0);
+	if (line_width > tw)
+		tw = line_width;
+	line_width = printXY(LNG(Top_To_Bottom), 0, 0, 0, FALSE, 0);
+	if (line_width > tw)
+		tw = line_width;
 	for (i = 0; i < option_count; i++) {
 		line_width = printXY(lines[i], 0, 0, 0, FALSE, 0);
 		if (line_width > tw)
@@ -977,7 +1002,7 @@ int configSaveTargetPrompt(const char *save_override_path, const char *save_cwd_
 		tw = 160;
 
 	dw = 2 * LINE_THICKNESS + a * 2 + tw;
-	dh = 2 * LINE_THICKNESS + b * 2 + FONT_HEIGHT * (option_count + 2);
+	dh = 2 * LINE_THICKNESS + b * 2 + FONT_HEIGHT * (option_count + 4);
 	dx = (SCREEN_WIDTH - dw) / 2;
 	dy = (SCREEN_HEIGHT - dh) / 2;
 	sel = 0;
@@ -1012,7 +1037,9 @@ int configSaveTargetPrompt(const char *save_override_path, const char *save_cwd_
 			drawPopSprite(setting->color[COLOR_BACKGR], dx, dy, dx + dw, dy + dh);
 			drawFrame(dx, dy, dx + dw, dy + dh, setting->color[COLOR_FRAME]);
 			printXY(title, dx + LINE_THICKNESS + a, dy + LINE_THICKNESS + b, setting->color[COLOR_TEXT], TRUE, 0);
-			y = dy + LINE_THICKNESS + b + FONT_HEIGHT * 2;
+			printXY(LNG(Config_Search_Order), dx + LINE_THICKNESS + a, dy + LINE_THICKNESS + b + FONT_HEIGHT, setting->color[COLOR_TEXT], TRUE, 0);
+			printXY(LNG(Top_To_Bottom), dx + LINE_THICKNESS + a, dy + LINE_THICKNESS + b + FONT_HEIGHT * 2, setting->color[COLOR_TEXT], TRUE, 0);
+			y = dy + LINE_THICKNESS + b + FONT_HEIGHT * 4;
 			for (i = 0; i < option_count; i++) {
 				printXY(lines[i], dx + LINE_THICKNESS + a + FONT_WIDTH, y + i * FONT_HEIGHT, setting->color[COLOR_TEXT], TRUE, 0);
 				if (i == sel)
