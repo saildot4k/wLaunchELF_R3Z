@@ -316,7 +316,8 @@ typedef struct
 	int gw[4];
 } data_ip_struct;
 
-extern char LaunchElfDir[MAX_PATH], LastDir[MAX_NAME];
+extern char LaunchElfDir[MAX_PATH], LaunchElfBootDir[MAX_PATH], LastDir[MAX_NAME];
+extern char LoadedConfigPath[MAX_PATH], LoadedIPConfigPath[MAX_PATH];
 
 #ifndef IPCONF_MAX_LEN
 #define IPCONF_MAX_LEN (3 * 16)
@@ -465,6 +466,7 @@ extern SETTING *setting;
 void initConfig(void);
 int loadConfig(char *, char *);  //0==OK, -1==load failed
 void config(char *, char *);
+void saveConfigToPath(char *, char *, const char *);
 int get_CNF_string(char **CNF_p_p,
                    char **name_p_p,
                    char **value_p_p);  //main CNF name,value parser

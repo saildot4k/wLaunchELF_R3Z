@@ -23,7 +23,8 @@
 #endif
 
 int TV_mode;
-char LaunchElfDir[MAX_PATH], mainMsg[MAX_PATH];
+char LaunchElfDir[MAX_PATH], LaunchElfBootDir[MAX_PATH], mainMsg[MAX_PATH];
+char LoadedConfigPath[MAX_PATH], LoadedIPConfigPath[MAX_PATH];
 char CNF[MAX_NAME];
 int swapKeys;
 
