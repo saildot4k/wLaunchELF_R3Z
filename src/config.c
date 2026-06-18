@@ -928,6 +928,8 @@ void config(char *mainMsg, char *CNF)
 			save_override_path[0] = '\0';
 		configAppendPathFile(save_cwd_path, sizeof(save_cwd_path), LaunchElfBootDir[0] ? LaunchElfBootDir : LaunchElfDir, CNF);
 		configBuildSysconfPath(save_sysconf_path, sizeof(save_sysconf_path), CNF);
+		if (!has_override_path && s == CONFIG_MAIN_SAVE_OVERRIDE)
+			s = CONFIG_MAIN_SAVE_CWD;
 
 		//Pad response section
 		waitPadReady(0, 0);
@@ -938,12 +940,16 @@ void config(char *mainMsg, char *CNF)
 					s--;
 				else
 					s = CONFIG_MAIN_COUNT - 1;
+				if (!has_override_path && s == CONFIG_MAIN_SAVE_OVERRIDE)
+					s = CONFIG_MAIN_LAST;
 			} else if (new_pad & PAD_DOWN) {
 				event |= 2;  //event |= valid pad command
 				if (s != CONFIG_MAIN_COUNT - 1)
 					s++;
 				else
 					s = 0;
+				if (!has_override_path && s == CONFIG_MAIN_SAVE_OVERRIDE)
+					s = CONFIG_MAIN_SAVE_CWD;
 			} else if (new_pad & PAD_LEFT) {
 				event |= 2;  //event |= valid pad command
 				if (s > CONFIG_MAIN_LAST)
@@ -955,7 +961,7 @@ void config(char *mainMsg, char *CNF)
 					if (s < CONFIG_MAIN_AFT_BTNS)
 						s = CONFIG_MAIN_AFT_BTNS;
 					else if (s <= CONFIG_MAIN_LAST)
-						s = CONFIG_MAIN_SAVE_OVERRIDE;
+						s = has_override_path ? CONFIG_MAIN_SAVE_OVERRIDE : CONFIG_MAIN_SAVE_CWD;
 				} else if ((new_pad & PAD_SQUARE) && (s < CONFIG_MAIN_AFT_BTNS)) {
 					event |= 2;  //event |= valid pad command
 					strcpy(title_tmp, setting->LK_Title[s]);
@@ -1110,9 +1116,9 @@ void config(char *mainMsg, char *CNF)
 			y += FONT_HEIGHT;
 			y += FONT_HEIGHT / 2;
 
-			configFormatSavePathValue(value, sizeof(value), has_override_path ? save_override_path : LNG(NONE), has_override_path ? LoadedConfigPath : NULL);
+			configFormatSavePathValue(value, sizeof(value), has_override_path ? save_override_path : "NOT SET", has_override_path ? LoadedConfigPath : NULL);
 			configFormatLabelValue(c, sizeof(c), "Save to override path", value);
-			printXY(c, x, y, setting->color[has_override_path ? COLOR_TEXT : COLOR_GRAPH3], TRUE, 0);
+			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 			configFormatSavePathValue(value, sizeof(value), save_cwd_path, LoadedConfigPath);
 			configFormatLabelValue(c, sizeof(c), LNG(Save_to), value);

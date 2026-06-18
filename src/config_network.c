@@ -175,6 +175,9 @@ void Config_Network(void)
 	configBuildSysconfPath(save_sysconf_path, sizeof(save_sysconf_path), "IPCONFIG.DAT");
 
 	while (1) {
+		if (!has_override_path && s == CONFIG_NET_SAVE_OVERRIDE)
+			s = CONFIG_NET_SAVE_CWD;
+
 		//Pad response section
 		waitPadReady(0, 0);
 		if (readpad()) {
@@ -186,12 +189,16 @@ void Config_Network(void)
 					s = CONFIG_NET_RETURN;
 					l = 1;
 				}
+				if (!has_override_path && s == CONFIG_NET_SAVE_OVERRIDE)
+					s = CONFIG_NET_GW;
 			} else if (new_pad & PAD_DOWN) {
 				event |= 2;  //event |= valid pad command
 				if (s != CONFIG_NET_COUNT - 1)
 					s++;
 				else
 					s = CONFIG_NET_FIRST;
+				if (!has_override_path && s == CONFIG_NET_SAVE_OVERRIDE)
+					s = CONFIG_NET_SAVE_CWD;
 				if (s >= CONFIG_NET_AFT_IP)
 					l = 1;
 			} else if (new_pad & PAD_LEFT) {
@@ -293,9 +300,9 @@ void Config_Network(void)
 
 			y += FONT_HEIGHT / 2;
 
-			configFormatSavePathValue(value, sizeof(value), has_override_path ? save_override_path : LNG(NONE), has_override_path ? LoadedIPConfigPath : NULL);
+			configFormatSavePathValue(value, sizeof(value), has_override_path ? save_override_path : "NOT SET", has_override_path ? LoadedIPConfigPath : NULL);
 			configFormatLabelValue(c, sizeof(c), "Save to override path", value);
-			printXY(c, x, y, setting->color[has_override_path ? COLOR_TEXT : COLOR_GRAPH3], TRUE, 0);
+			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 			configFormatSavePathValue(value, sizeof(value), save_cwd_path, LoadedIPConfigPath);
 			configFormatLabelValue(c, sizeof(c), LNG(Save_to), value);
