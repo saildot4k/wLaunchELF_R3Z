@@ -990,9 +990,6 @@ int configSaveTargetPrompt(const char *save_override_path, const char *save_cwd_
 	line_width = printXY(LNG(Config_Search_Order), 0, 0, 0, FALSE, 0);
 	if (line_width > tw)
 		tw = line_width;
-	line_width = printXY(LNG(Top_To_Bottom), 0, 0, 0, FALSE, 0);
-	if (line_width > tw)
-		tw = line_width;
 	for (i = 0; i < option_count; i++) {
 		line_width = printXY(lines[i], 0, 0, 0, FALSE, 0);
 		if (line_width > tw)
@@ -1002,7 +999,7 @@ int configSaveTargetPrompt(const char *save_override_path, const char *save_cwd_
 		tw = 160;
 
 	dw = 2 * LINE_THICKNESS + a * 2 + tw;
-	dh = 2 * LINE_THICKNESS + b * 2 + FONT_HEIGHT * (option_count + 4);
+	dh = 2 * LINE_THICKNESS + b * 2 + FONT_HEIGHT * (option_count + 3);
 	dx = (SCREEN_WIDTH - dw) / 2;
 	dy = (SCREEN_HEIGHT - dh) / 2;
 	sel = 0;
@@ -1038,8 +1035,7 @@ int configSaveTargetPrompt(const char *save_override_path, const char *save_cwd_
 			drawFrame(dx, dy, dx + dw, dy + dh, setting->color[COLOR_FRAME]);
 			printXY(title, dx + LINE_THICKNESS + a, dy + LINE_THICKNESS + b, setting->color[COLOR_TEXT], TRUE, 0);
 			printXY(LNG(Config_Search_Order), dx + LINE_THICKNESS + a, dy + LINE_THICKNESS + b + FONT_HEIGHT, setting->color[COLOR_TEXT], TRUE, 0);
-			printXY(LNG(Top_To_Bottom), dx + LINE_THICKNESS + a, dy + LINE_THICKNESS + b + FONT_HEIGHT * 2, setting->color[COLOR_TEXT], TRUE, 0);
-			y = dy + LINE_THICKNESS + b + FONT_HEIGHT * 4;
+			y = dy + LINE_THICKNESS + b + FONT_HEIGHT * 3;
 			for (i = 0; i < option_count; i++) {
 				printXY(lines[i], dx + LINE_THICKNESS + a + FONT_WIDTH, y + i * FONT_HEIGHT, setting->color[COLOR_TEXT], TRUE, 0);
 				if (i == sel)
