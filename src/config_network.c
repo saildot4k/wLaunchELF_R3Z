@@ -302,7 +302,7 @@ void Config_Network(void)
 
 			configFormatSavePathValue(value, sizeof(value), has_override_path ? save_override_path : "NOT SET", has_override_path ? LoadedIPConfigPath : NULL);
 			configFormatLabelValue(c, sizeof(c), "Save to override path", value);
-			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
+			printXY(c, x, y, setting->color[has_override_path ? COLOR_TEXT : COLOR_BACKGR], TRUE, 0);
 			y += FONT_HEIGHT;
 			configFormatSavePathValue(value, sizeof(value), save_cwd_path, LoadedIPConfigPath);
 			configFormatLabelValue(c, sizeof(c), LNG(Save_to), value);
