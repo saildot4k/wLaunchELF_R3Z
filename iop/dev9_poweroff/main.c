@@ -10,10 +10,10 @@ int _start(int argc, char **argv)
 	(void)argv;
 
 	/*
-	 * APA registers slot 0 for SMART attribute saving and ATAD registers
-	 * slot 15 for STANDBY IMMEDIATE. PFS close has already handled the
-	 * filesystem side; these drive-maintenance callbacks can stall final
-	 * software poweroff for several seconds on some drives/adapters.
+	 * APA registers slot 0 for SMART attribute saving and ATAD/ATA_BD
+	 * register slot 15 for STANDBY IMMEDIATE. uLE closes PFS before final
+	 * poweroff; these drive-maintenance callbacks can stall final software
+	 * poweroff for several seconds on some drives/adapters.
 	 */
 	Dev9RegisterPowerOffHandler(0, 0);
 	Dev9RegisterPowerOffHandler(15, 0);

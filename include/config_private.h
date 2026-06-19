@@ -9,26 +9,22 @@ enum {
 	DEF_HIDE_PATHS = TRUE,
 #ifdef CUSTOM_COLORS
 	DEF_COLOR1 = GS_SETREG_RGBA(0, 0, 0, 0),  //Backgr
-	DEF_COLOR2 = GS_SETREG_RGBA(160, 160, 160, 0),  //Frame
-#ifdef DVRP
-	DEF_COLOR3 = GS_SETREG_RGBA(0x7a, 0, 0xbe, 0),
+	DEF_COLOR2 = GS_SETREG_RGBA(0x35, 0x35, 0x35, 0),  //Frame
+	DEF_COLOR3 = GS_SETREG_RGBA(0x6c, 0xce, 0xff, 0),  //Select
+	DEF_COLOR4 = GS_SETREG_RGBA(0xa0, 0xa0, 0xa0, 0),  //Text
+	DEF_COLOR5 = GS_SETREG_RGBA(0xff, 0xcc, 0x99, 0),  //Folders
+	DEF_COLOR6 = GS_SETREG_RGBA(0x48, 0x6a, 0, 0),     //ELFs
+	DEF_COLOR7 = GS_SETREG_RGBA(0x43, 0x3a, 0x7c, 0),  //Unknown
+	DEF_COLOR8 = GS_SETREG_RGBA(0xd6, 0xc4, 0x28, 0),  //TextEditor
 #else
-	DEF_COLOR3 = GS_SETREG_RGBA(0, 204, 255, 0),  //Select
-#endif
-	DEF_COLOR4 = GS_SETREG_RGBA(255, 255, 255, 0),  //Text
-	DEF_COLOR5 = GS_SETREG_RGBA(255, 255, 0, 0),      //Folders
-	DEF_COLOR6 = GS_SETREG_RGBA(0, 255, 0, 0),        //ELFs
-	DEF_COLOR7 = GS_SETREG_RGBA(64, 64, 64, 0),       //Unknown
-	DEF_COLOR8 = GS_SETREG_RGBA(128, 128, 128, 0),    //TextEditor
-#else
-	DEF_COLOR1 = GS_SETREG_RGBA(128, 128, 128, 0),  //Backgr
-	DEF_COLOR2 = GS_SETREG_RGBA(64, 64, 64, 0),     //Frame
-	DEF_COLOR3 = GS_SETREG_RGBA(96, 0, 0, 0),       //Select
-	DEF_COLOR4 = GS_SETREG_RGBA(0, 0, 0, 0),        //Text
-	DEF_COLOR5 = GS_SETREG_RGBA(96, 96, 0, 0),      //Folders
-	DEF_COLOR6 = GS_SETREG_RGBA(0, 96, 0, 0),       //ELFs
-	DEF_COLOR7 = GS_SETREG_RGBA(224, 224, 224, 0),  //Unknown
-	DEF_COLOR8 = GS_SETREG_RGBA(0, 0, 0, 0),        //TextEditor
+	DEF_COLOR1 = GS_SETREG_RGBA(0, 0, 0, 0),              //Backgr
+	DEF_COLOR2 = GS_SETREG_RGBA(0x35, 0x35, 0x35, 0),     //Frame
+	DEF_COLOR3 = GS_SETREG_RGBA(0x6c, 0xce, 0xff, 0),     //Select
+	DEF_COLOR4 = GS_SETREG_RGBA(0xa0, 0xa0, 0xa0, 0),     //Text
+	DEF_COLOR5 = GS_SETREG_RGBA(0xff, 0xcc, 0x99, 0),     //Folders
+	DEF_COLOR6 = GS_SETREG_RGBA(0x48, 0x6a, 0, 0),        //ELFs
+	DEF_COLOR7 = GS_SETREG_RGBA(0x43, 0x3a, 0x7c, 0),     //Unknown
+	DEF_COLOR8 = GS_SETREG_RGBA(0xd6, 0xc4, 0x28, 0),     //TextEditor
 #endif //CUSTOM_COLORS
 	DEF_MENU_FRAME = TRUE,
 	DEF_SWAPKEYS = FALSE,
@@ -52,6 +48,19 @@ enum {
 
 void configFormatLabelValue(char *dst, size_t dst_size, const char *label, const char *value);
 void configFormatLabelValueAligned(char *dst, size_t dst_size, const char *label, const char *value, int label_width);
+void configFormatSavePathValue(char *dst, size_t dst_size, const char *path, const char *loaded_path);
+void configAppendPathFile(char *dst, size_t dst_size, const char *dir, const char *filename);
+void configBuildSysconfPath(char *dst, size_t dst_size, const char *filename);
+void configEnsureSysconfDir(const char *path);
+
+enum CONFIG_SAVE_TARGET {
+	CONFIG_SAVE_TARGET_CANCEL = -1,
+	CONFIG_SAVE_TARGET_OVERRIDE,
+	CONFIG_SAVE_TARGET_CWD,
+	CONFIG_SAVE_TARGET_SYSCONF
+};
+
+int configSaveTargetPrompt(const char *save_override_path, const char *save_cwd_path, const char *save_sysconf_path, const char *loaded_path, int has_override_path);
 
 int CheckMC(void);
 

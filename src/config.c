@@ -78,6 +78,24 @@ void configFormatLabelValueAligned(char *dst, size_t dst_size, const char *label
 		value_len = 0;
 	snprintf(dst + prefix_len, dst_size - prefix_len, "%.*s", value_len, value ? value : "");
 }
+
+void configFormatSavePathValue(char *dst, size_t dst_size, const char *path, const char *loaded_path)
+{
+	static const char marker[] = " LOADED";
+	const char *suffix;
+	int path_width;
+
+	if (dst_size == 0)
+		return;
+	if (path == NULL)
+		path = "";
+
+	suffix = (loaded_path != NULL && loaded_path[0] != '\0' && !stricmp(path, loaded_path)) ? marker : "";
+	path_width = (int)dst_size - (int)strlen(suffix) - 3;
+	if (path_width < 0)
+		path_width = 0;
+	snprintf(dst, dst_size, "\"%.*s\"%s", path_width, path, suffix);
+}
 //---------------------------------------------------------------------------
 // End of declarations
 // Start of functions
@@ -156,27 +174,88 @@ int CheckMC(void)
 	return -11;
 }
 
-static int getLaunchMcPort(void)
+static int getMcPortFromPath(const char *path)
 {
 	int mcport;
 
-	if (!strncmp(LaunchElfDir, "mc0", 3))
+	if (path == NULL)
+		return -1;
+	if (!strncmp(path, "mc0", 3))
 		return 0;
-	if (!strncmp(LaunchElfDir, "mc1", 3))
+	if (!strncmp(path, "mc1", 3))
 		return 1;
 
-	if (!strncmp(LaunchElfDir, "mc:", 3)) {
+	if (!strncmp(path, "mc:", 3)) {
 		mcport = CheckMC();
 		if (mcport == 0 || mcport == 1)
 			return mcport;
 		return 0;
 	}
 
+	return -1;
+}
+
+static int getLaunchMcPort(void)
+{
+	int mcport;
+
+	mcport = getMcPortFromPath(LaunchElfDir);
+	if (mcport == 0 || mcport == 1)
+		return mcport;
+
 	mcport = CheckMC();
 	if (mcport == 0 || mcport == 1)
 		return mcport;
 
 	return 0;
+}
+
+static int configGetPreferredSysconfPort(void)
+{
+	int mcport;
+
+	mcport = getMcPortFromPath(LaunchElfBootDir);
+	if (mcport == 0 || mcport == 1)
+		return mcport;
+
+	return getLaunchMcPort();
+}
+
+void configAppendPathFile(char *dst, size_t dst_size, const char *dir, const char *filename)
+{
+	size_t len;
+	const char *separator;
+
+	if (dst == NULL || dst_size == 0)
+		return;
+	if (filename == NULL)
+		filename = "";
+	if (dir == NULL || dir[0] == '\0') {
+		snprintf(dst, dst_size, "%s", filename);
+		return;
+	}
+
+	len = strlen(dir);
+	separator = (dir[len - 1] == '/' || dir[len - 1] == '\\' || dir[len - 1] == ':') ? "" : "/";
+	snprintf(dst, dst_size, "%s%s%s", dir, separator, filename);
+}
+
+void configBuildSysconfPath(char *dst, size_t dst_size, const char *filename)
+{
+	snprintf(dst, dst_size, "mc%d:/SYS-CONF/%s", configGetPreferredSysconfPort(), (filename != NULL) ? filename : "");
+}
+
+void configEnsureSysconfDir(const char *path)
+{
+	int ret;
+
+	if (path == NULL)
+		return;
+	if (!strncmp(path, "mc0:/SYS-CONF/", 14) || !strncmp(path, "mc1:/SYS-CONF/", 14)) {
+		mcSync(0, NULL, NULL);
+		mcMkDir(path[2] - '0', 0, "SYS-CONF");
+		mcSync(0, NULL, &ret);
+	}
 }
 //---------------------------------------------------------------------------
 static char *preloadCNFFd(int fd, const char *cnf_path)
@@ -276,7 +355,7 @@ char *preloadCNF(char *path)
 //endfunc preloadCNF
 // Save LAUNCHELF.CNF
 //---------------------------------------------------------------------------
-void saveConfig(char *mainMsg, char *CNF)
+void saveConfigToPath(char *mainMsg, char *CNF, const char *target_path)
 {
 	int i, ret, fd;
 	char c[MAX_PATH], tmp[26 * MAX_PATH + 30 * MAX_PATH];
@@ -425,28 +504,37 @@ void saveConfig(char *mainMsg, char *CNF)
 		}  //ends if
 	}      //ends for
 
-	strcpy(c, LaunchElfDir);
-	strcat(c, CNF);
-	ret = genFixPath(c, cnf_path);
-	if ((ret >= 0) && ((fd = genOpen(cnf_path, FIO_O_RDONLY)) >= 0))
-		genClose(fd);
-	else {                                //Start of clause for failure to use LaunchElfDir
-		if (setting->CNF_Path[0] == 0) {  //if NO CNF Path override defined
-			sprintf(c, "mc%d:/SYS-CONF", getLaunchMcPort());
+	if (target_path != NULL && target_path[0] != '\0') {
+		snprintf(c, sizeof(c), "%s", target_path);
+	} else {
+		strcpy(c, LaunchElfDir);
+		strcat(c, CNF);
+		ret = genFixPath(c, cnf_path);
+		if ((ret >= 0) && ((fd = genOpen(cnf_path, FIO_O_RDONLY)) >= 0))
+			genClose(fd);
+		else {                                //Start of clause for failure to use LaunchElfDir
+			if (setting->CNF_Path[0] == 0) {  //if NO CNF Path override defined
+				sprintf(c, "mc%d:/SYS-CONF", getLaunchMcPort());
 
-			if ((fd = fileXioDopen(c)) >= 0) {
-				fileXioDclose(fd);
-				char strtmp[MAX_PATH] = "/";
-				strcat(c, strcat(strtmp, CNF));
-			} else {
-				strcpy(c, LaunchElfDir);
-				strcat(c, CNF);
+				if ((fd = fileXioDopen(c)) >= 0) {
+					fileXioDclose(fd);
+					char strtmp[MAX_PATH] = "/";
+					strcat(c, strcat(strtmp, CNF));
+				} else {
+					strcpy(c, LaunchElfDir);
+					strcat(c, CNF);
+				}
 			}
-		}
-	}  //End of clause for failure to use LaunchElfDir
+		}  //End of clause for failure to use LaunchElfDir
+	}
 
+	configEnsureSysconfDir(c);
 	ret = genFixPath(c, cnf_path);
 	if ((ret < 0) || ((fd = genOpen(cnf_path, FIO_O_CREAT | FIO_O_WRONLY | FIO_O_TRUNC)) < 0)) {
+		if (target_path != NULL && target_path[0] != '\0') {
+			sprintf(mainMsg, "%s %s", LNG(Failed_To_Save), CNF);
+			return;
+		}
 		sprintf(c, "mc%d:/SYS-CONF", getLaunchMcPort());
 		if ((fd = fileXioDopen(c)) >= 0) {
 			fileXioDclose(fd);
@@ -463,11 +551,16 @@ void saveConfig(char *mainMsg, char *CNF)
 		}
 	}
 	ret = genWrite(fd, &tmp, CNF_size);
-	if (ret == CNF_size)
+	if (ret == CNF_size) {
+		snprintf(LoadedConfigPath, sizeof(LoadedConfigPath), "%s", c);
 		sprintf(mainMsg, "%s (%s)", LNG(Saved_Config), c);
-	else
+	} else
 		sprintf(mainMsg, "%s (%s)", LNG(Failed_writing), CNF);
 	genClose(fd);
+}
+void saveConfig(char *mainMsg, char *CNF)
+{
+	saveConfigToPath(mainMsg, CNF, NULL);
 }
 //---------------------------------------------------------------------------
 void initConfig(void)
@@ -556,9 +649,12 @@ int loadConfig(char *mainMsg, char *CNF)
 	char tsts[MAX_PATH];
 	char path[MAX_PATH];
 	char cnf_path[MAX_PATH];
+	char loaded_path[MAX_PATH];
 	char *RAM_p, *CNF_p, *name, *value;
 
 	initConfig();
+	LoadedConfigPath[0] = '\0';
+	loaded_path[0] = '\0';
 
 	strcpy(path, LaunchElfDir);
 	strcat(path, CNF);
@@ -568,6 +664,8 @@ int loadConfig(char *mainMsg, char *CNF)
 	fd = -1;
 	if ((tst = genFixPath(path, cnf_path)) >= 0)
 		fd = genOpen(cnf_path, FIO_O_RDONLY);
+	if (fd >= 0)
+		snprintf(loaded_path, sizeof(loaded_path), "%s", path);
 	if (fd < 0) {
 		char strtmp[MAX_PATH];
 		int ports_to_try[2];
@@ -587,8 +685,10 @@ int loadConfig(char *mainMsg, char *CNF)
 			strcpy(cnf_path, strtmp);
 			strcat(cnf_path, CNF);
 			fd = genOpen(cnf_path, FIO_O_RDONLY);
-			if (fd >= 0)
+			if (fd >= 0) {
 				strcpy(LaunchElfDir, strtmp);
+				snprintf(loaded_path, sizeof(loaded_path), "%s", cnf_path);
+			}
 		}
 	}
 	if (fd < 0) {
@@ -742,6 +842,7 @@ int loadConfig(char *mainMsg, char *CNF)
 	for (i = 0; i < SETTING_LK_BTN_COUNT; i++)
 		setting->LK_Title[i][MAX_ELF_TITLE - 1] = 0;
 	free(RAM_p);
+	snprintf(LoadedConfigPath, sizeof(LoadedConfigPath), "%s", loaded_path[0] ? loaded_path : cnf_path);
 	sprintf(mainMsg, "%s (%s)", LNG(Loaded_Config), cnf_path);
 	return 0;
 }
@@ -788,15 +889,189 @@ enum CONFIG_MAIN {
 	CONFIG_MAIN_ADVANCED,
 	CONFIG_MAIN_LAST = CONFIG_MAIN_ADVANCED,
 
-	CONFIG_MAIN_OK,
+	CONFIG_MAIN_SAVE,
 	CONFIG_MAIN_CANCEL,
 
 	CONFIG_MAIN_COUNT
 };
 
+static void configFormatPromptLabel(char *dst, size_t dst_size, const char *label)
+{
+	size_t label_len;
+
+	if (dst_size == 0)
+		return;
+	if (label == NULL)
+		label = "";
+
+	label_len = strlen(label);
+	if (label_len > 0 && label[label_len - 1] == ':')
+		snprintf(dst, dst_size, "%s", label);
+	else
+		snprintf(dst, dst_size, "%s:", label);
+}
+
+static void configFormatSavePromptLine(char *dst, size_t dst_size, const char *label, const char *path, const char *loaded_path, int max_chars)
+{
+	static const char marker[] = " LOADED";
+	char label_text[MAX_PATH];
+	const char *suffix;
+	int prefix_len;
+	int path_width;
+
+	if (dst_size == 0)
+		return;
+	if (label == NULL)
+		label = "";
+	if (path == NULL)
+		path = "";
+
+	configFormatPromptLabel(label_text, sizeof(label_text), label);
+	suffix = (loaded_path != NULL && loaded_path[0] != '\0' && !stricmp(path, loaded_path)) ? marker : "";
+	prefix_len = snprintf(dst, dst_size, " %s \"", label_text);
+	if (prefix_len < 0 || prefix_len >= (int)dst_size) {
+		dst[dst_size - 1] = '\0';
+		return;
+	}
+
+	path_width = max_chars - prefix_len - (int)strlen(suffix) - 1;
+	if (path_width < 0)
+		path_width = 0;
+	snprintf(dst + prefix_len, dst_size - prefix_len, "%.*s\"%s", path_width, path, suffix);
+}
+
+int configSaveTargetPrompt(const char *save_override_path, const char *save_cwd_path, const char *save_sysconf_path, const char *loaded_path, int has_override_path)
+{
+	enum CONFIG_SAVE_TARGET targets[4];
+	char lines[4][MAX_PATH];
+	char title[MAX_PATH];
+	int option_count;
+	int sel;
+	int default_sel;
+	int event, post_event;
+	int i;
+	int ret;
+	int tw;
+	int line_width;
+	int max_chars;
+	int a = 6, b = 4;
+	int dh, dw, dx, dy;
+	int y;
+
+	configFormatPromptLabel(title, sizeof(title), LNG(Save_to));
+	option_count = 0;
+	default_sel = -1;
+	if (has_override_path) {
+		targets[option_count] = CONFIG_SAVE_TARGET_OVERRIDE;
+		configFormatSavePromptLine(lines[option_count], sizeof(lines[option_count]), "Save to override path", save_override_path, loaded_path, 0x7fffffff);
+		option_count++;
+	}
+	targets[option_count] = CONFIG_SAVE_TARGET_CWD;
+	configFormatSavePromptLine(lines[option_count], sizeof(lines[option_count]), LNG(Save_to), save_cwd_path, loaded_path, 0x7fffffff);
+	option_count++;
+	targets[option_count] = CONFIG_SAVE_TARGET_SYSCONF;
+	configFormatSavePromptLine(lines[option_count], sizeof(lines[option_count]), LNG(Save_to), save_sysconf_path, loaded_path, 0x7fffffff);
+	option_count++;
+	targets[option_count] = CONFIG_SAVE_TARGET_CANCEL;
+	snprintf(lines[option_count], sizeof(lines[option_count]), " %s", LNG(Cancel));
+	option_count++;
+
+	for (i = 0; i < option_count; i++) {
+		if (loaded_path != NULL && loaded_path[0] != '\0') {
+			if ((targets[i] == CONFIG_SAVE_TARGET_OVERRIDE && save_override_path != NULL && !stricmp(save_override_path, loaded_path)) ||
+			    (targets[i] == CONFIG_SAVE_TARGET_CWD && save_cwd_path != NULL && !stricmp(save_cwd_path, loaded_path)) ||
+			    (targets[i] == CONFIG_SAVE_TARGET_SYSCONF && save_sysconf_path != NULL && !stricmp(save_sysconf_path, loaded_path))) {
+				default_sel = i;
+				break;
+			}
+		}
+		if (default_sel < 0 && targets[i] == CONFIG_SAVE_TARGET_SYSCONF)
+			default_sel = i;
+	}
+
+	max_chars = (SCREEN_WIDTH - 2 * SCREEN_MARGIN - 2 * LINE_THICKNESS - 2 * a - 2 * FONT_WIDTH) / FONT_WIDTH;
+	if (max_chars < 16)
+		max_chars = 16;
+	for (i = 0; i < option_count; i++) {
+		if (targets[i] == CONFIG_SAVE_TARGET_OVERRIDE)
+			configFormatSavePromptLine(lines[i], sizeof(lines[i]), "Save to override path", save_override_path, loaded_path, max_chars);
+		else if (targets[i] == CONFIG_SAVE_TARGET_CWD)
+			configFormatSavePromptLine(lines[i], sizeof(lines[i]), LNG(Save_to), save_cwd_path, loaded_path, max_chars);
+		else if (targets[i] == CONFIG_SAVE_TARGET_SYSCONF)
+			configFormatSavePromptLine(lines[i], sizeof(lines[i]), LNG(Save_to), save_sysconf_path, loaded_path, max_chars);
+	}
+
+	tw = printXY(title, 0, 0, 0, FALSE, 0);
+	line_width = printXY(LNG(Config_Search_Order), 0, 0, 0, FALSE, 0);
+	if (line_width > tw)
+		tw = line_width;
+	for (i = 0; i < option_count; i++) {
+		line_width = printXY(lines[i], 0, 0, 0, FALSE, 0);
+		if (line_width > tw)
+			tw = line_width;
+	}
+	if (tw < 160)
+		tw = 160;
+
+	dw = 2 * LINE_THICKNESS + a * 2 + tw;
+	dh = 2 * LINE_THICKNESS + b * 2 + FONT_HEIGHT * (option_count + 3);
+	dx = (SCREEN_WIDTH - dw) / 2;
+	dy = (SCREEN_HEIGHT - dh) / 2;
+	sel = default_sel >= 0 ? default_sel : 0;
+	event = 1;
+	ret = CONFIG_SAVE_TARGET_CANCEL;
+
+	while (1) {
+		waitPadReady(0, 0);
+		if (readpad()) {
+			if (new_pad & PAD_UP) {
+				event |= 2;
+				if (sel > 0)
+					sel--;
+				else
+					sel = option_count - 1;
+			} else if (new_pad & PAD_DOWN) {
+				event |= 2;
+				if (sel < option_count - 1)
+					sel++;
+				else
+					sel = 0;
+			} else if ((new_pad & PAD_TRIANGLE) || (!swapKeys && new_pad & PAD_CROSS) || (swapKeys && new_pad & PAD_CIRCLE)) {
+				ret = CONFIG_SAVE_TARGET_CANCEL;
+				break;
+			} else if ((swapKeys && new_pad & PAD_CROSS) || (!swapKeys && new_pad & PAD_CIRCLE)) {
+				ret = targets[sel];
+				break;
+			}
+		}
+
+		if (event || post_event) {
+			drawPopSprite(setting->color[COLOR_BACKGR], dx, dy, dx + dw, dy + dh);
+			drawFrame(dx, dy, dx + dw, dy + dh, setting->color[COLOR_FRAME]);
+			printXY(title, dx + LINE_THICKNESS + a, dy + LINE_THICKNESS + b, setting->color[COLOR_TEXT], TRUE, 0);
+			printXY(LNG(Config_Search_Order), dx + LINE_THICKNESS + a, dy + LINE_THICKNESS + b + FONT_HEIGHT, setting->color[COLOR_TEXT], TRUE, 0);
+			y = dy + LINE_THICKNESS + b + FONT_HEIGHT * 3;
+			for (i = 0; i < option_count; i++) {
+				printXY(lines[i], dx + LINE_THICKNESS + a + FONT_WIDTH, y + i * FONT_HEIGHT, setting->color[COLOR_TEXT], TRUE, 0);
+				if (i == sel)
+					drawChar(LEFT_CUR, dx + LINE_THICKNESS + a, y + i * FONT_HEIGHT, setting->color[COLOR_TEXT]);
+			}
+		}
+		drawLastMsg();
+		post_event = event;
+		event = 0;
+	}
+
+	return ret;
+}
+
 void config(char *mainMsg, char *CNF)
 {
 	char c[MAX_PATH];
+	char value[MAX_PATH];
+	char save_override_path[MAX_PATH];
+	char save_cwd_path[MAX_PATH];
+	char save_sysconf_path[MAX_PATH];
 	char title_tmp[MAX_ELF_TITLE];
 	char *localMsg;
 	int i;
@@ -804,6 +1079,8 @@ void config(char *mainMsg, char *CNF)
 	int x, y;
 	int len;
 	int bool_label_width;
+	int has_override_path;
+	int save_target;
 	int event, post_event = 0;
 
 	tmpsetting = setting;
@@ -813,6 +1090,14 @@ void config(char *mainMsg, char *CNF)
 	event = 1;  //event = initial entry
 	s = CONFIG_MAIN_FIRST;
 	while (1) {
+		has_override_path = (setting->CNF_Path[0] != '\0');
+		if (has_override_path)
+			configAppendPathFile(save_override_path, sizeof(save_override_path), setting->CNF_Path, CNF);
+		else
+			save_override_path[0] = '\0';
+		configAppendPathFile(save_cwd_path, sizeof(save_cwd_path), LaunchElfBootDir[0] ? LaunchElfBootDir : LaunchElfDir, CNF);
+		configBuildSysconfPath(save_sysconf_path, sizeof(save_sysconf_path), CNF);
+
 		//Pad response section
 		waitPadReady(0, 0);
 		if (readpad()) {
@@ -839,7 +1124,7 @@ void config(char *mainMsg, char *CNF)
 					if (s < CONFIG_MAIN_AFT_BTNS)
 						s = CONFIG_MAIN_AFT_BTNS;
 					else if (s <= CONFIG_MAIN_LAST)
-						s = CONFIG_MAIN_OK;
+						s = CONFIG_MAIN_SAVE;
 				} else if ((new_pad & PAD_SQUARE) && (s < CONFIG_MAIN_AFT_BTNS)) {
 					event |= 2;  //event |= valid pad command
 					strcpy(title_tmp, setting->LK_Title[s]);
@@ -876,10 +1161,21 @@ void config(char *mainMsg, char *CNF)
 					Config_Network();
 				else if (s == CONFIG_MAIN_ADVANCED)
 					Config_Advanced();
-				else if (s == CONFIG_MAIN_OK) {
-					free(tmpsetting);
-					saveConfig(mainMsg, CNF);
-					break;
+				else if (s == CONFIG_MAIN_SAVE) {
+					save_target = configSaveTargetPrompt(save_override_path, save_cwd_path, save_sysconf_path, LoadedConfigPath, has_override_path);
+					if (save_target == CONFIG_SAVE_TARGET_OVERRIDE) {
+						free(tmpsetting);
+						saveConfigToPath(mainMsg, CNF, save_override_path);
+						break;
+					} else if (save_target == CONFIG_SAVE_TARGET_CWD) {
+						free(tmpsetting);
+						saveConfigToPath(mainMsg, CNF, save_cwd_path);
+						break;
+					} else if (save_target == CONFIG_SAVE_TARGET_SYSCONF) {
+						free(tmpsetting);
+						saveConfigToPath(mainMsg, CNF, save_sysconf_path);
+						break;
+					}
 				} else if (s == CONFIG_MAIN_CANCEL)
 					goto cancel_exit;
 			} else if (new_pad & PAD_TRIANGLE) {
@@ -984,7 +1280,8 @@ void config(char *mainMsg, char *CNF)
 			y += FONT_HEIGHT;
 			y += FONT_HEIGHT / 2;
 
-			sprintf(c, "  %s", LNG(OK));
+			snprintf(value, sizeof(value), "...");
+			configFormatLabelValue(c, sizeof(c), LNG(Save_to), value);
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
 			sprintf(c, "  %s", LNG(Cancel));
@@ -994,7 +1291,7 @@ void config(char *mainMsg, char *CNF)
 			y = Menu_start_y + (s + 1) * FONT_HEIGHT;
 			if (s >= CONFIG_MAIN_AFT_BTNS)
 				y += FONT_HEIGHT / 2;
-			if (s >= CONFIG_MAIN_OK)
+			if (s >= CONFIG_MAIN_SAVE)
 				y += FONT_HEIGHT / 2;
 			drawChar(LEFT_CUR, x, y, setting->color[COLOR_TEXT]);
 
@@ -1016,8 +1313,8 @@ void config(char *mainMsg, char *CNF)
 						                 "1:%s \xFF"
 						                 "2:%s",
 						              LNG(Browse), LNG(Clear), LNG(Edit_Title));
-					}
-				} else if ((s == CONFIG_MAIN_SHOW_TITLES) || (s == CONFIG_MAIN_FILENAME)) {
+				}
+			} else if ((s == CONFIG_MAIN_SHOW_TITLES) || (s == CONFIG_MAIN_FILENAME)) {
 				if (swapKeys)
 					len = sprintf(c, "\xFF"
 					                 "1:%s",
@@ -1026,6 +1323,15 @@ void config(char *mainMsg, char *CNF)
 					len = sprintf(c, "\xFF"
 					                 "0:%s",
 					              LNG(Change));
+			} else if (s == CONFIG_MAIN_SAVE) {
+				if (swapKeys)
+					len = sprintf(c, "\xFF"
+					                 "1:%s",
+					              LNG(Select));
+				else
+					len = sprintf(c, "\xFF"
+					                 "0:%s",
+					              LNG(Select));
 			} else {
 				if (swapKeys)
 					len = sprintf(c, "\xFF"
