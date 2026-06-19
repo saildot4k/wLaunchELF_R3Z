@@ -28,7 +28,7 @@ MCMAN_SDK_ROOT :=
 MCMAN_SDK_MODULE_DIR :=
 
 MCSERV_SOURCE :=
-MCSERV_AUTOGEN := iop/__generated/mcserv-1400.irx
+MCSERV_AUTOGEN := iop/__generated/mcserv-1300.irx
 MCSERV_SDK_ROOT :=
 MCSERV_SDK_MODULE_DIR :=
 
@@ -48,10 +48,10 @@ MCMAN_SOURCE := $(MCMAN_AUTOGEN)
 MCMAN_SDK_ROOT := $(PS2SDK_COMPAT_SOURCE_ROOT)
 MCMAN_SDK_MODULE_DIR := $(PS2SDK_COMPAT_SOURCE_ROOT)/iop/memorycard/mcman-1400
 endif
-ifneq ($(wildcard $(PS2SDK_COMPAT_SOURCE_ROOT)/iop/memorycard/mcserv/Makefile),)
+ifneq ($(wildcard $(PS2SDK_COMPAT_SOURCE_ROOT)/iop/memorycard/mcserv-1300/Makefile),)
 MCSERV_SOURCE := $(MCSERV_AUTOGEN)
 MCSERV_SDK_ROOT := $(PS2SDK_COMPAT_SOURCE_ROOT)
-MCSERV_SDK_MODULE_DIR := $(PS2SDK_COMPAT_SOURCE_ROOT)/iop/memorycard/mcserv
+MCSERV_SDK_MODULE_DIR := $(PS2SDK_COMPAT_SOURCE_ROOT)/iop/memorycard/mcserv-1300
 endif
 ifneq ($(wildcard $(PS2SDK_COMPAT_SOURCE_ROOT)/iop/sio/sio2man/Makefile),)
 SIO2MAN_SOURCE := $(SIO2MAN_AUTOGEN)
@@ -71,8 +71,8 @@ MCMAN_SOURCE = $(PS2SDK)/iop/irx/mcman-1400.irx
 endif
 endif
 ifeq ($(strip $(MCSERV_SOURCE)),)
-ifneq ($(wildcard $(PS2SDK)/iop/irx/mcserv-1400.irx),)
-MCSERV_SOURCE = $(PS2SDK)/iop/irx/mcserv-1400.irx
+ifneq ($(wildcard $(PS2SDK)/iop/irx/mcserv-1300.irx),)
+MCSERV_SOURCE = $(PS2SDK)/iop/irx/mcserv-1300.irx
 endif
 endif
 ifeq ($(strip $(SIO2MAN_SOURCE)),)
@@ -92,7 +92,7 @@ ifeq ($(strip $(MCMAN_SOURCE)),)
   $(error Missing mcman-1400.irx. Update PS2SDK, or provide PS2SDKSRC/PS2SDK_LOCAL_SOURCE_ROOT with iop/memorycard/mcman-1400 sources)
 endif
 ifeq ($(strip $(MCSERV_SOURCE)),)
-  $(error Missing mcserv-1400.irx. Update PS2SDK, or provide PS2SDKSRC/PS2SDK_LOCAL_SOURCE_ROOT with iop/memorycard/mcserv sources)
+  $(error Missing mcserv-1300.irx. Update PS2SDK, or provide PS2SDKSRC/PS2SDK_LOCAL_SOURCE_ROOT with iop/memorycard/mcserv-1300 sources)
 endif
 ifeq ($(strip $(SIO2MAN_SOURCE)),)
   $(error Missing sio2man.irx. Update PS2SDK, or provide PS2SDKSRC/PS2SDK_LOCAL_SOURCE_ROOT with iop/sio/sio2man sources)
@@ -335,6 +335,7 @@ $(MCMAN_AUTOGEN): | iop/__generated
 	$(MAKE) -C $(MCMAN_SDK_MODULE_DIR) \
 		PS2SDKSRC=$(MCMAN_SDK_ROOT) \
 		PS2SDK=$(MCMAN_SDK_ROOT) \
+		MCMAN_BUILDING_XMCMAN_V2=0 \
 		IOP_BIN_DIR=$(abspath iop/__generated)/ \
 		IOP_OBJS_DIR=$(abspath iop/__generated/mcman_1400_obj)/ \
 		IOP_BIN=mcman-1400.irx
@@ -343,9 +344,10 @@ $(MCSERV_AUTOGEN): | iop/__generated
 	$(MAKE) -C $(MCSERV_SDK_MODULE_DIR) \
 		PS2SDKSRC=$(MCSERV_SDK_ROOT) \
 		PS2SDK=$(MCSERV_SDK_ROOT) \
+		MCMAN_BUILDING_XMCSERV=0 \
 		IOP_BIN_DIR=$(abspath iop/__generated)/ \
-		IOP_OBJS_DIR=$(abspath iop/__generated/mcserv_1400_obj)/ \
-		IOP_BIN=mcserv-1400.irx
+		IOP_OBJS_DIR=$(abspath iop/__generated/mcserv_1300_obj)/ \
+		IOP_BIN=mcserv-1300.irx
 
 $(SIO2MAN_AUTOGEN): | iop/__generated
 	$(MAKE) -C $(SIO2MAN_SDK_MODULE_DIR) \
@@ -359,6 +361,7 @@ $(PADMAN_AUTOGEN): | iop/__generated
 	$(MAKE) -C $(PADMAN_SDK_MODULE_DIR) \
 		PS2SDKSRC=$(PADMAN_SDK_ROOT) \
 		PS2SDK=$(PADMAN_SDK_ROOT) \
+		PADMAN_BUILDING_XPADMAN_V2=0 \
 		IOP_BIN_DIR=$(abspath iop/__generated)/ \
 		IOP_OBJS_DIR=$(abspath iop/__generated/padman_1400_obj)/ \
 		IOP_BIN=padman-1400.irx
@@ -436,10 +439,10 @@ $(MX4SIO_BD_AUTOGEN): | iop/__generated
 
 $(EE_ASM_DIR)mx4sio_bd.s: $(MX4SIO_BD_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ mx4sio_bd_irx
-	
+
 $(EE_ASM_DIR)mmceman_irx.s: iop/__precompiled/mmceman.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ mmceman_irx
- 
+
 $(EE_ASM_DIR)extflash_irx.s: $(EXTFLASH_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ extflash_irx
 
@@ -738,7 +741,7 @@ $(EE_ASM_DIR)ps2hdd_irx.s: $(PS2HDD_OSD_SOURCE) | $(EE_ASM_DIR)
 
 $(EE_ASM_DIR)ps2fs_irx.s: $(PS2SDK)/iop/irx/ps2fs.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ps2fs_irx
-	
+
 ifeq ($(DVRP),1)
 $(EE_ASM_DIR)ps2atad_irx.s: $(PS2SDK)/iop/irx/ps2atad.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ps2atad_irx
@@ -775,7 +778,7 @@ $(EE_ASM_DIR)ds34usb.s: iop/ds34usb.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ds34usb_irx
 
 $(EE_OBJS_DIR)libds34usb.a: iop/ds34usb/ee/libds34usb.a
-	cp $< $@	
+	cp $< $@
 
 $(EE_OBJS_DIR)libds34bt.a: iop/ds34bt/ee/libds34bt.a
 	cp $< $@
