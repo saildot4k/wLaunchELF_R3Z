@@ -1066,9 +1066,6 @@ void config(char *mainMsg, char *CNF)
 	int bool_label_width;
 	int has_override_path;
 	int save_target;
-	int reload_language;
-	int reload_font;
-	int refresh_save_paths;
 	int event, post_event = 0;
 
 	tmpsetting = setting;
@@ -1077,18 +1074,14 @@ void config(char *mainMsg, char *CNF)
 
 	event = 1;  //event = initial entry
 	s = CONFIG_MAIN_FIRST;
-	refresh_save_paths = 1;
 	while (1) {
-		if (refresh_save_paths) {
-			has_override_path = (setting->CNF_Path[0] != '\0');
-			if (has_override_path)
-				configAppendPathFile(save_override_path, sizeof(save_override_path), setting->CNF_Path, CNF);
-			else
-				save_override_path[0] = '\0';
-			configAppendPathFile(save_cwd_path, sizeof(save_cwd_path), LaunchElfBootDir[0] ? LaunchElfBootDir : LaunchElfDir, CNF);
-			configBuildSysconfPath(save_sysconf_path, sizeof(save_sysconf_path), CNF);
-			refresh_save_paths = 0;
-		}
+		has_override_path = (setting->CNF_Path[0] != '\0');
+		if (has_override_path)
+			configAppendPathFile(save_override_path, sizeof(save_override_path), setting->CNF_Path, CNF);
+		else
+			save_override_path[0] = '\0';
+		configAppendPathFile(save_cwd_path, sizeof(save_cwd_path), LaunchElfBootDir[0] ? LaunchElfBootDir : LaunchElfDir, CNF);
+		configBuildSysconfPath(save_sysconf_path, sizeof(save_sysconf_path), CNF);
 
 		//Pad response section
 		waitPadReady(0, 0);
@@ -1147,10 +1140,8 @@ void config(char *mainMsg, char *CNF)
 						setting->Hide_Paths = !setting->Hide_Paths;
 					else if (s == CONFIG_MAIN_SCREEN)
 						Config_Screen();
-					else if (s == CONFIG_MAIN_SETTINGS) {
+					else if (s == CONFIG_MAIN_SETTINGS)
 						Config_Startup();
-						refresh_save_paths = 1;
-					}
 				else if (s == CONFIG_MAIN_NETWORK)
 					Config_Network();
 				else if (s == CONFIG_MAIN_ADVANCED)
@@ -1174,15 +1165,11 @@ void config(char *mainMsg, char *CNF)
 					goto cancel_exit;
 			} else if (new_pad & PAD_TRIANGLE) {
 			cancel_exit:
-				reload_language = (setting->language != tmpsetting->language) || strcmp(setting->lang_file, tmpsetting->lang_file);
-				reload_font = strcmp(setting->font_file, tmpsetting->font_file);
 				free(setting);
 				setting = tmpsetting;
 				updateScreenMode();
-				if (reload_language)
-					Load_External_Language();
-				if (reload_font)
-					loadFont(setting->font_file);
+				Load_External_Language();
+				loadFont(setting->font_file);
 				mainMsg[0] = 0;
 				break;
 			}

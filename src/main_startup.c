@@ -43,9 +43,6 @@ void getIpConfig(void)
 
 	fd = -1;
 	len = 0;
-	// Keep the loaded IPCONFIG source authoritative until save or restart.
-	if (LoadedIPConfigPath[0] != '\0')
-		goto update_state;
 	LoadedIPConfigPath[0] = '\0';
 	loaded_path[0] = '\0';
 
@@ -98,7 +95,6 @@ void getIpConfig(void)
 		snprintf(gw, sizeof(gw), "%.15s", buf + i);
 	}
 
-update_state:
 	memset(if_conf, 0, IPCONF_MAX_LEN);
 	i = 0;
 	memcpy(if_conf + i, ip, strlen(ip) + 1);
