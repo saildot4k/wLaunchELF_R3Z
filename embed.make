@@ -1,23 +1,110 @@
-$(info using ps2sdk mc/pad drivers)
-MCMAN_SOURCE = $(PS2SDK)/iop/irx/mcman.irx
-MCSERV_SOURCE = $(PS2SDK)/iop/irx/mcserv.irx
+$(info using ps2sdk mc/pad 1400-compatible drivers)
+PS2SDK_LOCAL_SOURCE_ROOT ?= thirdparty/ps2sdk-master
+PS2SDK_COMPAT_SOURCE_ROOT ?=
+
+ifeq ($(strip $(PS2SDK_COMPAT_SOURCE_ROOT)),)
+ifneq ($(wildcard $(PS2SDK_LOCAL_SOURCE_ROOT)/Defs.make),)
+PS2SDK_COMPAT_SOURCE_ROOT := $(PS2SDK_LOCAL_SOURCE_ROOT)
+endif
+endif
+
+ifeq ($(strip $(PS2SDK_COMPAT_SOURCE_ROOT)),)
+ifneq ($(PS2SDKSRC),)
+ifneq ($(wildcard $(PS2SDKSRC)/Defs.make),)
+PS2SDK_COMPAT_SOURCE_ROOT := $(PS2SDKSRC)
+endif
+endif
+endif
+
+ifeq ($(strip $(PS2SDK_COMPAT_SOURCE_ROOT)),)
+ifneq ($(wildcard $(PS2SDK)/Defs.make),)
+PS2SDK_COMPAT_SOURCE_ROOT := $(PS2SDK)
+endif
+endif
+
+MCMAN_SOURCE :=
+MCMAN_AUTOGEN := iop/__generated/mcman-1400.irx
+MCMAN_SDK_ROOT :=
+MCMAN_SDK_MODULE_DIR :=
+
+MCSERV_SOURCE :=
+MCSERV_AUTOGEN := iop/__generated/mcserv-1400.irx
+MCSERV_SDK_ROOT :=
+MCSERV_SDK_MODULE_DIR :=
+
+SIO2MAN_SOURCE :=
+SIO2MAN_AUTOGEN := iop/__generated/sio2man.irx
+SIO2MAN_SDK_ROOT :=
+SIO2MAN_SDK_MODULE_DIR :=
+
+PADMAN_SOURCE :=
+PADMAN_AUTOGEN := iop/__generated/padman-1400.irx
+PADMAN_SDK_ROOT :=
+PADMAN_SDK_MODULE_DIR :=
+
+ifneq ($(strip $(PS2SDK_COMPAT_SOURCE_ROOT)),)
+ifneq ($(wildcard $(PS2SDK_COMPAT_SOURCE_ROOT)/iop/memorycard/mcman-1400/Makefile),)
+MCMAN_SOURCE := $(MCMAN_AUTOGEN)
+MCMAN_SDK_ROOT := $(PS2SDK_COMPAT_SOURCE_ROOT)
+MCMAN_SDK_MODULE_DIR := $(PS2SDK_COMPAT_SOURCE_ROOT)/iop/memorycard/mcman-1400
+endif
+ifneq ($(wildcard $(PS2SDK_COMPAT_SOURCE_ROOT)/iop/memorycard/mcserv/Makefile),)
+MCSERV_SOURCE := $(MCSERV_AUTOGEN)
+MCSERV_SDK_ROOT := $(PS2SDK_COMPAT_SOURCE_ROOT)
+MCSERV_SDK_MODULE_DIR := $(PS2SDK_COMPAT_SOURCE_ROOT)/iop/memorycard/mcserv
+endif
+ifneq ($(wildcard $(PS2SDK_COMPAT_SOURCE_ROOT)/iop/sio/sio2man/Makefile),)
+SIO2MAN_SOURCE := $(SIO2MAN_AUTOGEN)
+SIO2MAN_SDK_ROOT := $(PS2SDK_COMPAT_SOURCE_ROOT)
+SIO2MAN_SDK_MODULE_DIR := $(PS2SDK_COMPAT_SOURCE_ROOT)/iop/sio/sio2man
+endif
+ifneq ($(wildcard $(PS2SDK_COMPAT_SOURCE_ROOT)/iop/input/padman-1400/Makefile),)
+PADMAN_SOURCE := $(PADMAN_AUTOGEN)
+PADMAN_SDK_ROOT := $(PS2SDK_COMPAT_SOURCE_ROOT)
+PADMAN_SDK_MODULE_DIR := $(PS2SDK_COMPAT_SOURCE_ROOT)/iop/input/padman-1400
+endif
+endif
+
+ifeq ($(strip $(MCMAN_SOURCE)),)
+ifneq ($(wildcard $(PS2SDK)/iop/irx/mcman-1400.irx),)
+MCMAN_SOURCE = $(PS2SDK)/iop/irx/mcman-1400.irx
+endif
+endif
+ifeq ($(strip $(MCSERV_SOURCE)),)
+ifneq ($(wildcard $(PS2SDK)/iop/irx/mcserv-1400.irx),)
+MCSERV_SOURCE = $(PS2SDK)/iop/irx/mcserv-1400.irx
+endif
+endif
+ifeq ($(strip $(SIO2MAN_SOURCE)),)
+ifneq ($(wildcard $(PS2SDK)/iop/irx/sio2man.irx),)
 SIO2MAN_SOURCE = $(PS2SDK)/iop/irx/sio2man.irx
-PADMAN_SOURCE = $(PS2SDK)/iop/irx/padman.irx
+endif
+endif
+ifeq ($(strip $(PADMAN_SOURCE)),)
+ifneq ($(wildcard $(PS2SDK)/iop/irx/padman-1400.irx),)
+PADMAN_SOURCE = $(PS2SDK)/iop/irx/padman-1400.irx
+endif
+endif
 DVRDRV_SOURCE = $(PS2SDK)/iop/irx/dvrdrv.irx
 DVRFILE_SOURCE = $(PS2SDK)/iop/irx/dvrfile.irx
 
-ifeq ($(wildcard $(MCMAN_SOURCE)),)
-  $(error Missing $(MCMAN_SOURCE). Update PS2SDK/ps2dev container)
+ifeq ($(strip $(MCMAN_SOURCE)),)
+  $(error Missing mcman-1400.irx. Update PS2SDK, or provide PS2SDKSRC/PS2SDK_LOCAL_SOURCE_ROOT with iop/memorycard/mcman-1400 sources)
 endif
-ifeq ($(wildcard $(MCSERV_SOURCE)),)
-  $(error Missing $(MCSERV_SOURCE). Update PS2SDK/ps2dev container)
+ifeq ($(strip $(MCSERV_SOURCE)),)
+  $(error Missing mcserv-1400.irx. Update PS2SDK, or provide PS2SDKSRC/PS2SDK_LOCAL_SOURCE_ROOT with iop/memorycard/mcserv sources)
 endif
-ifeq ($(wildcard $(SIO2MAN_SOURCE)),)
-  $(error Missing $(SIO2MAN_SOURCE). Update PS2SDK/ps2dev container)
+ifeq ($(strip $(SIO2MAN_SOURCE)),)
+  $(error Missing sio2man.irx. Update PS2SDK, or provide PS2SDKSRC/PS2SDK_LOCAL_SOURCE_ROOT with iop/sio/sio2man sources)
 endif
-ifeq ($(wildcard $(PADMAN_SOURCE)),)
-  $(error Missing $(PADMAN_SOURCE). Update PS2SDK/ps2dev container)
+ifeq ($(strip $(PADMAN_SOURCE)),)
+  $(error Missing padman-1400.irx. Update PS2SDK, or provide PS2SDKSRC/PS2SDK_LOCAL_SOURCE_ROOT with iop/input/padman-1400 sources)
 endif
+
+$(info MCMAN_SOURCE=$(MCMAN_SOURCE))
+$(info MCSERV_SOURCE=$(MCSERV_SOURCE))
+$(info SIO2MAN_SOURCE=$(SIO2MAN_SOURCE))
+$(info PADMAN_SOURCE=$(PADMAN_SOURCE))
 ifeq ($(DVRP),1)
   ifeq ($(wildcard $(DVRDRV_SOURCE)),)
     $(error Missing $(DVRDRV_SOURCE). Update PS2SDK/ps2dev container)
@@ -217,9 +304,17 @@ ifneq ($(wildcard $(PS2SDK)/iop/irx/fileXio.irx),)
 FILEXIO_SOURCE := $(PS2SDK)/iop/irx/fileXio.irx
 endif
 
+ifneq ($(strip $(PS2SDK_COMPAT_SOURCE_ROOT)),)
+ifneq ($(wildcard $(PS2SDK_COMPAT_SOURCE_ROOT)/Defs.make),)
+VMCMAN_SDK_ROOT := $(PS2SDK_COMPAT_SOURCE_ROOT)
+endif
+endif
+
+ifeq ($(strip $(VMCMAN_SDK_ROOT)),)
 ifneq ($(PS2SDKSRC),)
 ifneq ($(wildcard $(PS2SDKSRC)/Defs.make),)
 VMCMAN_SDK_ROOT := $(PS2SDKSRC)
+endif
 endif
 endif
 
@@ -236,6 +331,38 @@ endif
 
 
 #---{ MC }---#
+$(MCMAN_AUTOGEN): | iop/__generated
+	$(MAKE) -C $(MCMAN_SDK_MODULE_DIR) \
+		PS2SDKSRC=$(MCMAN_SDK_ROOT) \
+		PS2SDK=$(MCMAN_SDK_ROOT) \
+		IOP_BIN_DIR=$(abspath iop/__generated)/ \
+		IOP_OBJS_DIR=$(abspath iop/__generated/mcman_1400_obj)/ \
+		IOP_BIN=mcman-1400.irx
+
+$(MCSERV_AUTOGEN): | iop/__generated
+	$(MAKE) -C $(MCSERV_SDK_MODULE_DIR) \
+		PS2SDKSRC=$(MCSERV_SDK_ROOT) \
+		PS2SDK=$(MCSERV_SDK_ROOT) \
+		IOP_BIN_DIR=$(abspath iop/__generated)/ \
+		IOP_OBJS_DIR=$(abspath iop/__generated/mcserv_1400_obj)/ \
+		IOP_BIN=mcserv-1400.irx
+
+$(SIO2MAN_AUTOGEN): | iop/__generated
+	$(MAKE) -C $(SIO2MAN_SDK_MODULE_DIR) \
+		PS2SDKSRC=$(SIO2MAN_SDK_ROOT) \
+		PS2SDK=$(SIO2MAN_SDK_ROOT) \
+		IOP_BIN_DIR=$(abspath iop/__generated)/ \
+		IOP_OBJS_DIR=$(abspath iop/__generated/sio2man_obj)/ \
+		IOP_BIN=sio2man.irx
+
+$(PADMAN_AUTOGEN): | iop/__generated
+	$(MAKE) -C $(PADMAN_SDK_MODULE_DIR) \
+		PS2SDKSRC=$(PADMAN_SDK_ROOT) \
+		PS2SDK=$(PADMAN_SDK_ROOT) \
+		IOP_BIN_DIR=$(abspath iop/__generated)/ \
+		IOP_OBJS_DIR=$(abspath iop/__generated/padman_1400_obj)/ \
+		IOP_BIN=padman-1400.irx
+
 $(EE_ASM_DIR)mcman_irx.s: $(MCMAN_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ mcman_irx
 
@@ -246,19 +373,22 @@ $(EE_ASM_DIR)sio2man.s: $(SIO2MAN_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ sio2man_irx
 
 # MX4SIO_BD module selection:
-# 1) installed PS2SDK IRX (preferred)
-# 2) auto-build from PS2SDK sources (when available)
+# 1) auto-build from the selected PS2SDK source tree
+# 2) installed PS2SDK IRX
 # 3) bundled fallback IRX
 MX4SIO_BD_SOURCE :=
 MX4SIO_BD_AUTOGEN := iop/__generated/mx4sio_bd.irx
 MX4SIO_BD_SDK_ROOT :=
 MX4SIO_BD_SDK_MODULE_DIR :=
 
-ifneq ($(wildcard $(PS2SDK)/iop/irx/mx4sio_bd.irx),)
-MX4SIO_BD_SOURCE := $(PS2SDK)/iop/irx/mx4sio_bd.irx
+ifneq ($(strip $(PS2SDK_COMPAT_SOURCE_ROOT)),)
+ifneq ($(wildcard $(PS2SDK_COMPAT_SOURCE_ROOT)/iop/sio/mx4sio_bd/Makefile),)
+MX4SIO_BD_SDK_ROOT := $(PS2SDK_COMPAT_SOURCE_ROOT)
+MX4SIO_BD_SDK_MODULE_DIR := $(PS2SDK_COMPAT_SOURCE_ROOT)/iop/sio/mx4sio_bd
+endif
 endif
 
-ifeq ($(strip $(MX4SIO_BD_SOURCE)),)
+ifeq ($(strip $(MX4SIO_BD_SDK_MODULE_DIR)),)
 ifneq ($(PS2SDKSRC),)
 ifneq ($(wildcard $(PS2SDKSRC)/iop/sio/mx4sio_bd/Makefile),)
 MX4SIO_BD_SDK_ROOT := $(PS2SDKSRC)
@@ -267,16 +397,20 @@ endif
 endif
 endif
 
-ifeq ($(strip $(MX4SIO_BD_SOURCE)),)
+ifeq ($(strip $(MX4SIO_BD_SDK_MODULE_DIR)),)
 ifneq ($(wildcard $(PS2SDK)/iop/sio/mx4sio_bd/Makefile),)
 MX4SIO_BD_SDK_ROOT := $(PS2SDK)
 MX4SIO_BD_SDK_MODULE_DIR := $(PS2SDK)/iop/sio/mx4sio_bd
 endif
 endif
 
-ifeq ($(strip $(MX4SIO_BD_SOURCE)),)
 ifneq ($(strip $(MX4SIO_BD_SDK_MODULE_DIR)),)
 MX4SIO_BD_SOURCE := $(MX4SIO_BD_AUTOGEN)
+endif
+
+ifeq ($(strip $(MX4SIO_BD_SOURCE)),)
+ifneq ($(wildcard $(PS2SDK)/iop/irx/mx4sio_bd.irx),)
+MX4SIO_BD_SOURCE := $(PS2SDK)/iop/irx/mx4sio_bd.irx
 endif
 endif
 
@@ -289,6 +423,8 @@ endif
 ifeq ($(strip $(MX4SIO_BD_SOURCE)),)
 $(error Missing mx4sio_bd.irx. Update PS2SDK, add iop/__precompiled/mx4sio_bd.irx, or provide PS2SDKSRC with iop/sio/mx4sio_bd sources)
 endif
+
+$(info MX4SIO_BD_SOURCE=$(MX4SIO_BD_SOURCE))
 
 $(MX4SIO_BD_AUTOGEN): | iop/__generated
 	$(MAKE) -C $(MX4SIO_BD_SDK_MODULE_DIR) \

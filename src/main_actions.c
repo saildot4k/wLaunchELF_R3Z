@@ -398,8 +398,10 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		TextEditor(NULL);
 		return;
 	} else if (!stricmp(path, setting->Misc_Configure)) {
-		Load_External_Language();
-		loadFont(setting->font_file);
+		if (setting->lang_file[0] != '\0')
+			Load_External_Language();
+		if (setting->font_file[0] != '\0')
+			loadFont(setting->font_file);
 		config(ctx->main_msg, ctx->cnf_path);
 		return;
 		//Next clause is for an optional font test routine
