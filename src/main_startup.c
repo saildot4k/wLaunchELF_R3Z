@@ -496,7 +496,7 @@ enum BOOT_DEVICE prepareBootDeviceAndPath(const char *arg0, char *boot_path, siz
 #endif
 #ifdef UDPFS
 	if (!strncmp(LaunchElfDir, "udpfs", 5))
-		boot = BOOT_DEVICE_HOST;
+		boot = BOOT_DEVICE_UDPFS;
 #endif
 #endif
 	DPRINTF("Boot device is %d\n", boot);
@@ -547,6 +547,11 @@ void bringUpBootDeviceStack(enum BOOT_DEVICE boot_device)
 			loadFlashModules();
 #endif
 			break;
+		case BOOT_DEVICE_UDPFS:
+#ifdef UDPFS
+			load_udpfs();
+#endif
+			break;
 		default:
 			break;
 	}
@@ -570,15 +575,8 @@ void bringUpBootNetworkStack(enum BOOT_DEVICE boot_device)
 	if (boot_device == BOOT_DEVICE_HOST) {
 		//If booted from a network filesystem device, bring that stack up now.
 		getIpConfig();
-#if defined(ETH) && defined(UDPFS)
-		if (!strncmp(LaunchElfDir, "udpfs", 5))
-			load_udpfs();
-		else
-			initHOST();
-#elif defined(ETH)
+#ifdef ETH
 		initHOST();
-#else
-		load_udpfs();
 #endif
 	}
 #else
