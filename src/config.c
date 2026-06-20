@@ -195,6 +195,18 @@ static int getMcPortFromPath(const char *path)
 	return -1;
 }
 
+static int getExplicitMcPortFromPath(const char *path)
+{
+	if (path == NULL)
+		return -1;
+	if (!strncmp(path, "mc0", 3))
+		return 0;
+	if (!strncmp(path, "mc1", 3))
+		return 1;
+
+	return -1;
+}
+
 static int getLaunchMcPort(void)
 {
 	int mcport;
@@ -210,15 +222,67 @@ static int getLaunchMcPort(void)
 	return 0;
 }
 
-static int configGetPreferredSysconfPort(void)
+static int configSysconfFileExistsOnPort(int port, const char *filename)
+{
+	char path[MAX_PATH];
+	int fd;
+
+	if ((port != 0 && port != 1) || filename == NULL || filename[0] == '\0')
+		return 0;
+
+	snprintf(path, sizeof(path), "mc%d:/SYS-CONF/%s", port, filename);
+	fd = genOpen(path, FIO_O_RDONLY);
+	if (fd < 0)
+		return 0;
+	genClose(fd);
+	return 1;
+}
+
+static int configGetPreferredSysconfPort(const char *filename, const char *loaded_path)
 {
 	int mcport;
+	int preferred_port;
+	int mc0_has_file;
+	int mc1_has_file;
+
+	preferred_port = getExplicitMcPortFromPath(loaded_path);
+	if (preferred_port < 0)
+		preferred_port = getExplicitMcPortFromPath(LaunchElfBootDir);
+	if (preferred_port < 0)
+		preferred_port = getExplicitMcPortFromPath(LaunchElfDir);
+
+	mc0_has_file = configSysconfFileExistsOnPort(0, filename);
+	mc1_has_file = configSysconfFileExistsOnPort(1, filename);
+
+	if ((preferred_port == 0 && mc0_has_file) || (preferred_port == 1 && mc1_has_file))
+		return preferred_port;
+	if (mc0_has_file && !mc1_has_file)
+		return 0;
+	if (mc1_has_file && !mc0_has_file)
+		return 1;
+	if (mc0_has_file && mc1_has_file)
+		return 0;
 
 	mcport = getMcPortFromPath(LaunchElfBootDir);
 	if (mcport == 0 || mcport == 1)
 		return mcport;
 
 	return getLaunchMcPort();
+}
+
+static void configResolveMcAliasPath(char *path, size_t path_size)
+{
+	char suffix[MAX_PATH];
+	int mcport;
+
+	if (path == NULL || path_size == 0 || strncmp(path, "mc:", 3))
+		return;
+
+	snprintf(suffix, sizeof(suffix), "%s", path + 2);
+	mcport = CheckMC();
+	if (mcport != 0 && mcport != 1)
+		mcport = 0;
+	snprintf(path, path_size, "mc%d%s", mcport, suffix);
 }
 
 void configAppendPathFile(char *dst, size_t dst_size, const char *dir, const char *filename)
@@ -242,7 +306,43 @@ void configAppendPathFile(char *dst, size_t dst_size, const char *dir, const cha
 
 void configBuildSysconfPath(char *dst, size_t dst_size, const char *filename)
 {
-	snprintf(dst, dst_size, "mc%d:/SYS-CONF/%s", configGetPreferredSysconfPort(), (filename != NULL) ? filename : "");
+	snprintf(dst, dst_size, "mc%d:/SYS-CONF/%s", configGetPreferredSysconfPort(filename, NULL), (filename != NULL) ? filename : "");
+}
+
+static void configBuildSysconfPathForLoaded(char *dst, size_t dst_size, const char *filename, const char *loaded_path)
+{
+	snprintf(dst, dst_size, "mc%d:/SYS-CONF/%s", configGetPreferredSysconfPort(filename, loaded_path), (filename != NULL) ? filename : "");
+}
+
+void configBuildSaveTargets(char *save_override_path, size_t save_override_path_size, char *save_cwd_path, size_t save_cwd_path_size, char *save_sysconf_path, size_t save_sysconf_path_size, const char *filename, const char *loaded_path, int *has_override_path)
+{
+	int use_override;
+
+	use_override = (setting->CNF_Path[0] != '\0');
+	if (has_override_path != NULL)
+		*has_override_path = use_override;
+
+	if (use_override) {
+		configAppendPathFile(save_override_path, save_override_path_size, setting->CNF_Path, filename);
+		configResolveMcAliasPath(save_override_path, save_override_path_size);
+	} else if (save_override_path != NULL && save_override_path_size > 0) {
+		save_override_path[0] = '\0';
+	}
+
+	configAppendPathFile(save_cwd_path, save_cwd_path_size, LaunchElfBootDir[0] ? LaunchElfBootDir : LaunchElfDir, filename);
+	configResolveMcAliasPath(save_cwd_path, save_cwd_path_size);
+	configBuildSysconfPathForLoaded(save_sysconf_path, save_sysconf_path_size, filename, loaded_path);
+}
+
+void configRefreshSaveTargetForWrite(enum CONFIG_SAVE_TARGET save_target, char *target_path, size_t target_path_size, const char *filename, const char *loaded_path)
+{
+	if (target_path == NULL || target_path_size == 0)
+		return;
+
+	if (save_target == CONFIG_SAVE_TARGET_SYSCONF)
+		configBuildSysconfPathForLoaded(target_path, target_path_size, filename, loaded_path);
+	else
+		configResolveMcAliasPath(target_path, target_path_size);
 }
 
 void configEnsureSysconfDir(const char *path)
@@ -1066,6 +1166,7 @@ void config(char *mainMsg, char *CNF)
 	int bool_label_width;
 	int has_override_path;
 	int save_target;
+	char *save_path;
 	int event, post_event = 0;
 
 	tmpsetting = setting;
@@ -1074,15 +1175,11 @@ void config(char *mainMsg, char *CNF)
 
 	event = 1;  //event = initial entry
 	s = CONFIG_MAIN_FIRST;
+	configBuildSaveTargets(save_override_path, sizeof(save_override_path),
+	                       save_cwd_path, sizeof(save_cwd_path),
+	                       save_sysconf_path, sizeof(save_sysconf_path),
+	                       CNF, LoadedConfigPath, &has_override_path);
 	while (1) {
-		has_override_path = (setting->CNF_Path[0] != '\0');
-		if (has_override_path)
-			configAppendPathFile(save_override_path, sizeof(save_override_path), setting->CNF_Path, CNF);
-		else
-			save_override_path[0] = '\0';
-		configAppendPathFile(save_cwd_path, sizeof(save_cwd_path), LaunchElfBootDir[0] ? LaunchElfBootDir : LaunchElfDir, CNF);
-		configBuildSysconfPath(save_sysconf_path, sizeof(save_sysconf_path), CNF);
-
 		//Pad response section
 		waitPadReady(0, 0);
 		if (readpad()) {
@@ -1140,28 +1237,31 @@ void config(char *mainMsg, char *CNF)
 						setting->Hide_Paths = !setting->Hide_Paths;
 					else if (s == CONFIG_MAIN_SCREEN)
 						Config_Screen();
-					else if (s == CONFIG_MAIN_SETTINGS)
+					else if (s == CONFIG_MAIN_SETTINGS) {
 						Config_Startup();
-				else if (s == CONFIG_MAIN_NETWORK)
-					Config_Network();
-				else if (s == CONFIG_MAIN_ADVANCED)
-					Config_Advanced();
-				else if (s == CONFIG_MAIN_SAVE) {
-					save_target = configSaveTargetPrompt(save_override_path, save_cwd_path, save_sysconf_path, LoadedConfigPath, has_override_path);
-					if (save_target == CONFIG_SAVE_TARGET_OVERRIDE) {
-						free(tmpsetting);
-						saveConfigToPath(mainMsg, CNF, save_override_path);
-						break;
-					} else if (save_target == CONFIG_SAVE_TARGET_CWD) {
-						free(tmpsetting);
-						saveConfigToPath(mainMsg, CNF, save_cwd_path);
-						break;
-					} else if (save_target == CONFIG_SAVE_TARGET_SYSCONF) {
-						free(tmpsetting);
-						saveConfigToPath(mainMsg, CNF, save_sysconf_path);
-						break;
-					}
-				} else if (s == CONFIG_MAIN_CANCEL)
+						configBuildSaveTargets(save_override_path, sizeof(save_override_path),
+						                       save_cwd_path, sizeof(save_cwd_path),
+						                       save_sysconf_path, sizeof(save_sysconf_path),
+						                       CNF, LoadedConfigPath, &has_override_path);
+					} else if (s == CONFIG_MAIN_NETWORK) {
+						Config_Network();
+					} else if (s == CONFIG_MAIN_ADVANCED) {
+						Config_Advanced();
+					} else if (s == CONFIG_MAIN_SAVE) {
+						save_target = configSaveTargetPrompt(save_override_path, save_cwd_path, save_sysconf_path, LoadedConfigPath, has_override_path);
+						if (save_target != CONFIG_SAVE_TARGET_CANCEL) {
+							if (save_target == CONFIG_SAVE_TARGET_OVERRIDE)
+								save_path = save_override_path;
+							else if (save_target == CONFIG_SAVE_TARGET_CWD)
+								save_path = save_cwd_path;
+							else
+								save_path = save_sysconf_path;
+							configRefreshSaveTargetForWrite(save_target, save_path, MAX_PATH, CNF, LoadedConfigPath);
+							free(tmpsetting);
+							saveConfigToPath(mainMsg, CNF, save_path);
+							break;
+						}
+					} else if (s == CONFIG_MAIN_CANCEL)
 					goto cancel_exit;
 			} else if (new_pad & PAD_TRIANGLE) {
 			cancel_exit:
