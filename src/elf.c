@@ -2,7 +2,6 @@
 //File name:    elf.c
 //--------------------------------------------------------------
 #include "launchelf.h"
-#include <elf-loader.h>
 
 #define MAX_PATH 1025
 
@@ -316,39 +315,6 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 	if (dvr_pfs_ix >= 0)
 		dvr_pfs_name[7] = '0' + dvr_pfs_ix;
 #endif
-
-	if (exec_kind == 1) {
-#ifdef DVRP
-		const int is_dvr_pfs = (dvr_pfs_ix >= 0 && !strncmp(filename, dvr_pfs_name, 9));
-#endif
-		const int is_hdd_pfs = (isHddPartyPath(party) && (!strncmp(filename, "pfs0:", 5)));
-		int ret;
-
-		if (is_hdd_pfs) {
-			if (0 > fileXioMount("pfs0:", party, FIO_MT_RDONLY)) {
-				unmountParty(0);
-				if (0 > fileXioMount("pfs0:", party, FIO_MT_RDONLY))
-					return;
-			}
-#ifdef DVRP
-		} else if (is_dvr_pfs) {
-			if (0 > fileXioMount(dvr_pfs_name, party, FIO_MT_RDONLY)) {
-				unmountDVRPParty(dvr_pfs_ix);
-				if (0 > fileXioMount(dvr_pfs_name, party, FIO_MT_RDONLY))
-					return;
-			}
-#endif
-		}
-
-		DPRINTF("RunLoaderElf: elf-loader2 target='%s' party='%s'\n", exec_target, party);
-		ret = LoadELFFromFileWithPartition(exec_target, (party != NULL && party[0] != '\0') ? party : NULL, 0, NULL);
-		if (ret < 0 && strcmp(exec_target, filename) != 0) {
-			DPRINTF("RunLoaderElf: elf-loader2 retry legacy target='%s' party='%s'\n", filename, party);
-			ret = LoadELFFromFileWithPartition(filename, (party != NULL && party[0] != '\0') ? party : NULL, 0, NULL);
-		}
-		DPRINTF("RunLoaderElf: elf-loader2 returned %d\n", ret);
-		exit(126);
-	}
 
 	if (isHddPartyPath(party) && (!strncmp(filename, "pfs0:", 5))) {
 		if (0 > fileXioMount("pfs0:", party, FIO_MT_RDONLY)) {

@@ -334,6 +334,35 @@ static void prepareDev9Poweroff(void)
 //------------------------------
 //endfunc prepareDev9Poweroff
 //---------------------------------------------------------------------------
+static int haveDev9StorageForPoweroff(void)
+{
+	if (have_ps2hdd || have_ps2fs || have_HDD_modules)
+		return 1;
+#ifdef EXFAT
+	if (have_ata_bd)
+		return 1;
+#endif
+#ifdef DVRP
+	if (have_ps2atad || have_DVRP_HDD_modules)
+		return 1;
+#endif
+
+	return 0;
+}
+//------------------------------
+//endfunc haveDev9StorageForPoweroff
+//---------------------------------------------------------------------------
+static void idleDev9StorageForPoweroff(void)
+{
+	if (!haveDev9StorageForPoweroff())
+		return;
+
+	fileXioDevctl("hdd0:", HDIOC_IDLEIMM, NULL, 0, NULL, 0);
+	fileXioDevctl("hdd1:", HDIOC_IDLEIMM, NULL, 0, NULL, 0);
+}
+//------------------------------
+//endfunc idleDev9StorageForPoweroff
+//---------------------------------------------------------------------------
 static void stopUsbMassForPoweroff(void)
 {
 	if (!have_usb_mass)
@@ -1486,6 +1515,7 @@ int loadAtaModules(void)
 
 	switchBlockStorageStack(BLOCK_STACK_ATA);
 	ensureCoreIoStackReady();
+	setupPowerOff();
 	loadAtaBlockDriver();
 	if (have_ata_bd) {
 		prepareDev9Poweroff();
@@ -1523,6 +1553,8 @@ void closeAllAndPoweroff(void)
 		 * poweroff.irx callback; slow DEV9 callbacks are cleared when
 		 * HDD/ATA driver stacks load.
 		 */
+		idleDev9StorageForPoweroff();
+
 		/* Switch off DEV9 */
 		while (fileXioDevctl("dev9x:", DDIOC_OFF, NULL, 0, NULL, 0) < 0) {
 		};

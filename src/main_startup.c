@@ -14,6 +14,11 @@ static unsigned short ROMVersion;
 static int hide_hdd_ata_devices = -1;
 
 static void normalizeBootPath(char *path);
+static int isDevicePathTerminator(char c);
+static int isBootUsbMassPath(const char *path);
+static int isBootAtaPath(const char *path);
+static int isBootHddPath(const char *path);
+static int isBootXfromPath(const char *path);
 static void initializeBootExecPath(void);
 static void buildBootBlockPath(char *dst, size_t dst_size, const char *prefix, const char *partition, const char *path_part);
 static int getRomverPrefixNumber(void);
@@ -309,6 +314,62 @@ static void normalizeBootPath(char *path)
 //------------------------------
 //endfunc normalizeBootPath
 //---------------------------------------------------------------------------
+static int isDevicePathTerminator(char c)
+{
+	return (c == '\0' || c == ':' || c == '/' || c == '\\');
+}
+//------------------------------
+//endfunc isDevicePathTerminator
+//---------------------------------------------------------------------------
+static int isBootUsbMassPath(const char *path)
+{
+	if (path == NULL)
+		return 0;
+
+	if (!strncmp(path, "mass", 4))
+		return (isDevicePathTerminator(path[4]) ||
+		        (path[4] >= '0' && path[4] <= '9' && isDevicePathTerminator(path[5])));
+
+	if (!strncmp(path, "usb", 3))
+		return (isDevicePathTerminator(path[3]) ||
+		        (path[3] >= '0' && path[3] <= '9' && isDevicePathTerminator(path[4])));
+
+	return 0;
+}
+//------------------------------
+//endfunc isBootUsbMassPath
+//---------------------------------------------------------------------------
+static int isBootAtaPath(const char *path)
+{
+	if (path == NULL || strncmp(path, "ata", 3))
+		return 0;
+
+	return ((path[3] == '0' || path[3] == '1') && isDevicePathTerminator(path[4]));
+}
+//------------------------------
+//endfunc isBootAtaPath
+//---------------------------------------------------------------------------
+static int isBootHddPath(const char *path)
+{
+	if (path == NULL || strncmp(path, "hdd", 3))
+		return 0;
+
+	return ((path[3] == '0' || path[3] == '1') && path[4] == ':');
+}
+//------------------------------
+//endfunc isBootHddPath
+//---------------------------------------------------------------------------
+static int isBootXfromPath(const char *path)
+{
+	if (path == NULL || strncmp(path, "xfrom", 5))
+		return 0;
+
+	return (isDevicePathTerminator(path[5]) ||
+	        (path[5] >= '0' && path[5] <= '9' && isDevicePathTerminator(path[6])));
+}
+//------------------------------
+//endfunc isBootXfromPath
+//---------------------------------------------------------------------------
 static void buildBootBlockPath(char *dst, size_t dst_size, const char *prefix, const char *partition, const char *path_part)
 {
 	size_t len;
@@ -383,29 +444,28 @@ enum BOOT_DEVICE prepareBootDeviceAndPath(const char *arg0, char *boot_path, siz
 		if (boot_path != NULL && boot_path_len > 0)
 			normalizeBootPath(boot_path);
 
-		if (!strncmp(LaunchElfDir, "mass", 4) || !strncmp(LaunchElfDir, "usb", 3)) {
+		if (isBootUsbMassPath(LaunchElfDir)) {
 			boot = BOOT_DEVICE_MASS;
 		} else if (!strncmp(LaunchElfDir, "mc", 2)) {
 			boot = BOOT_DEVICE_MC;
+#ifdef XFROM
+		} else if (console_is_PSX && isBootXfromPath(LaunchElfDir)) {
+			boot = BOOT_DEVICE_XFROM;
+#endif
 #ifdef MMCE
 		} else if (!strncmp(LaunchElfDir, "mmce", 4)) {
-			loadMmceModules();
-			boot = BOOT_DEVICE_MASS;
+			boot = BOOT_DEVICE_MMCE;
 #endif
 #ifdef MX4SIO
 		} else if (!strncmp(LaunchElfDir, "mx4sio", 6)) {
-			loadMx4sioModules();
-			boot = BOOT_DEVICE_MASS;
+			boot = BOOT_DEVICE_MX4SIO;
 #endif
-		} else if (!strncmp(LaunchElfDir, "ata", 3)) {
-			boot = BOOT_DEVICE_MASS;
-#ifdef EXFAT
-			loadAtaModules();
-#endif
+		} else if (isBootAtaPath(LaunchElfDir)) {
+			boot = BOOT_DEVICE_ATA;
 		} else if (!strncmp(LaunchElfDir, "cd", 2)) {
 			boot = BOOT_DEVICE_CDVD;
 			snprintf(LaunchElfDir, sizeof(LaunchElfDir), "%s", "mc0:/SYS-CONF/");  //Default to mc0 as a writable location.
-		} else if (!strncmp(LaunchElfDir, "hdd", 3) && LaunchElfDir[3] >= '0' && LaunchElfDir[3] <= '9' && LaunchElfDir[4] == ':' && boot_path != NULL && boot_path_len > 0) {
+		} else if (isBootHddPath(LaunchElfDir) && boot_path != NULL && boot_path_len > 0) {
 			//Booting from the HDD requires special handling for HDD-based paths.
 			char hdd_prefix[7];
 			char temp[MAX_PATH];
@@ -426,27 +486,6 @@ enum BOOT_DEVICE prepareBootDeviceAndPath(const char *arg0, char *boot_path, siz
 				}
 
 			boot = BOOT_DEVICE_HDD;
-#ifdef DVRP
-		} else if (console_is_PSX && !strncmp(LaunchElfDir, "dvr_hdd0:", 9) && boot_path != NULL && boot_path_len > 0) {
-			//Booting from the HDD requires special handling for HDD-based paths.
-			char temp[MAX_PATH];
-			char *t;
-			/* Change boot_path to contain a path to the block device.
-				Standard HDD path format: dvr_hdd0:partition:pfs:path/to/file
-				However, (older) homebrew may not use this format. */
-			snprintf(temp, sizeof(temp), "%s", boot_path + 9);  //Skip "dvr_hdd0:" when copying.
-			t = strchr(temp, ':');                              //Check if the separator between the block device & the path exists.
-				if (t != NULL) {
-					char *path_part;
-					*(t) = 0;                      //If it does, get the block device name.
-					path_part = strchr(t + 1, ':');  //Get the path to the file
-					if (path_part != NULL) {
-						buildBootBlockPath(LaunchElfDir, sizeof(LaunchElfDir), "dvr_hdd0:/", temp, path_part + 1);
-					}
-				}
-
-			boot = BOOT_DEVICE_HDD;
-#endif
 		}
 	}
 
@@ -457,7 +496,7 @@ enum BOOT_DEVICE prepareBootDeviceAndPath(const char *arg0, char *boot_path, siz
 #endif
 #ifdef UDPFS
 	if (!strncmp(LaunchElfDir, "udpfs", 5))
-		boot = BOOT_DEVICE_HOST;
+		boot = BOOT_DEVICE_UDPFS;
 #endif
 #endif
 	DPRINTF("Boot device is %d\n", boot);
@@ -476,6 +515,50 @@ enum BOOT_DEVICE prepareBootDeviceAndPath(const char *arg0, char *boot_path, siz
 //------------------------------
 //endfunc prepareBootDeviceAndPath
 //---------------------------------------------------------------------------
+void bringUpBootDeviceStack(enum BOOT_DEVICE boot_device)
+{
+	switch (boot_device) {
+		case BOOT_DEVICE_MASS:
+			if (isBootUsbMassPath(LaunchElfDir)) {
+				DPRINTF("Loading USB modules for boot\n");
+				loadUsbModules();
+			}
+			break;
+#ifdef MMCE
+		case BOOT_DEVICE_MMCE:
+			loadMmceModules();
+			break;
+#endif
+#ifdef MX4SIO
+		case BOOT_DEVICE_MX4SIO:
+			loadMx4sioModules();
+			break;
+#endif
+		case BOOT_DEVICE_ATA:
+#ifdef EXFAT
+			loadAtaModules();
+#endif
+			break;
+		case BOOT_DEVICE_HDD:
+			loadHddModules();
+			break;
+		case BOOT_DEVICE_XFROM:
+#ifdef XFROM
+			loadFlashModules();
+#endif
+			break;
+		case BOOT_DEVICE_UDPFS:
+#ifdef UDPFS
+			load_udpfs();
+#endif
+			break;
+		default:
+			break;
+	}
+}
+//------------------------------
+//endfunc bringUpBootDeviceStack
+//---------------------------------------------------------------------------
 void initializeBootDisplayDefaults(void)
 {
 	TV_mode = uLE_InitializeRegion();  //Let console region decide default TV_mode
@@ -492,15 +575,8 @@ void bringUpBootNetworkStack(enum BOOT_DEVICE boot_device)
 	if (boot_device == BOOT_DEVICE_HOST) {
 		//If booted from a network filesystem device, bring that stack up now.
 		getIpConfig();
-#if defined(ETH) && defined(UDPFS)
-		if (!strncmp(LaunchElfDir, "udpfs", 5))
-			load_udpfs();
-		else
-			initHOST();
-#elif defined(ETH)
+#ifdef ETH
 		initHOST();
-#else
-		load_udpfs();
 #endif
 	}
 #else

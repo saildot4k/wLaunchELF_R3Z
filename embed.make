@@ -1,39 +1,35 @@
-ifeq ($(SIO2MAN),0) # no custom SIO2 stack? use ps2dev:1.0 drivers
-  $(info using ps2dev:1.0 mc drivers)
-  MCMAN_SOURCE = $(PS2SDK)/iop/irx/mcman.irx
-  MCSERV_SOURCE = $(PS2SDK)/iop/irx/mcserv.irx
-  SIO2MAN_SOURCE = $(PS2SDK)/iop/irx/sio2man.irx
-else # custom SIO2 stack (MMCE/MX4SIO/manual): keep mc/pad on the SIO2MAN 1.x ABI
-  $(info using SIO2MAN 1.x-compatible mc/pad drivers)
-  MCMAN_SOURCE = iop/__precompiled/mcman.irx
-  MCSERV_SOURCE = iop/__precompiled/mcserv.irx
-  SIO2MAN_SOURCE = iop/__precompiled/sio2man.irx
-  ifneq ($(wildcard $(PS2SDK)/iop/irx/mcman-1400.irx),)
-    MCMAN_SOURCE = $(PS2SDK)/iop/irx/mcman-1400.irx
-  else
-    ifneq ($(wildcard $(PS2SDK)/iop/irx/mcman.irx),)
-      MCMAN_SOURCE = $(PS2SDK)/iop/irx/mcman.irx
-    endif
-  endif
-  ifneq ($(wildcard $(PS2SDK)/iop/irx/mcserv-1400.irx),)
-    MCSERV_SOURCE = $(PS2SDK)/iop/irx/mcserv-1400.irx
-  else
-    ifneq ($(wildcard $(PS2SDK)/iop/irx/mcserv.irx),)
-      MCSERV_SOURCE = $(PS2SDK)/iop/irx/mcserv.irx
-    endif
-  endif
-  ifneq ($(wildcard $(PS2SDK)/iop/irx/sio2man.irx),)
-    SIO2MAN_SOURCE = $(PS2SDK)/iop/irx/sio2man.irx
-  endif
-endif
-
-PADMAN_SOURCE = $(PS2SDK)/iop/irx/padman.irx
-ifneq ($(wildcard iop/__precompiled/padman.irx),)
-PADMAN_SOURCE = iop/__precompiled/padman.irx
-endif
 ifeq ($(SIO2MAN),1)
-  ifneq ($(wildcard $(PS2SDK)/iop/irx/padman-1400.irx),)
-    PADMAN_SOURCE = $(PS2SDK)/iop/irx/padman-1400.irx
+$(info using ps2sdk mc/pad 1400-compatible drivers)
+MCMAN_SOURCE = $(PS2SDK)/iop/irx/mcman-1400.irx
+PADMAN_SOURCE = $(PS2SDK)/iop/irx/padman-1400.irx
+else
+$(info using ps2sdk mc/pad drivers)
+MCMAN_SOURCE = $(PS2SDK)/iop/irx/mcman.irx
+PADMAN_SOURCE = $(PS2SDK)/iop/irx/padman.irx
+endif
+MCSERV_SOURCE = $(PS2SDK)/iop/irx/mcserv.irx
+SIO2MAN_SOURCE = $(PS2SDK)/iop/irx/sio2man.irx
+DVRDRV_SOURCE = $(PS2SDK)/iop/irx/dvrdrv.irx
+DVRFILE_SOURCE = $(PS2SDK)/iop/irx/dvrfile.irx
+
+ifeq ($(wildcard $(MCMAN_SOURCE)),)
+  $(error Missing $(MCMAN_SOURCE). Update PS2SDK/ps2dev container)
+endif
+ifeq ($(wildcard $(MCSERV_SOURCE)),)
+  $(error Missing $(MCSERV_SOURCE). Update PS2SDK/ps2dev container)
+endif
+ifeq ($(wildcard $(SIO2MAN_SOURCE)),)
+  $(error Missing $(SIO2MAN_SOURCE). Update PS2SDK/ps2dev container)
+endif
+ifeq ($(wildcard $(PADMAN_SOURCE)),)
+  $(error Missing $(PADMAN_SOURCE). Update PS2SDK/ps2dev container)
+endif
+ifeq ($(DVRP),1)
+  ifeq ($(wildcard $(DVRDRV_SOURCE)),)
+    $(error Missing $(DVRDRV_SOURCE). Update PS2SDK/ps2dev container)
+  endif
+  ifeq ($(wildcard $(DVRFILE_SOURCE)),)
+    $(error Missing $(DVRFILE_SOURCE). Update PS2SDK/ps2dev container)
   endif
 endif
 
@@ -617,10 +613,10 @@ ifeq ($(DVRP),1)
 $(EE_ASM_DIR)ps2atad_irx.s: $(PS2SDK)/iop/irx/ps2atad.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ps2atad_irx
 
-$(EE_ASM_DIR)dvrdrv_irx.s:iop/__precompiled/dvrdrv.irx | $(EE_ASM_DIR)
+$(EE_ASM_DIR)dvrdrv_irx.s: $(DVRDRV_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ dvrdrv_irx
 
-$(EE_ASM_DIR)dvrfile_irx.s:iop/__precompiled/dvrfile.irx | $(EE_ASM_DIR)
+$(EE_ASM_DIR)dvrfile_irx.s: $(DVRFILE_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ dvrfile_irx
 endif
 

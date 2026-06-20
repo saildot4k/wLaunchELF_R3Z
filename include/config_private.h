@@ -60,6 +60,8 @@ enum CONFIG_SAVE_TARGET {
 	CONFIG_SAVE_TARGET_SYSCONF
 };
 
+void configBuildSaveTargets(char *save_override_path, size_t save_override_path_size, char *save_cwd_path, size_t save_cwd_path_size, char *save_sysconf_path, size_t save_sysconf_path_size, const char *filename, const char *loaded_path, int *has_override_path);
+void configRefreshSaveTargetForWrite(enum CONFIG_SAVE_TARGET save_target, char *target_path, size_t target_path_size, const char *filename, const char *loaded_path);
 int configSaveTargetPrompt(const char *save_override_path, const char *save_cwd_path, const char *save_sysconf_path, const char *loaded_path, int has_override_path);
 
 int CheckMC(void);

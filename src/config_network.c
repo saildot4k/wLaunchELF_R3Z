@@ -160,18 +160,16 @@ void Config_Network(void)
 	char save_sysconf_path[MAX_PATH];
 	int has_override_path;
 	int save_target;
+	char *save_path;
 
 	event = 1;  //event = initial entry
 	s = CONFIG_NET_FIRST;
 	l = 1;
 	ipdata = BuildOctets(ip, netmask, gw);
-	has_override_path = (setting->CNF_Path[0] != '\0');
-	if (has_override_path)
-		configAppendPathFile(save_override_path, sizeof(save_override_path), setting->CNF_Path, "IPCONFIG.DAT");
-	else
-		save_override_path[0] = '\0';
-	configAppendPathFile(save_cwd_path, sizeof(save_cwd_path), LaunchElfBootDir[0] ? LaunchElfBootDir : LaunchElfDir, "IPCONFIG.DAT");
-	configBuildSysconfPath(save_sysconf_path, sizeof(save_sysconf_path), "IPCONFIG.DAT");
+	configBuildSaveTargets(save_override_path, sizeof(save_override_path),
+	                       save_cwd_path, sizeof(save_cwd_path),
+	                       save_sysconf_path, sizeof(save_sysconf_path),
+	                       "IPCONFIG.DAT", LoadedIPConfigPath, &has_override_path);
 
 	while (1) {
 		//Pad response section
@@ -245,11 +243,13 @@ void Config_Network(void)
 							sprintf(gw, "%i.%i.%i.%i", ipdata.gw[0], ipdata.gw[1], ipdata.gw[2], ipdata.gw[3]);
 
 							if (save_target == CONFIG_SAVE_TARGET_OVERRIDE)
-								saveNetworkSettings(NetMsg, save_override_path);
+								save_path = save_override_path;
 							else if (save_target == CONFIG_SAVE_TARGET_CWD)
-								saveNetworkSettings(NetMsg, save_cwd_path);
-							else if (save_target == CONFIG_SAVE_TARGET_SYSCONF)
-								saveNetworkSettings(NetMsg, save_sysconf_path);
+								save_path = save_cwd_path;
+							else
+								save_path = save_sysconf_path;
+							configRefreshSaveTargetForWrite(save_target, save_path, MAX_PATH, "IPCONFIG.DAT", LoadedIPConfigPath);
+							saveNetworkSettings(NetMsg, save_path);
 						}
 					} else  //s == CONFIG_NET_RETURN
 						return;
