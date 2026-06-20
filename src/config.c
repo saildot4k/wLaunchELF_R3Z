@@ -1172,6 +1172,7 @@ int configSaveTargetPrompt(const char *save_override_path, const char *save_cwd_
 	char title[MAX_PATH];
 	int option_count;
 	int sel;
+	int default_sel;
 	int event, post_event;
 	int i;
 	int ret;
@@ -1184,6 +1185,7 @@ int configSaveTargetPrompt(const char *save_override_path, const char *save_cwd_
 
 	configFormatPromptLabel(title, sizeof(title), LNG(Save_to));
 	option_count = 0;
+	default_sel = -1;
 	if (has_override_path) {
 		targets[option_count] = CONFIG_SAVE_TARGET_OVERRIDE;
 		configFormatSavePromptLine(lines[option_count], sizeof(lines[option_count]), save_override_path, loaded_path, 0x7fffffff);
@@ -1198,6 +1200,19 @@ int configSaveTargetPrompt(const char *save_override_path, const char *save_cwd_
 	targets[option_count] = CONFIG_SAVE_TARGET_CANCEL;
 	snprintf(lines[option_count], sizeof(lines[option_count]), " %s", LNG(Cancel));
 	option_count++;
+
+	for (i = 0; i < option_count; i++) {
+		if (loaded_path != NULL && loaded_path[0] != '\0') {
+			if ((targets[i] == CONFIG_SAVE_TARGET_OVERRIDE && save_override_path != NULL && !stricmp(save_override_path, loaded_path)) ||
+			    (targets[i] == CONFIG_SAVE_TARGET_CWD && save_cwd_path != NULL && !stricmp(save_cwd_path, loaded_path)) ||
+			    (targets[i] == CONFIG_SAVE_TARGET_SYSCONF && save_sysconf_path != NULL && !stricmp(save_sysconf_path, loaded_path))) {
+				default_sel = i;
+				break;
+			}
+		}
+		if (default_sel < 0 && targets[i] == CONFIG_SAVE_TARGET_SYSCONF)
+			default_sel = i;
+	}
 
 	max_chars = (SCREEN_WIDTH - 2 * SCREEN_MARGIN - 2 * LINE_THICKNESS - 2 * a - 2 * FONT_WIDTH) / FONT_WIDTH;
 	if (max_chars < 16)
