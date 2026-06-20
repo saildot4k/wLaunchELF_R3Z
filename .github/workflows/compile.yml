@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       make_args:
-        description: pass extra make argumments to control features not explicitly handled by CI
+        description: pass extra make arguments after CI defaults, e.g. DEBUG=1 ETH=1 UDPTTY=1
   push:
   repository_dispatch:
     types: [run_build]
@@ -84,7 +84,7 @@ jobs:
           "${{ matrix.storage_profile }}" \
           0 0)"
         echo "Resolved make flags: $FLAGS"
-        make rebuild ${{ github.event.inputs.make_args }} $FLAGS
+        make rebuild $FLAGS ${{ github.event.inputs.make_args }}
 
     - name: Verify loader low-memory layout guard
       run: |
