@@ -12,7 +12,7 @@ IOP_RESET ?= 1
 XFROM ?= 1
 UDPTTY ?= 0
 MX4SIO ?= 1
-SIO2MAN ?= 0
+SIO2MAN ?= 1
 PPC_UART ?= 0
 SIO_DEBUG ?= 0
 DEBUG ?= 0
@@ -45,7 +45,7 @@ EE_MATH_LIB := -lmf
 endif
 
 EE_LIBS = -lgskit -ldmakit -lmc -lhdd -lkbd $(EE_MATH_LIB) \
-			-lcdvd -lc -lfileXio -lpatches -lpoweroff -ldebug -lelf-loader2
+			-lcdvd -lc -lfileXio -lpatches -lpoweroff -ldebug
 EE_CFLAGS := -mgpopt -G10240 -G0 -DNEWLIB_PORT_AWARE -D_EE
 
 ifneq ($(DEBUG), 0)

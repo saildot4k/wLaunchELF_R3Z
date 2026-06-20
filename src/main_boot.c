@@ -32,10 +32,7 @@ enum BOOT_DEVICE performEarlyBootInitialization(const char *arg0, char *boot_pat
 		DPRINTF("# Console is PSX-DESR\n");
 	}
 	boot = prepareBootDeviceAndPath(arg0, boot_path, boot_path_len);
-	if (boot == BOOT_DEVICE_MASS && (!strncmp(LaunchElfDir, "mass", 4) || !strncmp(LaunchElfDir, "usb", 3))) {
-		DPRINTF("Loading USB modules for USB boot\n");
-		loadUsbModules();
-	}
+	bringUpBootDeviceStack(boot);
 	initializeBootDisplayDefaults();
 
 	cnf_path_buf = cnf_path;
