@@ -362,6 +362,7 @@ $(MCMAN_AUTOGEN): | iop/__generated
 		IOP_BIN_DIR=$(abspath iop/__generated)/ \
 		IOP_OBJS_DIR=$(abspath iop/__generated/mcman_1400_obj)/ \
 		IOP_BIN=mcman-1400.irx
+	if [ -f "$(MCMAN_SDK_MODULE_DIR)/mcman-1400.irx" ]; then cp "$(MCMAN_SDK_MODULE_DIR)/mcman-1400.irx" "$@"; fi
 	test -s $@
 
 $(MCSERV_AUTOGEN): | iop/__generated
@@ -372,6 +373,7 @@ $(MCSERV_AUTOGEN): | iop/__generated
 		IOP_BIN_DIR=$(abspath iop/__generated)/ \
 		IOP_OBJS_DIR=$(abspath iop/__generated/mcserv_1400_obj)/ \
 		IOP_BIN=mcserv-1400.irx
+	if [ -f "$(MCSERV_SDK_MODULE_DIR)/mcserv-1400.irx" ]; then cp "$(MCSERV_SDK_MODULE_DIR)/mcserv-1400.irx" "$@"; fi
 	test -s $@
 
 $(SIO2MAN_AUTOGEN): | iop/__generated
@@ -381,6 +383,7 @@ $(SIO2MAN_AUTOGEN): | iop/__generated
 		IOP_BIN_DIR=$(abspath iop/__generated)/ \
 		IOP_OBJS_DIR=$(abspath iop/__generated/sio2man_obj)/ \
 		IOP_BIN=sio2man.irx
+	if [ -f "$(SIO2MAN_SDK_MODULE_DIR)/sio2man.irx" ]; then cp "$(SIO2MAN_SDK_MODULE_DIR)/sio2man.irx" "$@"; fi
 	test -s $@
 
 $(PADMAN_AUTOGEN): | iop/__generated
@@ -391,6 +394,7 @@ $(PADMAN_AUTOGEN): | iop/__generated
 		IOP_BIN_DIR=$(abspath iop/__generated)/ \
 		IOP_OBJS_DIR=$(abspath iop/__generated/padman_1400_obj)/ \
 		IOP_BIN=padman-1400.irx
+	if [ -f "$(PADMAN_SDK_MODULE_DIR)/padman-1400.irx" ]; then cp "$(PADMAN_SDK_MODULE_DIR)/padman-1400.irx" "$@"; fi
 	test -s $@
 
 $(EE_ASM_DIR)mcman_irx.s: $(MCMAN_SOURCE) | $(EE_ASM_DIR)
@@ -467,6 +471,7 @@ $(MX4SIO_BD_AUTOGEN): | iop/__generated
 		IOP_BIN_DIR=$(abspath iop/__generated)/ \
 		IOP_OBJS_DIR=$(abspath iop/__generated/mx4sio_bd_obj)/ \
 		IOP_BIN=mx4sio_bd.irx
+	if [ -f "$(MX4SIO_BD_SDK_MODULE_DIR)/mx4sio_bd.irx" ]; then cp "$(MX4SIO_BD_SDK_MODULE_DIR)/mx4sio_bd.irx" "$@"; fi
 	test -s $@
 
 $(EE_ASM_DIR)mx4sio_bd.s: $(MX4SIO_BD_SOURCE) | $(EE_ASM_DIR)
@@ -496,6 +501,7 @@ $(BDM_AUTOGEN): | iop/__generated
 		IOP_BIN_DIR=$(abspath iop/__generated)/ \
 		IOP_OBJS_DIR=$(abspath iop/__generated/bdm_obj)/ \
 		IOP_BIN=bdm.irx
+	if [ -f "$(BDM_SDK_MODULE_DIR)/bdm.irx" ]; then cp "$(BDM_SDK_MODULE_DIR)/bdm.irx" "$@"; fi
 	test -s $@
 
 $(BDMFS_FATFS_AUTOGEN): | iop/__generated
@@ -505,6 +511,7 @@ $(BDMFS_FATFS_AUTOGEN): | iop/__generated
 		IOP_BIN_DIR=$(abspath iop/__generated)/ \
 		IOP_OBJS_DIR=$(abspath iop/__generated/bdmfs_fatfs_obj)/ \
 		IOP_BIN=bdmfs_fatfs.irx
+	if [ -f "$(BDMFS_FATFS_SDK_MODULE_DIR)/bdmfs_fatfs.irx" ]; then cp "$(BDMFS_FATFS_SDK_MODULE_DIR)/bdmfs_fatfs.irx" "$@"; fi
 	test -s $@
 
 $(USBMASS_BD_AUTOGEN): | iop/__generated
@@ -514,6 +521,7 @@ $(USBMASS_BD_AUTOGEN): | iop/__generated
 		IOP_BIN_DIR=$(abspath iop/__generated)/ \
 		IOP_OBJS_DIR=$(abspath iop/__generated/usbmass_bd_obj)/ \
 		IOP_BIN=usbmass_bd.irx
+	if [ -f "$(USBMASS_BD_SDK_MODULE_DIR)/usbmass_bd.irx" ]; then cp "$(USBMASS_BD_SDK_MODULE_DIR)/usbmass_bd.irx" "$@"; fi
 	test -s $@
 
 $(EE_ASM_DIR)bdm_irx.s:$(BDM_SOURCE) | $(EE_ASM_DIR)
@@ -586,6 +594,7 @@ $(ATA_BD_AUTOGEN): | iop/__generated
 		IOP_BIN_DIR=$(abspath iop/__generated)/ \
 		IOP_OBJS_DIR=$(abspath iop/__generated/ata_bd_obj)/ \
 		IOP_BIN=ata_bd.irx
+	if [ -f "$(ATA_BD_SDK_MODULE_DIR)/ata_bd.irx" ]; then cp "$(ATA_BD_SDK_MODULE_DIR)/ata_bd.irx" "$@"; fi
 	test -s $@
 
 $(EE_ASM_DIR)ata_bd_irx.s:$(ATA_BD_SOURCE) | $(EE_ASM_DIR)
