@@ -480,8 +480,8 @@ static int isMmceBootFolderPath(const char *path)
 	while (*suffix == '/')
 		suffix++;
 
-	return mmceEqualsIgnoreCase(suffix, "MemoryCards/BOOT/") ||
-	       mmceEqualsIgnoreCase(suffix, "MemoryCards/BOOT") ||
+	return mmceEqualsIgnoreCase(suffix, "MemoryCards/PS2/BOOT/") ||
+	       mmceEqualsIgnoreCase(suffix, "MemoryCards/PS2/BOOT") ||
 	       mmceEqualsIgnoreCase(suffix, "PS2/BOOT/") ||
 	       mmceEqualsIgnoreCase(suffix, "PS2/BOOT");
 }
@@ -1650,7 +1650,7 @@ int getFilePath(char *out, int cnfmode)
 									(void)ynDialog(msg1);
 								} else if (x == -5) {
 									sprintf(msg1,
-									        "\nBootCard files must be selected from /BOOT/ or /CardN/.\nExamples:\nmmce0:/MemoryCards/BOOT/BootCard-2.mcd\nmmce0:/PS2/BOOT/BootCard-2.mcd\nmmce0:/MemoryCards/PS2/Card0/BootCard-2.mcd\n\nMemCard Pro 2 game cards can be mounted from:\nmmce0:/PS2/<folder>/<foldername-N>.mc2");
+									        "\nBootCard files must be selected from /BOOT/ or /CardN/.\nExamples:\nmmce0:/MemoryCards/PS2/BOOT/BootCard-2.mcd\nmmce0:/PS2/BOOT/BootCard-2.mcd\nmmce0:/MemoryCards/PS2/Card0/BootCard-2.mcd\n\nMemCard Pro 2 game cards can be mounted from:\nmmce0:/PS2/<folder>/<foldername-N>.mc2");
 									(void)ynDialog(msg1);
 								} else if (x == -8) {
 									sprintf(msg1, "\nMMCE GAMEID verify failed before channel switch.\nRequested \"%s\" did not become active.",
