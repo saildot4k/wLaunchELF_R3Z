@@ -1098,7 +1098,7 @@ int configSaveTargetPrompt(const char *save_override_path, const char *save_cwd_
 	if (tw < 160)
 		tw = 160;
 
-	dw = 2 * LINE_THICKNESS + a * 2 + tw;
+	dw = 2 * LINE_THICKNESS + a * 2 + tw + FONT_WIDTH;
 	dh = 2 * LINE_THICKNESS + b * 2 + FONT_HEIGHT * (option_count + 3);
 	dx = (SCREEN_WIDTH - dw) / 2;
 	dy = (SCREEN_HEIGHT - dh) / 2;
