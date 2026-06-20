@@ -505,12 +505,6 @@ $(BDM_AUTOGEN): | iop/__generated
 	test -s $@
 
 $(BDMFS_FATFS_AUTOGEN): | iop/__generated
-	if [ ! -f "$(BDMFS_FATFS_SDK_ROOT)/common/external_deps/fatfs/source/include/ff.h" ]; then \
-		$(MAKE) -C "$(BDMFS_FATFS_SDK_ROOT)/common/external_deps" \
-			PS2SDKSRC="$(BDMFS_FATFS_SDK_ROOT)" \
-			PS2SDK="$(BDMFS_FATFS_SDK_ROOT)" \
-			all; \
-	fi
 	$(MAKE) -C $(BDMFS_FATFS_SDK_MODULE_DIR) \
 		PS2SDKSRC=$(BDMFS_FATFS_SDK_ROOT) \
 		PS2SDK=$(BDMFS_FATFS_SDK_ROOT) \
