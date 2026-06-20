@@ -471,12 +471,19 @@ static int parseMmceCardNumberFromPath(const char *path, u16 *card_num)
 
 static int isMmceBootFolderPath(const char *path)
 {
-	char segment[64];
+	const char *suffix;
 
-	if (getMmceLastPathSegment(path, segment, sizeof(segment)) < 0)
+	if (getMmceUnitFromPath(path) < 0)
 		return FALSE;
 
-	return mmceStartsWithIgnoreCase(segment, "BOOT");
+	suffix = path + 6;
+	while (*suffix == '/')
+		suffix++;
+
+	return mmceEqualsIgnoreCase(suffix, "MemoryCards/BOOT/") ||
+	       mmceEqualsIgnoreCase(suffix, "MemoryCards/BOOT") ||
+	       mmceEqualsIgnoreCase(suffix, "PS2/BOOT/") ||
+	       mmceEqualsIgnoreCase(suffix, "PS2/BOOT");
 }
 
 static int isMmceBootCardFileName(const char *name)
@@ -606,121 +613,6 @@ static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mount
 
 	return 0;
 }
-
-static int promptMmceChannel1to8(void)
-{
-	char input[4];
-
-	input[0] = '1';
-	input[1] = '\0';
-	if (keyboard(input, 2) <= 0)
-		return -1;
-
-	if ((input[0] < '1') || (input[0] > '8') || (input[1] != '\0')) {
-		(void)ynDialog("\nMMCE channel must be a single value from 1 to 8.");
-		return -1;
-	}
-
-	return input[0] - '0';
-}
-
-static int buildMmceChannelFileName(const FILEINFO *file, u16 channel_ui, char *out_name, size_t out_name_size)
-{
-	const char *dot, *dash;
-	size_t prefix_len;
-
-	if ((file == NULL) || (out_name == NULL) || (out_name_size == 0))
-		return -1;
-	if (!isMmceCardImageFile(file))
-		return -1;
-
-	dot = strrchr(file->name, '.');
-	if (dot == NULL)
-		return -1;
-
-	dash = dot;
-	while ((dash > file->name) && (*(dash - 1) != '-'))
-		dash--;
-	if ((dash <= file->name) || (*(dash - 1) != '-'))
-		return -1;
-
-	prefix_len = (size_t)(dash - file->name);
-	if (prefix_len + 1 >= out_name_size)
-		return -1;
-
-	memcpy(out_name, file->name, prefix_len);
-	out_name[prefix_len] = '\0';
-	snprintf(out_name + prefix_len, out_name_size - prefix_len, "%u%s",
-	         (unsigned int)channel_ui, dot);
-	return 0;
-}
-
-static int mmceSwitchChannelOnly(const char *path, const FILEINFO *selected_file, int delta, int requested_ui, u16 *target_ui_out, u16 *active_ui_out)
-{
-	int ret, dummy;
-	int unit;
-	u16 current_ui = 1;
-	u16 target_ui;
-	u16 active_channel = 0xFFFF;
-	u16 active_card = 0xFFFF;
-	char req_name[MAX_NAME];
-	FILEINFO req_file;
-
-	if (target_ui_out != NULL)
-		*target_ui_out = 0xFFFF;
-	if (active_ui_out != NULL)
-		*active_ui_out = 0xFFFF;
-
-	unit = getMmceUnitFromPath(path);
-	if ((unit < 0) || (unit > 1))
-		return -1;
-
-	if ((selected_file == NULL) || !isMmceCardImageFile(selected_file))
-		return -2;
-	if ((requested_ui < 0) || (requested_ui > 8))
-		return -2;
-
-	if (parseMmceChannelFromFilename(selected_file->name, &current_ui) < 0)
-		return -4;
-	if ((current_ui < 1) || (current_ui > 8))
-		current_ui = 1;
-
-	if (requested_ui >= 1)
-		target_ui = (u16)requested_ui;
-	else if (delta > 0)
-		target_ui = (u16)((current_ui % 8) + 1);
-	else if (delta < 0)
-		target_ui = (u16)((current_ui == 1) ? 8 : (current_ui - 1));
-	else
-		target_ui = current_ui;
-
-	DPRINTF("MMCE channel-only switch unit=%d current_ui=%u target_ui=%u delta=%d\n",
-	        unit, (unsigned int)current_ui, (unsigned int)target_ui, delta);
-
-	ret = buildMmceChannelFileName(selected_file, target_ui, req_name, sizeof(req_name));
-	if (ret < 0)
-		return ret;
-
-	req_file = *selected_file;
-	snprintf(req_file.name, sizeof(req_file.name), "%s", req_name);
-	DPRINTF("MMCE channel-only context switch using '%s'\n", req_file.name);
-
-	ret = mountMmceCardImage(path, &req_file, NULL, &active_card, &active_channel);
-	if (ret < 0)
-		return ret;
-
-	if (target_ui_out != NULL)
-		*target_ui_out = target_ui;
-	if (active_ui_out != NULL)
-		*active_ui_out = active_channel;
-
-	DPRINTF("MMCE channel-only switched target_ui=%u active_ui=%u active_card=%u\n",
-	        (unsigned int)target_ui, (unsigned int)active_channel, (unsigned int)active_card);
-
-	mcGetInfo(unit, 0, &dummy, &dummy, &dummy);
-	mcSync(0, NULL, &dummy);
-	return 0;
-}
 #endif
 
 static int classifyPsuAction(const char *destPath)
@@ -759,11 +651,6 @@ static int menu(const char *path, FILEINFO *file)
 	u64 color;
 	char enable[NUM_MENU], tmp[80];
 	const char *psu_action_label;
-#ifdef MMCE
-	const char *mmce_ch_dec_label = "MMCE Ch -1";
-	const char *mmce_ch_inc_label = "MMCE Ch +1";
-	const char *mmce_ch_set_label = "MMCE Set Ch (1-8)";
-#endif
 	int x, y, i, sel;
 	int event, post_event = 0;
 	int menu_disabled = 0;
@@ -791,11 +678,6 @@ static int menu(const char *path, FILEINFO *file)
 	menu_len = strlen(LNG(time_manip)) > menu_len ? strlen(LNG(time_manip)) : menu_len;
 	menu_len = strlen(LNG(title_cfg)) > menu_len ? strlen(LNG(title_cfg)) : menu_len;
 	menu_len = (strlen(LNG(Mount)) + 6) > menu_len ? (strlen(LNG(Mount)) + 6) : menu_len;
-#ifdef MMCE
-	menu_len = strlen(mmce_ch_dec_label) > menu_len ? strlen(mmce_ch_dec_label) : menu_len;
-	menu_len = strlen(mmce_ch_inc_label) > menu_len ? strlen(mmce_ch_inc_label) : menu_len;
-	menu_len = strlen(mmce_ch_set_label) > menu_len ? strlen(mmce_ch_set_label) : menu_len;
-#endif
 	
 
 	int menu_ch_w = menu_len + 1;                                 //Total characters in longest menu string
@@ -806,11 +688,6 @@ static int menu(const char *path, FILEINFO *file)
 	int mSprite_Y2 = mSprite_Y1 + (menu_ch_h + 1) * FONT_HEIGHT;  //Bottom edge of sprite
 
 	memset(enable, TRUE, NUM_MENU);  //Assume that all menu items are legal by default
-#ifdef MMCE
-	enable[MMCE_CH_DEC] = FALSE;
-	enable[MMCE_CH_INC] = FALSE;
-	enable[MMCE_CH_SET] = FALSE;
-#endif
 
 	//identify cases where write access is illegal, and disable menu items accordingly
 	if ((!strncmp(path, "cdfs", 4))  //Writing is always illegal for CDVD drive
@@ -838,15 +715,6 @@ static int menu(const char *path, FILEINFO *file)
 		enable[MOUNTVMC1] = FALSE;
 		enable[GETSIZE] = FALSE;
 	}
-#ifdef MMCE
-	if (!menu_disabled && (getMmceUnitFromPath(path) >= 0)) {
-		if (isMmceCardImageFile(file)) {
-			enable[MMCE_CH_DEC] = TRUE;
-			enable[MMCE_CH_INC] = TRUE;
-			enable[MMCE_CH_SET] = TRUE;
-		}
-	}
-#endif
 //#ifdef TMANIP
 	if (                                                        //if
 	    (file->stats.AttrFile & sceMcFileAttrSubdir) &&         //pointing to a folder
@@ -976,18 +844,21 @@ static int menu(const char *path, FILEINFO *file)
 					strcpy(tmp, LNG(New_Dir));
 				else if (i == NEWICON)
 					strcpy(tmp, LNG(New_Icon));
-				else if (i == MOUNTVMC0)
-					sprintf(tmp, "%s vmc0:", LNG(Mount));
-				else if (i == MOUNTVMC1)
-					sprintf(tmp, "%s vmc1:", LNG(Mount));
+				else if (i == MOUNTVMC0) {
 #ifdef MMCE
-				else if (i == MMCE_CH_DEC)
-					strcpy(tmp, mmce_ch_dec_label);
-				else if (i == MMCE_CH_INC)
-					strcpy(tmp, mmce_ch_inc_label);
-				else if (i == MMCE_CH_SET)
-					strcpy(tmp, mmce_ch_set_label);
+					if (getMmceUnitFromPath(path) >= 0)
+						sprintf(tmp, "%s mc0:", LNG(Mount));
+					else
 #endif
+						sprintf(tmp, "%s vmc0:", LNG(Mount));
+				} else if (i == MOUNTVMC1) {
+#ifdef MMCE
+					if (getMmceUnitFromPath(path) >= 0)
+						sprintf(tmp, "%s mc1:", LNG(Mount));
+					else
+#endif
+						sprintf(tmp, "%s vmc1:", LNG(Mount));
+				}
 				else if (i == GETSIZE)
 					strcpy(tmp, LNG(Get_Size));
 				else if (i == OPEN_TEXTEDITOR)
@@ -1746,81 +1617,52 @@ int getFilePath(char *out, int cnfmode)
 					DoneIcon:
 						strcpy(tmp, tmp1);  //Dummy code to make 'goto DoneIcon' legal for gcc
 					}                       //ends NEWICON
-#ifdef MMCE
-					else if ((ret == MMCE_CH_DEC) || (ret == MMCE_CH_INC) || (ret == MMCE_CH_SET)) {
-						u16 mmce_target_channel = 0xFFFF;
-						u16 mmce_active_channel = 0xFFFF;
-						int requested_channel = -1;
-						int delta = 0;
-
-						if (ret == MMCE_CH_DEC)
-							delta = -1;
-						else if (ret == MMCE_CH_INC)
-							delta = 1;
-						else {
-							requested_channel = promptMmceChannel1to8();
-							if (requested_channel < 1) {
-								browser_pushed = FALSE;
-								continue;
-							}
-						}
-
-						x = mmceSwitchChannelOnly(path, &files[browser_sel], delta, requested_channel, &mmce_target_channel, &mmce_active_channel);
-						if (x >= 0) {
-							snprintf(msg0, sizeof(msg0), "MMCE channel switched to mc%d! channel=%u",
-							         getMmceUnitFromPath(path), (unsigned int)mmce_target_channel);
-							browser_pushed = FALSE;
-							browser_cd = TRUE;
-						} else if (x == -2) {
-							(void)ynDialog("\nMMCE channel actions require selecting a .mc2/.mcd file.");
-						} else if (x == -4) {
-							(void)ynDialog("\nMMCE channel must be last dash number.\nExample: SLUS-21338-1.mc2");
-						} else {
-							snprintf(msg1, sizeof(msg1), "\nMMCE channel switch failed.\nResult=%d", x);
-							(void)ynDialog(msg1);
-						}
-						continue;
-					}
-#endif
 					else if ((ret == MOUNTVMC0) || (ret == MOUNTVMC1)) {
 						i = ret - MOUNTVMC0;
 #ifdef MMCE
-						if ((getMmceUnitFromPath(path) >= 0) && isMmceCardImageFile(&files[browser_sel])) {
-							int mmce_slot = -1;
-							u16 mmce_active_card = 0xFFFF;
-							u16 mmce_active_channel = 0xFFFF;
+						{
+							int mmce_unit = getMmceUnitFromPath(path);
+							if ((mmce_unit >= 0) && isMmceCardImageFile(&files[browser_sel])) {
+								int mmce_slot = -1;
+								u16 mmce_active_card = 0xFFFF;
+								u16 mmce_active_channel = 0xFFFF;
 
-							x = mountMmceCardImage(path, &files[browser_sel], &mmce_slot, &mmce_active_card, &mmce_active_channel);
-							if (x >= 0) {
-								if (mmce_active_card != 0xFFFF) {
-									snprintf(msg0, sizeof(msg0), "MMCE CARD-CHANNEL switched to mc%d! card=%u channel=%u",
-									         mmce_slot, (unsigned int)mmce_active_card, (unsigned int)mmce_active_channel);
-								} else {
-									snprintf(msg0, sizeof(msg0), "MMCE CARD-CHANNEL switched to mc%d! channel=%u",
-									         mmce_slot, (unsigned int)mmce_active_channel);
+								if (i != mmce_unit) {
+									browser_pushed = FALSE;
+									continue;
 								}
-								browser_cd = TRUE;
-							} else if (x == -3) {
-								sprintf(msg1,
-								        "\nMMCE card id parse failed.\nUse <gameid>-<channel>.mc2/mcd\nor browse inside gameid folder.");
-								(void)ynDialog(msg1);
-							} else if (x == -4) {
-								sprintf(msg1, "\nMMCE channel must be last dash number.\nExample: SLUS-21338-1.mc2");
-								(void)ynDialog(msg1);
-							} else if (x == -5) {
-								sprintf(msg1,
-								        "\nBootCard files must be selected from /BOOT/ or /CardN/.\nExamples:\nmmce0:/MemoryCards/PS2/BOOT/BootCard-2.mcd\nmmce0:/MemoryCards/PS2/Card0/BootCard-2.mcd\n\nMemCard Pro 2 game cards can be mounted from:\nmmce0:/PS2/<folder>/<foldername-N>.mc2");
-								(void)ynDialog(msg1);
-							} else if (x == -8) {
-								sprintf(msg1, "\nMMCE GAMEID verify failed before channel switch.\nRequested \"%s\" did not become active.",
-								        files[browser_sel].name);
-								(void)ynDialog(msg1);
-							} else {
-								sprintf(msg1, "\nMMCE card mount failed for \"%s\"\nResult=%d", files[browser_sel].name, x);
-								(void)ynDialog(msg1);
+								x = mountMmceCardImage(path, &files[browser_sel], &mmce_slot, &mmce_active_card, &mmce_active_channel);
+								if (x >= 0) {
+									if (mmce_active_card != 0xFFFF) {
+										snprintf(msg0, sizeof(msg0), "MMCE CARD-CHANNEL switched to mc%d! card=%u channel=%u",
+										         mmce_slot, (unsigned int)mmce_active_card, (unsigned int)mmce_active_channel);
+									} else {
+										snprintf(msg0, sizeof(msg0), "MMCE CARD-CHANNEL switched to mc%d! channel=%u",
+										         mmce_slot, (unsigned int)mmce_active_channel);
+									}
+									browser_cd = TRUE;
+								} else if (x == -3) {
+									sprintf(msg1,
+									        "\nMMCE card id parse failed.\nUse <gameid>-<channel>.mc2/mcd\nor browse inside gameid folder.");
+									(void)ynDialog(msg1);
+								} else if (x == -4) {
+									sprintf(msg1, "\nMMCE channel must be last dash number.\nExample: SLUS-21338-1.mc2");
+									(void)ynDialog(msg1);
+								} else if (x == -5) {
+									sprintf(msg1,
+									        "\nBootCard files must be selected from /BOOT/ or /CardN/.\nExamples:\nmmce0:/MemoryCards/BOOT/BootCard-2.mcd\nmmce0:/PS2/BOOT/BootCard-2.mcd\nmmce0:/MemoryCards/PS2/Card0/BootCard-2.mcd\n\nMemCard Pro 2 game cards can be mounted from:\nmmce0:/PS2/<folder>/<foldername-N>.mc2");
+									(void)ynDialog(msg1);
+								} else if (x == -8) {
+									sprintf(msg1, "\nMMCE GAMEID verify failed before channel switch.\nRequested \"%s\" did not become active.",
+									        files[browser_sel].name);
+									(void)ynDialog(msg1);
+								} else {
+									sprintf(msg1, "\nMMCE card mount failed for \"%s\"\nResult=%d", files[browser_sel].name, x);
+									(void)ynDialog(msg1);
+								}
+								browser_pushed = FALSE;
+								continue;
 							}
-							browser_pushed = FALSE;
-							continue;
 						}
 #endif
 						sprintf(tmp, "vmc%d:", i);
