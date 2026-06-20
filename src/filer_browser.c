@@ -6,6 +6,9 @@
 #include "filer_actions.h"
 #include "filer_shared.h"
 #include "init.h"
+#ifdef MMCE
+#include "mmce_cmds.h"
+#endif
 
 static int isHddBrowserPath(const char *path)
 {
@@ -162,6 +165,448 @@ static int isMcLikePath(const char *path)
 {
 	return (!strncmp(path, "mc", 2) || !strncmp(path, "vmc", 3));
 }
+
+#ifdef MMCE
+static int getMmceUnitFromPath(const char *path)
+{
+	if (!strncmp(path, "mmce0:", 6))
+		return 0;
+	if (!strncmp(path, "mmce1:", 6))
+		return 1;
+
+	return -1;
+}
+
+static int isMmceCardImageFile(const FILEINFO *file)
+{
+	if ((file->stats.AttrFile & sceMcFileAttrSubdir) || !strcmp(file->name, ".."))
+		return FALSE;
+
+	return genCmpFileExt(file->name, "MC2") || genCmpFileExt(file->name, "MCD");
+}
+
+static int mmceStartsWithIgnoreCase(const char *value, const char *prefix)
+{
+	unsigned char a, b;
+
+	if ((value == NULL) || (prefix == NULL))
+		return FALSE;
+
+	while (*prefix != '\0') {
+		if (*value == '\0')
+			return FALSE;
+		a = (unsigned char)*value++;
+		b = (unsigned char)*prefix++;
+		if ((a >= 'A') && (a <= 'Z'))
+			a = (unsigned char)(a - 'A' + 'a');
+		if ((b >= 'A') && (b <= 'Z'))
+			b = (unsigned char)(b - 'A' + 'a');
+		if (a != b)
+			return FALSE;
+	}
+
+	return TRUE;
+}
+
+static int mmceEndsWithIgnoreCase(const char *value, const char *suffix)
+{
+	size_t value_len, suffix_len;
+	unsigned char a, b;
+
+	if ((value == NULL) || (suffix == NULL))
+		return FALSE;
+
+	value_len = strlen(value);
+	suffix_len = strlen(suffix);
+	if (suffix_len > value_len)
+		return FALSE;
+
+	value += (value_len - suffix_len);
+	while (*suffix != '\0') {
+		a = (unsigned char)*value++;
+		b = (unsigned char)*suffix++;
+		if ((a >= 'A') && (a <= 'Z'))
+			a = (unsigned char)(a - 'A' + 'a');
+		if ((b >= 'A') && (b <= 'Z'))
+			b = (unsigned char)(b - 'A' + 'a');
+		if (a != b)
+			return FALSE;
+	}
+
+	return TRUE;
+}
+
+static int mmceEqualsIgnoreCase(const char *a, const char *b)
+{
+	unsigned char ca, cb;
+
+	if ((a == NULL) || (b == NULL))
+		return FALSE;
+
+	while ((*a != '\0') && (*b != '\0')) {
+		ca = (unsigned char)*a++;
+		cb = (unsigned char)*b++;
+		if ((ca >= 'A') && (ca <= 'Z'))
+			ca = (unsigned char)(ca - 'A' + 'a');
+		if ((cb >= 'A') && (cb <= 'Z'))
+			cb = (unsigned char)(cb - 'A' + 'a');
+		if (ca != cb)
+			return FALSE;
+	}
+
+	return (*a == '\0') && (*b == '\0');
+}
+
+static void mmceNormalizeCardIdForCompare(const char *input, char *output, size_t output_size)
+{
+	char *dot;
+	size_t len;
+
+	if ((output == NULL) || (output_size == 0))
+		return;
+
+	output[0] = '\0';
+	if (input == NULL)
+		return;
+
+	snprintf(output, output_size, "%s", input);
+	len = strlen(output);
+	if (len == 0)
+		return;
+
+	if (mmceEndsWithIgnoreCase(output, ".mc2") || mmceEndsWithIgnoreCase(output, ".mcd")) {
+		dot = strrchr(output, '.');
+		if (dot != NULL)
+			dot[0] = '\0';
+	}
+}
+
+static int mmceIsDashNumberSuffix(const char *suffix)
+{
+	if ((suffix == NULL) || (*suffix != '-'))
+		return FALSE;
+	suffix++;
+	if ((*suffix < '0') || (*suffix > '9'))
+		return FALSE;
+	while (*suffix != '\0') {
+		if ((*suffix < '0') || (*suffix > '9'))
+			return FALSE;
+		suffix++;
+	}
+
+	return TRUE;
+}
+
+static int mmceGameIdMatchesRequested(const char *requested_id, const char *active_id, u16 requested_channel_ui)
+{
+	char requested_norm[64];
+	char active_norm[64];
+	char active_with_channel[64];
+	char requested_with_channel[64];
+	int match;
+	size_t req_len;
+	size_t active_len;
+
+	mmceNormalizeCardIdForCompare(requested_id, requested_norm, sizeof(requested_norm));
+	mmceNormalizeCardIdForCompare(active_id, active_norm, sizeof(active_norm));
+
+	if ((requested_norm[0] == '\0') || (active_norm[0] == '\0')) {
+		DPRINTF("MMCE gameid compare invalid req='%s' active='%s' req_norm='%s' active_norm='%s'\n",
+		        requested_id ? requested_id : "(null)",
+		        active_id ? active_id : "(null)",
+		        requested_norm, active_norm);
+		return FALSE;
+	}
+
+	match = mmceEqualsIgnoreCase(requested_norm, active_norm);
+	if (!match) {
+		req_len = strlen(requested_norm);
+		active_len = strlen(active_norm);
+		if ((active_len > req_len) &&
+		    mmceStartsWithIgnoreCase(active_norm, requested_norm) &&
+		    mmceIsDashNumberSuffix(active_norm + req_len)) {
+			match = TRUE;
+		} else if ((req_len > active_len) &&
+		           mmceStartsWithIgnoreCase(requested_norm, active_norm) &&
+		           mmceIsDashNumberSuffix(requested_norm + active_len)) {
+			match = TRUE;
+		} else if (requested_channel_ui > 0) {
+			snprintf(active_with_channel, sizeof(active_with_channel), "%s-%u",
+			         active_norm, (unsigned int)requested_channel_ui);
+			if (mmceEqualsIgnoreCase(requested_norm, active_with_channel)) {
+				match = TRUE;
+			} else {
+				snprintf(requested_with_channel, sizeof(requested_with_channel), "%s-%u",
+				         requested_norm, (unsigned int)requested_channel_ui);
+				if (mmceEqualsIgnoreCase(active_norm, requested_with_channel))
+					match = TRUE;
+			}
+		}
+	}
+
+	DPRINTF("MMCE gameid compare req='%s' active='%s' req_norm='%s' active_norm='%s' req_channel_ui=%u match=%d\n",
+	        requested_id ? requested_id : "(null)",
+	        active_id ? active_id : "(null)",
+	        requested_norm, active_norm, (unsigned int)requested_channel_ui, match);
+	return match;
+}
+
+static int getMmceLastPathSegment(const char *path, char *segment, size_t segment_size)
+{
+	const char *start, *end;
+	size_t len;
+
+	if ((path == NULL) || (segment == NULL) || (segment_size == 0))
+		return -1;
+
+	end = path + strlen(path);
+	while ((end > path) && (*(end - 1) == '/'))
+		end--;
+	if (end <= path)
+		return -1;
+
+	start = end;
+	while ((start > path) && (*(start - 1) != '/') && (*(start - 1) != ':'))
+		start--;
+
+	len = (size_t)(end - start);
+	if ((len == 0) || (len >= segment_size))
+		return -1;
+
+	memcpy(segment, start, len);
+	segment[len] = '\0';
+	return 0;
+}
+
+static int parseMmceCardIdFromFilename(const char *name, char *card_id, size_t card_id_size)
+{
+	const char *dot, *dash;
+	size_t len;
+
+	if ((card_id == NULL) || (card_id_size == 0))
+		return -1;
+
+	dot = strrchr(name, '.');
+	if (dot == NULL)
+		return -1;
+	dash = dot;
+	while ((dash > name) && (*(dash - 1) != '-'))
+		dash--;
+	if ((dash <= name) || (*(dash - 1) != '-'))
+		return -1;
+
+	len = (size_t)((dash - 1) - name);
+	if (len == 0)
+		return -1;
+	if (len >= card_id_size)
+		len = card_id_size - 1;
+
+	memcpy(card_id, name, len);
+	card_id[len] = '\0';
+	return 0;
+}
+
+static int parseMmceChannelFromFilename(const char *name, u16 *channel_num)
+{
+	const char *dot, *dash, *p;
+	unsigned int value = 0;
+
+	dot = strrchr(name, '.');
+	if (dot == NULL)
+		return -1;
+	dash = dot;
+	while ((dash > name) && (*(dash - 1) != '-'))
+		dash--;
+	if ((dash <= name) || (*(dash - 1) != '-'))
+		return -1;
+
+	p = dash;
+	if ((*p < '0') || (*p > '9'))
+		return -1;
+
+	while (p < dot) {
+		if ((*p < '0') || (*p > '9'))
+			return -1;
+		value = value * 10 + (*p - '0');
+		if (value > 0xFFFF)
+			return -1;
+		p++;
+	}
+
+	if (value == 0)
+		return -1;
+
+	*channel_num = (u16)value;
+	return 0;
+}
+
+static int parseMmceCardNumberFromPath(const char *path, u16 *card_num)
+{
+	char segment[64];
+	const char *p;
+	unsigned int value = 0;
+
+	if ((card_num == NULL) || (getMmceLastPathSegment(path, segment, sizeof(segment)) < 0))
+		return -1;
+
+	if (!mmceStartsWithIgnoreCase(segment, "Card"))
+		return -1;
+
+	p = segment + 4;
+	if ((*p < '0') || (*p > '9'))
+		return -1;
+
+	while (*p != '\0') {
+		if ((*p < '0') || (*p > '9'))
+			return -1;
+		value = value * 10 + (*p - '0');
+		if (value > 0xFFFF)
+			return -1;
+		p++;
+	}
+
+	*card_num = (u16)value;
+	return 0;
+}
+
+static int isMmceBootFolderPath(const char *path)
+{
+	char segment[64];
+
+	if (getMmceLastPathSegment(path, segment, sizeof(segment)) < 0)
+		return FALSE;
+
+	return mmceStartsWithIgnoreCase(segment, "BOOT");
+}
+
+static int isMmceBootCardFileName(const char *name)
+{
+	return mmceStartsWithIgnoreCase(name, "BootCard-");
+}
+
+static int deriveMmceCardId(const char *path, const FILEINFO *file, char *card_id, size_t card_id_size)
+{
+	if (parseMmceCardIdFromFilename(file->name, card_id, card_id_size) == 0)
+		return 0;
+
+	if (getMmceLastPathSegment(path, card_id, card_id_size) < 0)
+		return -1;
+
+	if (!strcmp(card_id, "MemoryCards") || !strcmp(card_id, "PS2") || !strcmp(card_id, "PS1"))
+		return -1;
+
+	return 0;
+}
+
+static int mountMmceCardImage(const char *path, const FILEINFO *file, int *mounted_slot, u16 *active_card_out, u16 *active_channel_out)
+{
+	int unit, ret, dummy;
+	u16 channel_num, channel_wire_num;
+	u16 card_num = 0xFFFF;
+	char devname[8];
+	char card_id[64];
+	char active_card_id[64];
+	int use_numbered_card = FALSE;
+	u8 card_type = MMCE_CARD_TYPE_REGULAR;
+
+	if (active_card_out != NULL)
+		*active_card_out = 0xFFFF;
+	if (active_channel_out != NULL)
+		*active_channel_out = 0xFFFF;
+
+	unit = getMmceUnitFromPath(path);
+	if (unit < 0 || unit > 1)
+		return -1;
+
+	if (!isMmceCardImageFile(file))
+		return -2;
+
+	if (parseMmceChannelFromFilename(file->name, &channel_num) < 0)
+		return -4;
+	channel_wire_num = channel_num;
+	DPRINTF("MMCE mount request path='%s' file='%s' unit=%d req_channel_ui=%u req_channel_wire=%u\n",
+	        path, file->name, unit, (unsigned int)channel_num, (unsigned int)channel_wire_num);
+
+	if (parseMmceCardNumberFromPath(path, &card_num) == 0) {
+		use_numbered_card = TRUE;
+		card_type = isMmceBootCardFileName(file->name) ? MMCE_CARD_TYPE_BOOT : MMCE_CARD_TYPE_REGULAR;
+	} else if (isMmceBootFolderPath(path)) {
+		use_numbered_card = TRUE;
+		card_type = MMCE_CARD_TYPE_BOOT;
+		card_num = 0;
+	} else {
+		if (isMmceBootCardFileName(file->name))
+			return -5;
+		if (deriveMmceCardId(path, file, card_id, sizeof(card_id)) < 0)
+			return -3;
+	}
+
+	if (use_numbered_card) {
+		DPRINTF("MMCE mount route=SET_CARD_CHANNEL card_type=%u card_num=%u channel=%u\n",
+		        (unsigned int)card_type, (unsigned int)card_num, (unsigned int)channel_wire_num);
+	} else {
+		DPRINTF("MMCE mount route=SET_GAMEID_THEN_SET_CHANNEL card_id='%s' channel=%u\n",
+		        card_id, (unsigned int)channel_wire_num);
+	}
+
+	snprintf(devname, sizeof(devname), "mmce%d:", unit);
+
+	ret = mmceCmdPing(devname);
+	if (ret < 0)
+		return ret;
+	ret = mmceCmdWaitReady(devname);
+	if (ret < 0)
+		return ret;
+
+	if (use_numbered_card) {
+		ret = mmceCmdSetCardAndChannel(devname, card_type, card_num, channel_wire_num);
+		if (ret < 0)
+			return ret;
+		ret = mmceCmdWaitReady(devname);
+		if (ret < 0)
+			return ret;
+		if (active_card_out != NULL)
+			*active_card_out = card_num;
+	} else {
+		ret = mmceCmdSetGameId(devname, card_id);
+		if (ret < 0)
+			return ret;
+		ret = mmceCmdWaitReady(devname);
+		if (ret < 0)
+			return ret;
+		ret = mmceCmdWaitGameIdStable(devname, active_card_id, sizeof(active_card_id));
+		if (ret < 0)
+			return ret;
+		DPRINTF("MMCE verify gameid requested='%s' active='%s'\n", card_id, active_card_id);
+		if (active_card_id[0] == '\0') {
+			DPRINTF("MMCE verify gameid readback empty; continuing to channel switch.\n");
+		} else if (!mmceGameIdMatchesRequested(card_id, active_card_id, channel_num)) {
+			return -8;
+		}
+		ret = mmceCmdSetChannel(devname, channel_wire_num);
+		if (ret < 0)
+			return ret;
+		ret = mmceCmdWaitReady(devname);
+		if (ret < 0)
+			return ret;
+	}
+
+	DPRINTF("MMCE card/channel switch complete card_known=%d card=%u channel_ui=%u channel_wire=%u\n",
+	        use_numbered_card, (unsigned int)card_num,
+	        (unsigned int)channel_num, (unsigned int)channel_wire_num);
+
+	if (active_channel_out != NULL)
+		*active_channel_out = channel_num;
+
+	mcGetInfo(unit, 0, &dummy, &dummy, &dummy);
+	mcSync(0, NULL, &dummy);
+
+	if (mounted_slot != NULL)
+		*mounted_slot = unit;
+
+	return 0;
+}
+#endif
 
 static int classifyPsuAction(const char *destPath)
 {
@@ -1142,6 +1587,44 @@ int getFilePath(char *out, int cnfmode)
 					}                       //ends NEWICON
 					else if ((ret == MOUNTVMC0) || (ret == MOUNTVMC1)) {
 						i = ret - MOUNTVMC0;
+#ifdef MMCE
+						if ((getMmceUnitFromPath(path) >= 0) && isMmceCardImageFile(&files[browser_sel])) {
+							u16 mmce_active_card = 0xFFFF;
+							u16 mmce_active_channel = 0xFFFF;
+
+							x = mountMmceCardImage(path, &files[browser_sel], NULL, &mmce_active_card, &mmce_active_channel);
+							if (x >= 0) {
+								if (mmce_active_card != 0xFFFF) {
+									snprintf(msg0, sizeof(msg0), "MMCE CARD-CHANNEL switched! card=%u channel=%u",
+									         (unsigned int)mmce_active_card, (unsigned int)mmce_active_channel);
+								} else {
+									snprintf(msg0, sizeof(msg0), "MMCE CARD-CHANNEL switched! channel=%u",
+									         (unsigned int)mmce_active_channel);
+								}
+								browser_cd = TRUE;
+							} else if (x == -3) {
+								sprintf(msg1,
+								        "\nMMCE card id parse failed.\nUse <gameid>-<channel>.mc2/mcd\nor browse inside gameid folder.");
+								(void)ynDialog(msg1);
+							} else if (x == -4) {
+								sprintf(msg1, "\nMMCE channel must be last dash number.\nExample: SLUS-21338-1.mc2");
+								(void)ynDialog(msg1);
+							} else if (x == -5) {
+								sprintf(msg1,
+								        "\nBootCard files must be selected from /BOOT/ or /CardN/.\nExamples:\nmmce0:/MemoryCards/PS2/BOOT/BootCard-2.mcd\nmmce0:/MemoryCards/PS2/Card0/BootCard-2.mcd\n\nMemCard Pro 2 game cards can be mounted from:\nmmce0:/PS2/<folder>/<foldername-N>.mc2");
+								(void)ynDialog(msg1);
+							} else if (x == -8) {
+								sprintf(msg1, "\nMMCE GAMEID verify failed before channel switch.\nRequested \"%s\" did not become active.",
+								        files[browser_sel].name);
+								(void)ynDialog(msg1);
+							} else {
+								sprintf(msg1, "\nMMCE card mount failed for \"%s\"\nResult=%d", files[browser_sel].name, x);
+								(void)ynDialog(msg1);
+							}
+							browser_pushed = FALSE;
+							continue;
+						}
+#endif
 						sprintf(tmp, "vmc%d:", i);
 						if (vmcMounted[i]) {
 							if ((j = vmc_PartyIndex[i]) >= 0) {
