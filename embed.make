@@ -1,8 +1,14 @@
+ifeq ($(SIO2MAN),1)
+$(info using ps2sdk mc/pad 1400-compatible drivers)
+MCMAN_SOURCE = $(PS2SDK)/iop/irx/mcman-1400.irx
+PADMAN_SOURCE = $(PS2SDK)/iop/irx/padman-1400.irx
+else
 $(info using ps2sdk mc/pad drivers)
 MCMAN_SOURCE = $(PS2SDK)/iop/irx/mcman.irx
+PADMAN_SOURCE = $(PS2SDK)/iop/irx/padman.irx
+endif
 MCSERV_SOURCE = $(PS2SDK)/iop/irx/mcserv.irx
 SIO2MAN_SOURCE = $(PS2SDK)/iop/irx/sio2man.irx
-PADMAN_SOURCE = $(PS2SDK)/iop/irx/padman.irx
 DVRDRV_SOURCE = $(PS2SDK)/iop/irx/dvrdrv.irx
 DVRFILE_SOURCE = $(PS2SDK)/iop/irx/dvrfile.irx
 
