@@ -8,9 +8,9 @@
 #include "main_history.h"
 #include "main_info_screens.h"
 
-//CleanUp releases uLE stuff preparatory to launching some other application
+//CleanUpForExec releases uLE stuff preparatory to launching some other application
 //------------------------------
-static void CleanUp(void)
+void CleanUpForExec(void)
 {
 	clrScr(GS_SETREG_RGBA(0x00, 0x00, 0x00, 0));
 	drawScr();
@@ -33,7 +33,7 @@ static void CleanUp(void)
 #endif
 }
 //------------------------------
-//endfunc CleanUp
+//endfunc CleanUpForExec
 //---------------------------------------------------------------------------
 static int isHddLaunchPath(const char *path)
 {
@@ -61,6 +61,11 @@ void ExecuteMainAction(char *pathin, const MainExecuteContext *ctx)
 		return;
 
 Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
+
+	if (IsPopstarterVcdPath(path)) {
+		LaunchPopstarterVcd(path, ctx->main_msg, MAX_PATH);
+		return;
+	}
 
 	if (!strncmp(path, "mc", 2)) {
 		party[0] = 0;
@@ -244,7 +249,7 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		sprintf(arg3, "-x %s", path);
 		argc = 4;
 		strcpy(kelf_loader, "moduleload");
-		CleanUp();
+		CleanUpForExec();
 		LoadExecPS2(kelf_loader, argc, args);
 
 	} else if (!stricmp(path, setting->Misc_PS2Disc)) {
@@ -266,7 +271,7 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 				applyXPARAM(disc_gameid);
 			}
 
-			CleanUp();
+			CleanUpForExec();
 			if (have_disc_gameid && !setting->cdrom_disable_gameid)
 				displayRetroGemGameID(disc_gameid, 2);
 			LoadExecPS2("rom0:PS1DRV", 2, args);
@@ -341,7 +346,7 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 					strcpy(kelf_loader, "moduleload");
 				}
 
-				CleanUp();
+				CleanUpForExec();
 				LoadExecPS2(kelf_loader, argc, args);
 
 			Fail_DVD_Video:
@@ -452,7 +457,7 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 			}
 
 			x = setting->reboot_iop_elf_load;
-			CleanUp();
+			CleanUpForExec();
 			if (show_launch_gameid)
 				displayRetroGemGameID(launch_gameid, 2);
 			RunLoaderElf(fullpath, party, path, t, x);

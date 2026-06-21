@@ -298,6 +298,16 @@ LANG_FILE =
 # missing or has an invalid format. (Fonts are released separately.)
 # ----------------------------------------------------------------------
 FONT_FILE =
+# ----------------------------------------------------------------------
+# POPSTARTER_ELF is optional. If set, this POPStarter ELF is used for
+# launching POPS VCD files. If blank, wLaunchELF uses the default path
+# for the selected VCD device, such as mass:/POPS/POPSTARTER.ELF,
+# mmce0:/POPS/POPSTARTER.ELF, mmce1:/POPS/POPSTARTER.ELF,
+# mx4sio:/POPS/POPSTARTER.ELF, ata0:/POPS/POPSTARTER.ELF,
+# ata1:/POPS/POPSTARTER.ELF, or hdd0:/__common/POPS/POPSTARTER.ELF.
+# This can be changed from the "Startup Settings" submenu.
+# ----------------------------------------------------------------------
+POPSTARTER_ELF =
 # From v3.92 Two options for PSU gamesave files are saved here.
 # Set PSU_HugeNames non-zero to make PSU names contain both original
 # gamesave folder names and the gamesave titles (from icon.sys).
