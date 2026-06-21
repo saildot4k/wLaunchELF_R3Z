@@ -355,7 +355,7 @@ static int prepareHddLaunch(const char *path, char *arg, size_t arg_size, char *
 			return POPSTARTER_ERR_UNSUPPORTED_PATH;
 	}
 
-	snprintf(default_popstarter, default_popstarter_size, "%s/__common/POPS/POPSTARTER.ELF", hdd_device);
+	snprintf(default_popstarter, default_popstarter_size, "%s__common:pfs:/POPS/POPS.ELF", hdd_device);
 	return POPSTARTER_OK;
 }
 
@@ -607,10 +607,10 @@ static void setPopstarterMessage(char *message, size_t message_size, int result,
 			snprintf(message, message_size, "Cannot open POPS VCD: %s", vcd_path);
 			break;
 		case POPSTARTER_ERR_OPEN_POPSTARTER:
-			snprintf(message, message_size, "Cannot find POPSTARTER.ELF: %s", popstarter_path);
+			snprintf(message, message_size, "Cannot find POPStarter ELF: %s", popstarter_path);
 			break;
 		case POPSTARTER_ERR_INVALID_POPSTARTER:
-			snprintf(message, message_size, "POPSTARTER.ELF is not an ELF: %s", popstarter_path);
+			snprintf(message, message_size, "POPStarter ELF is not an ELF: %s", popstarter_path);
 			break;
 		default:
 			snprintf(message, message_size, "POPStarter launch failed: %s", vcd_path);
