@@ -22,6 +22,60 @@ static int isHddDevicePath(const char *path)
 	        path[5] == '/');
 }
 
+static const char *findHddPfsSeparator(const char *path)
+{
+	const char *p;
+
+	if (path == NULL)
+		return NULL;
+
+	for (p = path; *p != '\0'; p++) {
+		if (p[0] == ':' &&
+		    p[1] != '\0' &&
+		    p[2] != '\0' &&
+		    p[3] != '\0' &&
+		    wle_ascii_tolower((unsigned char)p[1]) == 'p' &&
+		    wle_ascii_tolower((unsigned char)p[2]) == 'f' &&
+		    wle_ascii_tolower((unsigned char)p[3]) == 's' &&
+		    p[4] == ':')
+			return p;
+	}
+
+	return NULL;
+}
+
+static int splitHddPfsPath(const char *path, char *hdd_device, size_t hdd_device_size,
+                           char *partition, size_t partition_size, const char **subpath)
+{
+	const char *partition_start;
+	const char *pfs_sep;
+	size_t partition_len;
+
+	if (path == NULL || hdd_device == NULL || hdd_device_size < 6 ||
+	    partition == NULL || partition_size == 0 || subpath == NULL)
+		return 0;
+	if (strncmp(path, "hdd", 3) || path[3] < '0' || path[3] > '9')
+		return 0;
+
+	if (path[4] != ':' || path[5] == '/')
+		return 0;
+	partition_start = path + 5;
+
+	pfs_sep = findHddPfsSeparator(partition_start);
+	if (pfs_sep == NULL)
+		return 0;
+
+	partition_len = pfs_sep - partition_start;
+	if (partition_len == 0 || partition_len >= partition_size)
+		return 0;
+
+	snprintf(hdd_device, hdd_device_size, "hdd%c:", path[3]);
+	memcpy(partition, partition_start, partition_len);
+	partition[partition_len] = '\0';
+	*subpath = pfs_sep + 5;
+	return 1;
+}
+
 static int splitDevicePath(const char *path, char *device, size_t device_size, const char **suffix)
 {
 	const char *colon;
@@ -135,6 +189,37 @@ static int buildHddPartitionArg(char *arg, size_t arg_size, const char *partitio
 	return (len > 0 && len < (int)arg_size);
 }
 
+static int openHddPfsPathForRead(const char *path, char *opened_path, size_t opened_path_size)
+{
+	char hdd_device[6];
+	char partition[MAX_PART_NAME + 1];
+	char party[MAX_NAME];
+	char fixed_path[MAX_PATH];
+	const char *subpath;
+	int pfs_ix;
+	int fd;
+
+	if (!splitHddPfsPath(path, hdd_device, sizeof(hdd_device), partition, sizeof(partition), &subpath))
+		return -1;
+
+	if (*subpath == '\0')
+		subpath = "/";
+	if (*subpath != '/')
+		return -1;
+
+	loadHddModules();
+	snprintf(party, sizeof(party), "%s%s", hdd_device, partition);
+	pfs_ix = mountParty(party);
+	if (pfs_ix < 0)
+		return -1;
+
+	snprintf(fixed_path, sizeof(fixed_path), "pfs%d:%s", pfs_ix, subpath);
+	fd = genOpen(fixed_path, FIO_O_RDONLY);
+	if (fd >= 0 && opened_path != NULL && opened_path_size > 0)
+		snprintf(opened_path, opened_path_size, "%s", fixed_path);
+	return fd;
+}
+
 static int openPathForRead(const char *path, char *opened_path, size_t opened_path_size)
 {
 	char fixed_path[MAX_PATH];
@@ -142,6 +227,10 @@ static int openPathForRead(const char *path, char *opened_path, size_t opened_pa
 
 	if (path == NULL || path[0] == '\0')
 		return -1;
+
+	fd = openHddPfsPathForRead(path, opened_path, opened_path_size);
+	if (fd >= 0)
+		return fd;
 
 	if (genFixPath(path, fixed_path) >= 0) {
 		fd = genOpen(fixed_path, FIO_O_RDONLY);
@@ -232,25 +321,29 @@ static int prepareHddLaunch(const char *path, char *arg, size_t arg_size, char *
 	size_t partition_len;
 	int is_pops_partition;
 
-	if (!isHddDevicePath(path))
+	if (isHddDevicePath(path)) {
+		memcpy(hdd_device, path, 5);
+		hdd_device[5] = '\0';
+		partition_start = path + 6;
+		subpath = strchr(partition_start, '/');
+		if (subpath == NULL)
+			return POPSTARTER_ERR_UNSUPPORTED_PATH;
+
+		partition_len = subpath - partition_start;
+		if (partition_len == 0 || partition_len > MAX_PART_NAME)
+			return POPSTARTER_ERR_UNSUPPORTED_PATH;
+		memcpy(partition, partition_start, partition_len);
+		partition[partition_len] = '\0';
+	} else if (!splitHddPfsPath(path, hdd_device, sizeof(hdd_device), partition, sizeof(partition), &subpath)) {
 		return 0;
+	}
 
-	memcpy(hdd_device, path, 5);
-	hdd_device[5] = '\0';
-	partition_start = path + 6;
-	subpath = strchr(partition_start, '/');
-	if (subpath == NULL)
+	if (subpath == NULL || subpath[0] == '\0' || subpath[0] != '/')
 		return POPSTARTER_ERR_UNSUPPORTED_PATH;
-
-	partition_len = subpath - partition_start;
-	if (partition_len == 0 || partition_len > MAX_PART_NAME)
-		return POPSTARTER_ERR_UNSUPPORTED_PATH;
-	memcpy(partition, partition_start, partition_len);
-	partition[partition_len] = '\0';
 
 	is_pops_partition = !strncmp(partition, "__.POPS", 7);
 	if (is_pops_partition) {
-		name = strrchr(path, '/');
+		name = strrchr(subpath, '/');
 		if (name == NULL || !buildArg(arg, arg_size, "uLE:", name))
 			return POPSTARTER_ERR_UNSUPPORTED_PATH;
 	} else {
@@ -324,11 +417,36 @@ static int checkExecutablePath(const char *path, int *exec_kind)
 	return 1;
 }
 
+static int prepareHddPfsElfLaunch(const char *path, char *fullpath, size_t fullpath_size,
+                                  char *party, size_t party_size, int *exec_kind)
+{
+	char hdd_device[6];
+	char partition[MAX_PART_NAME + 1];
+	char browser_path[MAX_PATH];
+	const char *subpath;
+
+	if (!splitHddPfsPath(path, hdd_device, sizeof(hdd_device), partition, sizeof(partition), &subpath))
+		return 0;
+	if (subpath == NULL || subpath[0] == '\0')
+		subpath = "/";
+	if (subpath[0] != '/')
+		return POPSTARTER_ERR_UNSUPPORTED_PATH;
+
+	snprintf(browser_path, sizeof(browser_path), "%s/%s%s", hdd_device, partition, subpath);
+	if (!checkExecutablePath(browser_path, exec_kind))
+		return POPSTARTER_ERR_INVALID_POPSTARTER;
+
+	snprintf(party, party_size, "%s%s", hdd_device, partition);
+	snprintf(fullpath, fullpath_size, "pfs0:%s", subpath);
+	return POPSTARTER_OK;
+}
+
 static int preparePopstarterElfLaunch(const char *path, char *fullpath, size_t fullpath_size, char *party, size_t party_size, int *exec_kind)
 {
 	char tmp[MAX_PATH];
 	char *p;
 	int fd;
+	int ret;
 
 	if (path == NULL || path[0] == '\0' || fullpath == NULL || fullpath_size == 0 ||
 	    party == NULL || party_size == 0 || exec_kind == NULL)
@@ -341,6 +459,10 @@ static int preparePopstarterElfLaunch(const char *path, char *fullpath, size_t f
 	if (fd < 0)
 		return POPSTARTER_ERR_OPEN_POPSTARTER;
 	genClose(fd);
+
+	ret = prepareHddPfsElfLaunch(path, fullpath, fullpath_size, party, party_size, exec_kind);
+	if (ret != 0)
+		return ret;
 
 	if (!strncmp(path, "mc:/", 4)) {
 		snprintf(tmp, sizeof(tmp), "mc0:%s", path + 3);
