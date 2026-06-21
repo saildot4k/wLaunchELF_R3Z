@@ -37,10 +37,6 @@
 #include "errno.h"
 //--------------------------------------------------------------
 
-#define POPSTARTER_LOAD_ADDR_VALUE 0x00100000
-#define POPSTARTER_MAX_PAYLOAD_SIZE 0x400000
-#define POPSTARTER_BUFFER_MODE "-popstarter-buffer"
-
 //--------------------------------------------------------------
 //End of data declarations
 //--------------------------------------------------------------
@@ -67,63 +63,6 @@ static void wle_log(const char *msg)
 	sio_putsn(msg);
 }
 
-static unsigned int parseHexArg(const char *text)
-{
-	unsigned int value = 0;
-	unsigned char c;
-
-	if (text == NULL)
-		return 0;
-	if (text[0] == '0' && (text[1] == 'x' || text[1] == 'X'))
-		text += 2;
-
-	while ((c = (unsigned char)*text++) != '\0') {
-		value <<= 4;
-		if (c >= '0' && c <= '9')
-			value |= c - '0';
-		else if (c >= 'a' && c <= 'f')
-			value |= c - 'a' + 10;
-		else if (c >= 'A' && c <= 'F')
-			value |= c - 'A' + 10;
-		else
-			return 0;
-	}
-
-	return value;
-}
-
-static int runPopstarterBuffer(int argc, char *argv[])
-{
-	static char popstarter_arg[1025];
-	static char *args[1] = {popstarter_arg};
-	unsigned int payload_addr;
-	unsigned int payload_size;
-	void *payload;
-
-	if (argc < 4)
-		return -EINVAL;
-
-	payload_addr = parseHexArg(argv[1]);
-	payload_size = parseHexArg(argv[2]);
-	if (payload_addr == 0 || payload_size == 0 || payload_size >= POPSTARTER_MAX_PAYLOAD_SIZE)
-		return -EINVAL;
-
-	payload = (void *)payload_addr;
-	strncpy(popstarter_arg, argv[3], sizeof(popstarter_arg) - 1);
-	popstarter_arg[sizeof(popstarter_arg) - 1] = '\0';
-
-	memmove((void *)POPSTARTER_LOAD_ADDR_VALUE, payload, payload_size);
-	if (*(u32 *)POPSTARTER_LOAD_ADDR_VALUE != 0x0804000C)
-		return -EINVAL;
-
-	SifExitRpc();
-	FlushCache(0);
-	FlushCache(2);
-
-	ExecPS2((void *)POPSTARTER_LOAD_ADDR_VALUE, 0, 1, args);
-	return 0;
-}
-
 //--------------------------------------------------------------
 //End of func:  void wipeUserMem(void)
 //--------------------------------------------------------------
@@ -136,23 +75,18 @@ int main(int argc, char *argv[])
 	char *args[1];
 	int ret, rebootiop = 0, prefer_encrypted = 0;
 	u32 loader_epc;
-	int popstarter_buffer_mode;
 
 	// Initialize
 	SifInitRpc(0);
 	wle_log("# wle: loader start\n");
-	popstarter_buffer_mode = (argc >= 4 && !strcmp(argv[0], POPSTARTER_BUFFER_MODE));
 	/*
 	 * In DEBUG builds this loader can be linked above 0x100000.
 	 * Avoid wiping memory in that case, or we may erase the currently
 	 * running loader image before SifLoadElf executes.
 	 */
 	loader_epc = (u32)&main;
-	if (loader_epc < 0x100000 && !popstarter_buffer_mode)
+	if (loader_epc < 0x100000)
 		wipeUserMem();
-
-	if (popstarter_buffer_mode)
-		return runPopstarterBuffer(argc, argv);
 
 	if (argc < 2) {  // arg1=path to ELF, arg2=partition to mount
 		wle_log("# wle: argc < 2\n");

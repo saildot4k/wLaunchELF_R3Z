@@ -150,6 +150,11 @@ static int isHddBrowserPath(const char *path)
 	return (isHddPartyPath(path) && path[5] == '/');
 }
 
+static int isExplicitHddHandoffPath(const char *path)
+{
+	return (path != NULL && (isHddBrowserPath(path) || !strncmp(path, "uLE:", 4)));
+}
+
 static const char *normalizeExecArg0Path(const char *path, char *buffer, size_t buffer_size)
 {
 	const char *suffix;
@@ -375,7 +380,7 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 		}
 
 		argv[0] = exec_target;
-		if ((handoff_path != NULL) && isHddBrowserPath(handoff_path))
+		if (isExplicitHddHandoffPath(handoff_path))
 			argv[1] = (char *)handoff_path;
 		else
 			argv[1] = bootpath;
@@ -416,33 +421,6 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 }
 //------------------------------
 //End of func:  void RunLoaderElf(char *filename, char *party, const char *selected_path, int exec_kind, int reboot_iop_elf_load)
-//--------------------------------------------------------------
-void RunPopstarterLoader(const void *payload, int payload_size, const char *arg0)
-{
-#define POPSTARTER_LOADER_ARGC 4
-	static char mode[] = "-popstarter-buffer";
-	static char payload_addr[16];
-	static char payload_len[16];
-	static char popstarter_arg[MAX_PATH];
-	char *argv[POPSTARTER_LOADER_ARGC];
-
-	if (payload == NULL || payload_size <= 0 || arg0 == NULL || arg0[0] == '\0')
-		return;
-
-	snprintf(payload_addr, sizeof(payload_addr), "%08x", (unsigned int)payload);
-	snprintf(payload_len, sizeof(payload_len), "%x", payload_size);
-	snprintf(popstarter_arg, sizeof(popstarter_arg), "%s", arg0);
-
-	argv[0] = mode;
-	argv[1] = payload_addr;
-	argv[2] = payload_len;
-	argv[3] = popstarter_arg;
-
-	RunEmbeddedLoader(POPSTARTER_LOADER_ARGC, argv);
-#undef POPSTARTER_LOADER_ARGC
-}
-//------------------------------
-//End of func:  void RunPopstarterLoader(const void *payload, int payload_size, const char *arg0)
 //--------------------------------------------------------------
 //End of file:  elf.c
 //--------------------------------------------------------------

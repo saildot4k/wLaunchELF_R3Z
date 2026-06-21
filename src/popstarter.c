@@ -13,10 +13,6 @@ enum POPSTARTER_RESULT {
 	POPSTARTER_ERR_INVALID_POPSTARTER = -17
 };
 
-#define POPSTARTER_ELF_HEADER_SIZE 0x400
-#define POPSTARTER_READ_CHUNK 0x10000
-#define POPSTARTER_MAX_PAYLOAD_SIZE 0x400000
-
 static int isHddDevicePath(const char *path)
 {
 	return (path != NULL &&
@@ -311,73 +307,164 @@ static int prepareLaunch(const char *path, char *arg, size_t arg_size, char *pop
 	return POPSTARTER_OK;
 }
 
-static void freePopstarterPayload(u8 *payload)
+static int checkExecutablePath(const char *path, int *exec_kind)
 {
-	if (payload != NULL)
-		free(payload);
+	char tmp[MAX_PATH];
+	int kind;
+
+	if (path == NULL || path[0] == '\0' || exec_kind == NULL)
+		return 0;
+
+	snprintf(tmp, sizeof(tmp), "%s", path);
+	kind = checkELFheader(tmp);
+	if (kind <= 0)
+		return 0;
+
+	*exec_kind = kind;
+	return 1;
 }
 
-static int readPopstarterPayload(const char *path, u8 **payload, int *payload_size)
+static int preparePopstarterElfLaunch(const char *path, char *fullpath, size_t fullpath_size, char *party, size_t party_size, int *exec_kind)
 {
-	u32 entry;
-	u8 *buffer;
+	char tmp[MAX_PATH];
+	char *p;
 	int fd;
-	int total;
-	int chunk;
-	int rd;
 
-	if (payload == NULL || payload_size == NULL)
-		return POPSTARTER_ERR_INVALID_POPSTARTER;
-	*payload = NULL;
-	*payload_size = 0;
+	if (path == NULL || path[0] == '\0' || fullpath == NULL || fullpath_size == 0 ||
+	    party == NULL || party_size == 0 || exec_kind == NULL)
+		return POPSTARTER_ERR_OPEN_POPSTARTER;
 
-	buffer = memalign(64, POPSTARTER_MAX_PAYLOAD_SIZE);
-	if (buffer == NULL)
-		return POPSTARTER_ERR_INVALID_POPSTARTER;
+	fullpath[0] = '\0';
+	party[0] = '\0';
 
 	fd = openPathForRead(path, NULL, 0);
-	if (fd < 0) {
-		freePopstarterPayload(buffer);
+	if (fd < 0)
 		return POPSTARTER_ERR_OPEN_POPSTARTER;
-	}
-
-	if (fileXioLseek(fd, POPSTARTER_ELF_HEADER_SIZE, SEEK_SET) < 0) {
-		genClose(fd);
-		freePopstarterPayload(buffer);
-		return POPSTARTER_ERR_INVALID_POPSTARTER;
-	}
-
-	total = 0;
-	while (total < POPSTARTER_MAX_PAYLOAD_SIZE) {
-		chunk = POPSTARTER_MAX_PAYLOAD_SIZE - total;
-		if (chunk > POPSTARTER_READ_CHUNK)
-			chunk = POPSTARTER_READ_CHUNK;
-
-		rd = genRead(fd, buffer + total, chunk);
-		if (rd < 0) {
-			genClose(fd);
-			freePopstarterPayload(buffer);
-			return POPSTARTER_ERR_INVALID_POPSTARTER;
-		}
-		if (rd == 0)
-			break;
-		total += rd;
-	}
 	genClose(fd);
 
-	if (total <= 0 || total >= POPSTARTER_MAX_PAYLOAD_SIZE)
-	{
-		freePopstarterPayload(buffer);
-		return POPSTARTER_ERR_INVALID_POPSTARTER;
-	}
-	memcpy(&entry, buffer, sizeof(entry));
-	if (entry != 0x0804000C) {
-		freePopstarterPayload(buffer);
+	if (!strncmp(path, "mc:/", 4)) {
+		snprintf(tmp, sizeof(tmp), "mc0:%s", path + 3);
+		if (checkExecutablePath(tmp, exec_kind)) {
+			snprintf(fullpath, fullpath_size, "%s", tmp);
+			return POPSTARTER_OK;
+		}
+
+		snprintf(tmp, sizeof(tmp), "mc1:%s", path + 3);
+		if (checkExecutablePath(tmp, exec_kind)) {
+			snprintf(fullpath, fullpath_size, "%s", tmp);
+			return POPSTARTER_OK;
+		}
 		return POPSTARTER_ERR_INVALID_POPSTARTER;
 	}
 
-	*payload = buffer;
-	*payload_size = total;
+	if (isHddDevicePath(path)) {
+		loadHddModules();
+		if (!checkExecutablePath(path, exec_kind))
+			return POPSTARTER_ERR_INVALID_POPSTARTER;
+		snprintf(party, party_size, "hdd%c:%s", path[3], path + 6);
+		p = strchr(party, '/');
+		if (p == NULL)
+			return POPSTARTER_ERR_UNSUPPORTED_PATH;
+		snprintf(fullpath, fullpath_size, "pfs0:%s", p);
+		*p = '\0';
+		return POPSTARTER_OK;
+	}
+
+#ifdef MX4SIO
+	if (!strncmp(path, "mx4sio", 6)) {
+		if (!mx4sio_driver_running && !loadMx4sioModules())
+			return POPSTARTER_ERR_OPEN_POPSTARTER;
+		if (!checkExecutablePath(path, exec_kind))
+			return POPSTARTER_ERR_INVALID_POPSTARTER;
+		snprintf(fullpath, fullpath_size, "%s", path);
+		return POPSTARTER_OK;
+	}
+#endif
+
+#ifdef MMCE
+	if (!strncmp(path, "mmce", 4)) {
+		loadMmceModules();
+		if (!checkExecutablePath(path, exec_kind))
+			return POPSTARTER_ERR_INVALID_POPSTARTER;
+		snprintf(fullpath, fullpath_size, "%s", path);
+		return POPSTARTER_OK;
+	}
+#endif
+
+	if (!strncmp(path, "usb", 3)) {
+		char *pathSep;
+
+		if (!checkExecutablePath(path, exec_kind))
+			return POPSTARTER_ERR_INVALID_POPSTARTER;
+		if (genFixPath(path, fullpath) < 0)
+			return POPSTARTER_ERR_OPEN_POPSTARTER;
+		pathSep = strchr(fullpath, '/');
+		if (pathSep && (pathSep - fullpath < 7) && pathSep[-1] == ':')
+			strcpy(fullpath + (pathSep - fullpath), pathSep + 1);
+		return POPSTARTER_OK;
+	}
+
+	if (!strncmp(path, "ata", 3)) {
+		char *pathSep;
+
+#ifdef EXFAT
+		loadAtaModules();
+#endif
+		if (!checkExecutablePath(path, exec_kind))
+			return POPSTARTER_ERR_INVALID_POPSTARTER;
+		if (!strncmp(path, "ata:", 4))
+			snprintf(fullpath, fullpath_size, "ata0:%s", path + 4);
+		else
+			snprintf(fullpath, fullpath_size, "%s", path);
+		pathSep = strchr(fullpath, '/');
+		if (pathSep && (pathSep - fullpath < 7) && pathSep[-1] == ':')
+			strcpy(fullpath + (pathSep - fullpath), pathSep + 1);
+		return POPSTARTER_OK;
+	}
+
+	if (!strncmp(path, "mass", 4)) {
+		char *pathSep;
+
+		if (!checkExecutablePath(path, exec_kind))
+			return POPSTARTER_ERR_INVALID_POPSTARTER;
+		snprintf(fullpath, fullpath_size, "%s", path);
+		pathSep = strchr(path, '/');
+		if (pathSep && (pathSep - path < 7) && pathSep[-1] == ':')
+			strcpy(fullpath + (pathSep - path), pathSep + 1);
+		return POPSTARTER_OK;
+	}
+
+#if defined(ETH) || defined(UDPFS)
+	if (!strncmp(path, "host:", 5)) {
+#ifdef ETH
+		initHOST();
+		if (!checkExecutablePath(path, exec_kind))
+			return POPSTARTER_ERR_INVALID_POPSTARTER;
+		snprintf(fullpath, fullpath_size, "host:%s", (path[5] == '/') ? path + 6 : path + 5);
+		makeHostPath(fullpath, fullpath);
+		return POPSTARTER_OK;
+#else
+		return POPSTARTER_ERR_UNSUPPORTED_PATH;
+#endif
+	}
+
+	if (!strncmp(path, "udpfs:", 6)) {
+#ifdef UDPFS
+		load_udpfs();
+		if (!checkExecutablePath(path, exec_kind))
+			return POPSTARTER_ERR_INVALID_POPSTARTER;
+		snprintf(fullpath, fullpath_size, "%s", path);
+		return POPSTARTER_OK;
+#else
+		return POPSTARTER_ERR_UNSUPPORTED_PATH;
+#endif
+	}
+#endif
+
+	if (!checkExecutablePath(path, exec_kind))
+		return POPSTARTER_ERR_INVALID_POPSTARTER;
+
+	snprintf(fullpath, fullpath_size, "%s", path);
 	return POPSTARTER_OK;
 }
 
@@ -401,7 +488,7 @@ static void setPopstarterMessage(char *message, size_t message_size, int result,
 			snprintf(message, message_size, "Cannot find POPSTARTER.ELF: %s", popstarter_path);
 			break;
 		case POPSTARTER_ERR_INVALID_POPSTARTER:
-			snprintf(message, message_size, "POPSTARTER.ELF is not POPStarter: %s", popstarter_path);
+			snprintf(message, message_size, "POPSTARTER.ELF is not an ELF: %s", popstarter_path);
 			break;
 		default:
 			snprintf(message, message_size, "POPStarter launch failed: %s", vcd_path);
@@ -419,14 +506,18 @@ int LaunchPopstarterVcd(const char *path, char *message, size_t message_size)
 {
 	char arg0[MAX_PATH];
 	char popstarter_path[MAX_PATH];
-	u8 *payload;
-	int payload_size;
+	char popstarter_fullpath[MAX_PATH];
+	char popstarter_party[MAX_PATH];
+	int exec_kind;
+	int reboot_iop_elf_load;
 	int ret;
 
 	arg0[0] = '\0';
 	popstarter_path[0] = '\0';
-	payload = NULL;
-	payload_size = 0;
+	popstarter_fullpath[0] = '\0';
+	popstarter_party[0] = '\0';
+	exec_kind = 1;
+	reboot_iop_elf_load = 0;
 
 	ret = prepareLaunch(path, arg0, sizeof(arg0), popstarter_path, sizeof(popstarter_path));
 	if (ret < 0)
@@ -436,17 +527,18 @@ int LaunchPopstarterVcd(const char *path, char *message, size_t message_size)
 	if (ret < 0)
 		goto fail;
 
-	ret = readPopstarterPayload(popstarter_path, &payload, &payload_size);
+	ret = preparePopstarterElfLaunch(popstarter_path, popstarter_fullpath, sizeof(popstarter_fullpath),
+	                                 popstarter_party, sizeof(popstarter_party), &exec_kind);
 	if (ret < 0)
 		goto fail;
 
-	unmountAll();
+	if (setting != NULL)
+		reboot_iop_elf_load = setting->reboot_iop_elf_load;
 	CleanUpForExec();
-	RunPopstarterLoader(payload, payload_size, arg0);
+	RunLoaderElf(popstarter_fullpath, popstarter_party, arg0, exec_kind, reboot_iop_elf_load);
 	return POPSTARTER_OK;
 
 fail:
-	freePopstarterPayload(payload);
 	setPopstarterMessage(message, message_size, ret, path, popstarter_path);
 	return ret;
 }
