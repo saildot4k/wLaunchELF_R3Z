@@ -37,6 +37,7 @@
 #include <libpad.h>
 #include <iopheap.h>
 #include <errno.h>
+#include <fileio.h>
 #include <fileXio_rpc.h>
 #include <io_common.h>
 #include <iopcontrol.h>
