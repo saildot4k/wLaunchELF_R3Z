@@ -344,10 +344,12 @@ int copy(char *outPath, const char *inPath, FILEINFO file, int recurses)
 	mcT_header *mcT_head_p = (mcT_header *)&file.stats;
 	int psu_pad_size = 0, PSU_restart_f = 0;
 	char *cp, *np;
+#if FILEOP_TRACE
 	int trace_net_copy = 0;
 	int trace_vmc_copy = 0;
 	unsigned int trace_chunk_index = 0;
 	u64 chunk_remaining_before = 0;
+#endif
 	u64 CurrentTime = 0LL;
 
 	if (recurses + 1 >= MAX_RECURSE)
