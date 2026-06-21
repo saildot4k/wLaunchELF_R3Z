@@ -13,6 +13,10 @@ enum POPSTARTER_RESULT {
 	POPSTARTER_ERR_INVALID_POPSTARTER = -17
 };
 
+#define POPSTARTER_ELF_HEADER_SIZE 0x400
+#define POPSTARTER_READ_CHUNK 0x10000
+#define POPSTARTER_MAX_PAYLOAD_SIZE 0x400000
+
 static int isHddDevicePath(const char *path)
 {
 	return (path != NULL &&
@@ -201,7 +205,10 @@ static int validateVcd(const char *path)
 		return POPSTARTER_ERR_INVALID_VCD;
 	}
 
-	genLseek(fd, 1024, SEEK_SET);
+	if (genLseek(fd, 1024, SEEK_SET) < 0) {
+		genClose(fd);
+		return POPSTARTER_ERR_INVALID_VCD;
+	}
 	if (genRead(fd, datacheck, 16) != 16) {
 		genClose(fd);
 		return POPSTARTER_ERR_INVALID_VCD;
@@ -304,44 +311,73 @@ static int prepareLaunch(const char *path, char *arg, size_t arg_size, char *pop
 	return POPSTARTER_OK;
 }
 
-static int loadPopstarterPayload(const char *path)
+static void freePopstarterPayload(u8 *payload)
 {
-	s64 size;
+	if (payload != NULL)
+		free(payload);
+}
+
+static int readPopstarterPayload(const char *path, u8 **payload, int *payload_size)
+{
+	u32 entry;
+	u8 *buffer;
 	int fd;
 	int total;
-	int remaining;
 	int chunk;
 	int rd;
 
-	fd = openPathForRead(path, NULL, 0);
-	if (fd < 0)
-		return POPSTARTER_ERR_OPEN_POPSTARTER;
-
-	size = genLseek(fd, 0, SEEK_END);
-	if (size <= 0x400 || size > 0x7fffffff) {
-		genClose(fd);
+	if (payload == NULL || payload_size == NULL)
 		return POPSTARTER_ERR_INVALID_POPSTARTER;
+	*payload = NULL;
+	*payload_size = 0;
+
+	buffer = memalign(64, POPSTARTER_MAX_PAYLOAD_SIZE);
+	if (buffer == NULL)
+		return POPSTARTER_ERR_INVALID_POPSTARTER;
+
+	fd = openPathForRead(path, NULL, 0);
+	if (fd < 0) {
+		freePopstarterPayload(buffer);
+		return POPSTARTER_ERR_OPEN_POPSTARTER;
 	}
-	if (genLseek(fd, 0x400, SEEK_SET) < 0) {
+
+	if (fileXioLseek(fd, POPSTARTER_ELF_HEADER_SIZE, SEEK_SET) < 0) {
 		genClose(fd);
+		freePopstarterPayload(buffer);
 		return POPSTARTER_ERR_INVALID_POPSTARTER;
 	}
 
 	total = 0;
-	remaining = (int)size - 0x400;
-	while (total < remaining) {
-		chunk = remaining - total;
-		rd = genRead(fd, (u8 *)0x00100000 + total, chunk);
-		if (rd <= 0)
+	while (total < POPSTARTER_MAX_PAYLOAD_SIZE) {
+		chunk = POPSTARTER_MAX_PAYLOAD_SIZE - total;
+		if (chunk > POPSTARTER_READ_CHUNK)
+			chunk = POPSTARTER_READ_CHUNK;
+
+		rd = genRead(fd, buffer + total, chunk);
+		if (rd < 0) {
+			genClose(fd);
+			freePopstarterPayload(buffer);
+			return POPSTARTER_ERR_INVALID_POPSTARTER;
+		}
+		if (rd == 0)
 			break;
 		total += rd;
 	}
 	genClose(fd);
 
-	if (total != remaining)
+	if (total <= 0 || total >= POPSTARTER_MAX_PAYLOAD_SIZE)
+	{
+		freePopstarterPayload(buffer);
 		return POPSTARTER_ERR_INVALID_POPSTARTER;
-	if (_lw(0x00100000) != 0x0804000C)
+	}
+	memcpy(&entry, buffer, sizeof(entry));
+	if (entry != 0x0804000C) {
+		freePopstarterPayload(buffer);
 		return POPSTARTER_ERR_INVALID_POPSTARTER;
+	}
+
+	*payload = buffer;
+	*payload_size = total;
 	return POPSTARTER_OK;
 }
 
@@ -383,11 +419,14 @@ int LaunchPopstarterVcd(const char *path, char *message, size_t message_size)
 {
 	char arg0[MAX_PATH];
 	char popstarter_path[MAX_PATH];
-	char *args[1] = {arg0};
+	u8 *payload;
+	int payload_size;
 	int ret;
 
 	arg0[0] = '\0';
 	popstarter_path[0] = '\0';
+	payload = NULL;
+	payload_size = 0;
 
 	ret = prepareLaunch(path, arg0, sizeof(arg0), popstarter_path, sizeof(popstarter_path));
 	if (ret < 0)
@@ -397,22 +436,17 @@ int LaunchPopstarterVcd(const char *path, char *message, size_t message_size)
 	if (ret < 0)
 		goto fail;
 
-	ret = loadPopstarterPayload(popstarter_path);
+	ret = readPopstarterPayload(popstarter_path, &payload, &payload_size);
 	if (ret < 0)
 		goto fail;
 
 	unmountAll();
 	CleanUpForExec();
-	fioExit();
-	SifInitRpc(0);
-	SifExitRpc();
-	FlushCache(0);
-	FlushCache(2);
-
-	ExecPS2((void *)0x00100000, 0, 1, args);
+	RunPopstarterLoader(payload, payload_size, arg0);
 	return POPSTARTER_OK;
 
 fail:
+	freePopstarterPayload(payload);
 	setPopstarterMessage(message, message_size, ret, path, popstarter_path);
 	return ret;
 }

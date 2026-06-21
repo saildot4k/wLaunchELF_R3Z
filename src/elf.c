@@ -278,6 +278,53 @@ error:
 //------------------------------
 //End of func:  int checkELFheader(const char *path)
 //--------------------------------------------------------------
+static void RunEmbeddedLoader(int argc, char **argv)
+{
+	u8 *boot_elf;
+	elf_header_t *eh;
+	elf_pheader_t *eph;
+	void *pdata;
+	int i;
+
+	/* NB: LOADER.ELF is embedded  */
+	boot_elf = (u8 *)loader_elf;
+	eh = (elf_header_t *)boot_elf;
+	if (_lw((u32)&eh->ident) != ELF_MAGIC)
+		asm volatile("break\n");
+	DPRINTF("RunEmbeddedLoader: loader embedded entry=0x%08x phoff=0x%08x phnum=%u\n",
+	        eh->entry, eh->phoff, eh->phnum);
+
+	eph = (elf_pheader_t *)(boot_elf + eh->phoff);
+
+	/* Scan through the ELF's program headers and copy them into RAM, then
+									zero out any non-loaded regions.  */
+	for (i = 0; i < eh->phnum; i++) {
+		if (eph[i].type != ELF_PT_LOAD)
+			continue;
+		DPRINTF("RunEmbeddedLoader: loader phdr[%d] vaddr=%p offset=0x%08x filesz=0x%08x memsz=0x%08x\n",
+		        i, eph[i].vaddr, eph[i].offset, eph[i].filesz, eph[i].memsz);
+
+		pdata = (void *)(boot_elf + eph[i].offset);
+		memcpy(eph[i].vaddr, pdata, eph[i].filesz);
+
+		if (eph[i].memsz > eph[i].filesz)
+			memset(eph[i].vaddr + eph[i].filesz, 0,
+			       eph[i].memsz - eph[i].filesz);
+	}
+	if (eh->entry == 0 || (eh->entry & 0x3) != 0) {
+		DPRINTF("RunEmbeddedLoader: invalid embedded loader entry=0x%08x\n", eh->entry);
+		return;
+	}
+	/* Let's go.  */
+	SifExitRpc();
+	FlushCache(0);
+	FlushCache(2);
+
+	ExecPS2((void *)eh->entry, NULL, argc, argv);
+}
+//--------------------------------------------------------------
+//End of func:  void RunEmbeddedLoader(int argc, char **argv)
+//--------------------------------------------------------------
 // RunLoaderElf loads LOADER.ELF from program memory and passes
 // args of selected ELF and partition to it
 // Modified version of loader from Independence
@@ -286,11 +333,6 @@ error:
 void RunLoaderElf(char *filename, char *party, const char *selected_path, int exec_kind, int reboot_iop_elf_load)
 {
 #define ELFLOAD_ARGC 3
-	u8 *boot_elf;
-	elf_header_t *eh;
-	elf_pheader_t *eph;
-	void *pdata;
-	int i;
 	char *argv[ELFLOAD_ARGC], bootpath[256];
 	static char exec_target[MAX_PATH];
 	static char exec_arg0[MAX_PATH];
@@ -364,49 +406,43 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 		argv[1] = (char *)((handoff_path != NULL) ? handoff_path : filename);
 	}
 
-	/* NB: LOADER.ELF is embedded  */
-	boot_elf = (u8 *)loader_elf;
-	eh = (elf_header_t *)boot_elf;
-	if (_lw((u32)&eh->ident) != ELF_MAGIC)
-		asm volatile("break\n");
-	DPRINTF("RunLoaderElf: loader embedded entry=0x%08x phoff=0x%08x phnum=%u\n",
-	        eh->entry, eh->phoff, eh->phnum);
-
-	eph = (elf_pheader_t *)(boot_elf + eh->phoff);
-
-	/* Scan through the ELF's program headers and copy them into RAM, then
-									zero out any non-loaded regions.  */
-	for (i = 0; i < eh->phnum; i++) {
-		if (eph[i].type != ELF_PT_LOAD)
-			continue;
-		DPRINTF("RunLoaderElf: loader phdr[%d] vaddr=%p offset=0x%08x filesz=0x%08x memsz=0x%08x\n",
-		        i, eph[i].vaddr, eph[i].offset, eph[i].filesz, eph[i].memsz);
-
-		pdata = (void *)(boot_elf + eph[i].offset);
-		memcpy(eph[i].vaddr, pdata, eph[i].filesz);
-
-		if (eph[i].memsz > eph[i].filesz)
-			memset(eph[i].vaddr + eph[i].filesz, 0,
-			       eph[i].memsz - eph[i].filesz);
-	}
 	if (exec_kind == 2)
 		argv[2] = (reboot_iop_elf_load) ? "-er" : "-enr";
 	else
 		argv[2] = (reboot_iop_elf_load) ? "-r" : "-nr";
 	DPRINTF("RunLoaderElf: loader mode arg='%s'\n", argv[2]);
-	if (eh->entry == 0 || (eh->entry & 0x3) != 0) {
-		DPRINTF("RunLoaderElf: invalid embedded loader entry=0x%08x\n", eh->entry);
-		return;
-	}
-	/* Let's go.  */
-	SifExitRpc();
-	FlushCache(0);
-	FlushCache(2);
 
-	ExecPS2((void *)eh->entry, NULL, ELFLOAD_ARGC, argv);
+	RunEmbeddedLoader(ELFLOAD_ARGC, argv);
 }
 //------------------------------
 //End of func:  void RunLoaderElf(char *filename, char *party, const char *selected_path, int exec_kind, int reboot_iop_elf_load)
+//--------------------------------------------------------------
+void RunPopstarterLoader(const void *payload, int payload_size, const char *arg0)
+{
+#define POPSTARTER_LOADER_ARGC 4
+	static char mode[] = "-popstarter-buffer";
+	static char payload_addr[16];
+	static char payload_len[16];
+	static char popstarter_arg[MAX_PATH];
+	char *argv[POPSTARTER_LOADER_ARGC];
+
+	if (payload == NULL || payload_size <= 0 || arg0 == NULL || arg0[0] == '\0')
+		return;
+
+	snprintf(payload_addr, sizeof(payload_addr), "%08x", (unsigned int)payload);
+	snprintf(payload_len, sizeof(payload_len), "%x", payload_size);
+	snprintf(popstarter_arg, sizeof(popstarter_arg), "%s", arg0);
+
+	argv[0] = mode;
+	argv[1] = payload_addr;
+	argv[2] = payload_len;
+	argv[3] = popstarter_arg;
+
+	RunEmbeddedLoader(POPSTARTER_LOADER_ARGC, argv);
+#undef POPSTARTER_LOADER_ARGC
+}
+//------------------------------
+//End of func:  void RunPopstarterLoader(const void *payload, int payload_size, const char *arg0)
 //--------------------------------------------------------------
 //End of file:  elf.c
 //--------------------------------------------------------------
