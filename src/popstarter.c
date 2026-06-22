@@ -76,6 +76,23 @@ static int splitHddPfsPath(const char *path, char *hdd_device, size_t hdd_device
 	return 1;
 }
 
+static int isHddPfsPath(const char *path)
+{
+	char hdd_device[6];
+	char partition[MAX_PART_NAME + 1];
+	const char *subpath;
+
+	return splitHddPfsPath(path, hdd_device, sizeof(hdd_device), partition, sizeof(partition), &subpath);
+}
+
+static int isHddPartyPath(const char *party)
+{
+	return (party != NULL &&
+	        !strncmp(party, "hdd", 3) &&
+	        party[3] >= '0' && party[3] <= '9' &&
+	        party[4] == ':');
+}
+
 static int splitDevicePath(const char *path, char *device, size_t device_size, const char **suffix)
 {
 	const char *colon;
@@ -656,6 +673,8 @@ int LaunchPopstarterVcd(const char *path, char *message, size_t message_size)
 
 	if (setting != NULL)
 		reboot_iop_elf_load = setting->reboot_iop_elf_load;
+	if (isHddDevicePath(path) || isHddPfsPath(path) || isHddPartyPath(popstarter_party))
+		unmountAll();
 	CleanUpForExec();
 	RunLoaderElf(popstarter_fullpath, popstarter_party, arg0, exec_kind, reboot_iop_elf_load);
 	return POPSTARTER_OK;
