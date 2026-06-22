@@ -304,9 +304,9 @@ FONT_FILE =
 # for the selected VCD device, such as mass:/POPS/POPSTARTER.ELF,
 # mmce0:/POPS/POPSTARTER.ELF, mmce1:/POPS/POPSTARTER.ELF,
 # mx4sio:/POPS/POPSTARTER.ELF, ata0:/POPS/POPSTARTER.ELF,
-# ata1:/POPS/POPSTARTER.ELF, or hdd0:__common:pfs:/POPS/POPS.ELF.
+# ata1:/POPS/POPSTARTER.ELF, or hdd0:__common:pfs:/POPS/POPSTARTER.ELF.
 # HDD paths may also use the standard hdd0:partition:pfs:/path format,
-# e.g. hdd0:__common:pfs:/POPS/POPS.ELF.
+# e.g. hdd0:__common:pfs:/POPS/POPSTARTER.ELF.
 # This can be changed from the "Startup Settings" submenu.
 # ----------------------------------------------------------------------
 POPSTARTER_ELF =

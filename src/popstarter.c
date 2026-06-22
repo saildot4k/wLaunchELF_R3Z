@@ -372,7 +372,7 @@ static int prepareHddLaunch(const char *path, char *arg, size_t arg_size, char *
 			return POPSTARTER_ERR_UNSUPPORTED_PATH;
 	}
 
-	snprintf(default_popstarter, default_popstarter_size, "%s__common:pfs:/POPS/POPS.ELF", hdd_device);
+	snprintf(default_popstarter, default_popstarter_size, "%s__common:pfs:/POPS/POPSTARTER.ELF", hdd_device);
 	return POPSTARTER_OK;
 }
 
