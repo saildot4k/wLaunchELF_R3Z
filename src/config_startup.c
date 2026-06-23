@@ -9,7 +9,7 @@ enum CONFIG_STARTUP {
 	CONFIG_STARTUP_SELECT_BTN,
 	CONFIG_STARTUP_INIT_DELAY,
 	CONFIG_STARTUP_TIMEOUT,
-	CONFIG_STARTUP_RESET_IOP_ELFOAD,
+	CONFIG_STARTUP_RESET_IOP_ELFLOAD,
 	CONFIG_STARTUP_VKEY_LAYOUT,
 	CONFIG_STARTUP_KEYBOARD,
 	CONFIG_STARTUP_USBKBD,
@@ -19,6 +19,7 @@ enum CONFIG_STARTUP {
 	CONFIG_STARTUP_FONT,
 	CONFIG_STARTUP_ESR,
 	CONFIG_STARTUP_OSDSYS,
+	CONFIG_STARTUP_POPSTARTER,
 	CONFIG_STARTUP_HIDE_HDD,
 
 	CONFIG_STARTUP_RETURN,
@@ -60,7 +61,7 @@ static int getConfigStartupItemY(int s)
 
 	for (i = CONFIG_STARTUP_FIRST; i < s; i++) {
 		y += FONT_HEIGHT;
-		if (i == CONFIG_STARTUP_RESET_IOP_ELFOAD || i == CONFIG_STARTUP_KBDMAP || i == CONFIG_STARTUP_OSDSYS || i == CONFIG_STARTUP_HIDE_HDD)
+		if (i == CONFIG_STARTUP_RESET_IOP_ELFLOAD || i == CONFIG_STARTUP_KBDMAP || i == CONFIG_STARTUP_POPSTARTER || i == CONFIG_STARTUP_HIDE_HDD)
 			y += FONT_HEIGHT / 2;
 	}
 
@@ -134,7 +135,9 @@ void Config_Startup(void)
 					} else if (s == CONFIG_STARTUP_OSDSYS) {  //clear OSDSYS file choice
 						setting->LK_Path[SETTING_LK_OSDSYS][0] = 0;
 						setting->LK_Flag[SETTING_LK_OSDSYS] = 0;
-					} else if (s == CONFIG_STARTUP_HIDE_HDD)
+					} else if (s == CONFIG_STARTUP_POPSTARTER)
+						setting->popstarter_file[0] = '\0';
+					else if (s == CONFIG_STARTUP_HIDE_HDD)
 						setting->Hide_Hdd = normalizeHideHddMode(setting->Hide_Hdd - 1);
 				} else if ((swapKeys && new_pad & PAD_CROSS) || (!swapKeys && new_pad & PAD_CIRCLE)) {
 					event |= 2;  //event |= valid pad command
@@ -149,7 +152,7 @@ void Config_Startup(void)
 						setting->timeout++;
 					else if (s == CONFIG_STARTUP_KEYBOARD)
 						setting->usbkbd_used = !setting->usbkbd_used;
-					else if (s == CONFIG_STARTUP_RESET_IOP_ELFOAD)
+					else if (s == CONFIG_STARTUP_RESET_IOP_ELFLOAD)
 						setting->reboot_iop_elf_load = !setting->reboot_iop_elf_load;
 					else if (s == CONFIG_STARTUP_VKEY_LAYOUT)
 						setting->virtual_keyboard_layout = normalizeVirtualKeyboardLayout(setting->virtual_keyboard_layout + 1);
@@ -187,6 +190,13 @@ void Config_Startup(void)
 						}
 						if (setting->LK_Path[SETTING_LK_OSDSYS][0])
 							setting->LK_Flag[SETTING_LK_OSDSYS] = 1;
+					} else if (s == CONFIG_STARTUP_POPSTARTER) {
+						getFilePath(setting->popstarter_file, ELF_FILE_CNF);
+						if (!strncmp(setting->popstarter_file, "mc0", 3) ||
+						    !strncmp(setting->popstarter_file, "mc1", 3)) {
+							snprintf(c, sizeof(c), "mc%.*s", (int)sizeof(c) - 3, &setting->popstarter_file[3]);
+							strcpy(setting->popstarter_file, c);
+						}
 					} else if (s == CONFIG_STARTUP_HIDE_HDD)
 						setting->Hide_Hdd = normalizeHideHddMode(setting->Hide_Hdd + 1);
 					else if (s == CONFIG_STARTUP_RETURN)
@@ -273,6 +283,10 @@ void Config_Startup(void)
 			configFormatLabelValue(c, sizeof(c), "OSDSYS kelf", (strlen(setting->LK_Path[SETTING_LK_OSDSYS]) == 0) ? LNG(DEFAULT) : setting->LK_Path[SETTING_LK_OSDSYS]);
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
+
+			configFormatLabelValue(c, sizeof(c), "POPSTARTER ELF", (strlen(setting->popstarter_file) == 0) ? LNG(DEFAULT) : setting->popstarter_file);
+			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
+			y += FONT_HEIGHT;
 			y += FONT_HEIGHT / 2;
 
 			configFormatLabelValue(c, sizeof(c), "Hide HDD", getHideHddModeDisplayName(setting->Hide_Hdd));
@@ -290,7 +304,7 @@ void Config_Startup(void)
 
 
 			//Tooltip section
-			if ((s == CONFIG_STARTUP_SELECT_BTN) || (s == CONFIG_STARTUP_KEYBOARD) || (s == CONFIG_STARTUP_RESET_IOP_ELFOAD)) {  //usbkbd_used
+			if ((s == CONFIG_STARTUP_SELECT_BTN) || (s == CONFIG_STARTUP_KEYBOARD) || (s == CONFIG_STARTUP_RESET_IOP_ELFLOAD)) {  //usbkbd_used
 				if (swapKeys)
 					len = sprintf(c, "\xFF"
 					                 "1:%s",
@@ -312,8 +326,8 @@ void Config_Startup(void)
 					              LNG(Add), LNG(Subtract));
 			} else if ((s == CONFIG_STARTUP_USBKBD) || (s == CONFIG_STARTUP_KBDMAP) || (s == CONFIG_STARTUP_CNF)
 			           //usbkbd_file||kbdmap_file||CNF_Path
-			           //Language||Fontfile||ESR_elf||OSDSYS_kelf
-			           || (s == CONFIG_STARTUP_LANG_FILE) || (s == CONFIG_STARTUP_FONT) || (s == CONFIG_STARTUP_ESR) || (s == CONFIG_STARTUP_OSDSYS)) {
+			           //Language||Fontfile||ESR_elf||OSDSYS_kelf||POPSTARTER_ELF
+			           || (s == CONFIG_STARTUP_LANG_FILE) || (s == CONFIG_STARTUP_FONT) || (s == CONFIG_STARTUP_ESR) || (s == CONFIG_STARTUP_OSDSYS) || (s == CONFIG_STARTUP_POPSTARTER)) {
 				if (swapKeys)
 					len = sprintf(c, "\xFF"
 					                 "1:%s \xFF"

@@ -425,10 +425,10 @@ void TextEditor(char *path)
 
 				if (Editor_Insert)
 					color = setting->color[COLOR_SELECT];
-					else
-						color = setting->color[COLOR_TEXT];
-					editorKeyboardPrintLeft(LNG(INSERT), KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12,
-					                        (KeyBoard_Cur == WFONTS - 1) ? setting->color[COLOR_BACKGR] : color);
+				else
+					color = setting->color[COLOR_TEXT];
+				editorKeyboardPrintLeft(LNG(INSERT), KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12,
+				                        (KeyBoard_Cur == WFONTS - 1) ? setting->color[COLOR_BACKGR] : color);
 				tmp[0] = '\0';
 				if (Editor_RetMode == OTHER)
 					strcpy(tmp, LNG(RET_CRLF));
@@ -436,15 +436,15 @@ void TextEditor(char *path)
 					strcpy(tmp, LNG(RET_CR));
 				else if (Editor_RetMode == MAC)
 					strcpy(tmp, LNG(RET_LF));
-					editorKeyboardPrintLeft(tmp, KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12 + FONT_HEIGHT + 2,
-					                        (KeyBoard_Cur == 2 * WFONTS - 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
-					editorKeyboardPrintLeft(LNG(TAB), KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 2 + 4,
-					                        (KeyBoard_Cur == 3 * WFONTS - 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
-					special_toggle_label = KeyBoard_Special ? getVirtualKeyboardLayoutDisplayName(setting->virtual_keyboard_layout) : LNG(SPECIAL);
-					editorKeyboardPrintLeft(special_toggle_label, KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 3 + 6,
-					                        (KeyBoard_Cur == 4 * WFONTS - 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
-					editorKeyboardPrintLeft(LNG(KB_RETURN), KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 4 + 8,
-					                        (KeyBoard_Cur == 5 * WFONTS - 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
+				editorKeyboardPrintLeft(tmp, KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12 + FONT_HEIGHT + 2,
+				                        (KeyBoard_Cur == 2 * WFONTS - 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
+				editorKeyboardPrintLeft(LNG(TAB), KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 2 + 4,
+				                        (KeyBoard_Cur == 3 * WFONTS - 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
+				special_toggle_label = KeyBoard_Special ? getVirtualKeyboardLayoutDisplayName(setting->virtual_keyboard_layout) : LNG(SPECIAL);
+				editorKeyboardPrintLeft(special_toggle_label, KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 3 + 6,
+				                        (KeyBoard_Cur == 4 * WFONTS - 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
+				editorKeyboardPrintLeft(LNG(KB_RETURN), KEY_BOX4_LEFT, KEY_BOX4_RIGHT, KEY_Y + 12 + FONT_HEIGHT * 4 + 8,
+				                        (KeyBoard_Cur == 5 * WFONTS - 1) ? setting->color[COLOR_BACKGR] : setting->color[COLOR_TEXT]);
 
 					for (i = 0; i < KEY_LEN; i++) {
 						layout_index = getVirtualKeyboardEditorLayoutIndex(i);

@@ -14,7 +14,7 @@
 #define ULE_VERSION_DEBUG_SUFFIX ""
 #endif
 
-#define ULE_VERSION "v4.50_R3Z" ULE_VERSION_DEBUG_SUFFIX
+#define ULE_VERSION "v4.60_R3Z" ULE_VERSION_DEBUG_SUFFIX
 //#ifndef ULE_VERDATE
 //#define ULE_VERDATE __DATE__
 //#endif
@@ -169,6 +169,7 @@ enum {                // cnfmode values for getFilePath in browsing for configur
 	LANG_CNF,         // Language file choice
 	FONT_CNF,         // Font file choice ( .fnt )
 	SAVE_CNF,         // Generic Save choice (with or without selected file)
+	ELF_FILE_CNF,     // Generic ELF file choice
 	CNFMODE_CNT       // Total number of cnfmode values defined
 };
 
@@ -222,11 +223,11 @@ enum SETTING_LK {
 	SETTING_LK_BTN_COUNT,
 
 	//Special paths
-	SETTING_LK_ESR = SETTING_LK_BTN_COUNT,
-	SETTING_LK_OSDSYS,
+		SETTING_LK_ESR = SETTING_LK_BTN_COUNT,
+		SETTING_LK_OSDSYS,
 
-	SETTING_LK_COUNT
-};
+		SETTING_LK_COUNT
+	};
 
 enum VIRTUAL_KEYBOARD_LAYOUT {
 	VKEY_LAYOUT_ABC = 0,
@@ -283,6 +284,7 @@ typedef struct
 	char Menu_Title[MAX_MENU_TITLE + 1];
 	char lang_file[MAX_PATH];
 	char font_file[MAX_PATH];
+	char popstarter_file[MAX_PATH];
 	int Menu_Frame;
 	int timeout;
 	int Hide_Paths;
@@ -369,6 +371,7 @@ int uLE_InitializeRegion(void);
 int uLE_cdDiscValid(void);
 int uLE_cdStop(void);
 int IsSupportedFileType(char *path);
+void CleanUpForExec(void);
 #ifdef XFROM
 int loadFlashModules(void);
 #endif
@@ -385,6 +388,10 @@ int loadAtaModules(void);
 /* elf.c */
 int checkELFheader(char *filename);
 void RunLoaderElf(char *filename, char *party, const char *selected_path, int exec_kind, int reboot_iop_elf_load);
+
+/* popstarter.c */
+int IsPopstarterVcdPath(const char *path);
+int LaunchPopstarterVcd(const char *path, char *message, size_t message_size);
 
 /* draw.c */
 #define FOLDER 0

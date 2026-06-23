@@ -537,6 +537,7 @@ void saveConfigToPath(char *mainMsg, char *CNF, const char *target_path)
 	        "language = %s\r\n"
 	        "LANG_FILE = %s\r\n"
 	        "FONT_FILE = %s\r\n"
+	        "POPSTARTER_ELF = %s\r\n"
 	        "PSU_HugeNames = %d\r\n"
 	        "PSU_DateNames = %d\r\n"
 	        "PSU_NoOverwrite = %d\r\n"
@@ -562,6 +563,7 @@ void saveConfigToPath(char *mainMsg, char *CNF, const char *target_path)
 	        getBuiltinLanguageConfigName(setting->language),
 	        setting->lang_file,        //LANG_FILE
 	        setting->font_file,        //FONT_FILE
+	        setting->popstarter_file,  //POPSTARTER_ELF
 	        setting->PSU_HugeNames,    //PSU_HugeNames
 	        setting->PSU_DateNames,    //PSU_DateNames
 	        setting->PSU_NoOverwrite,  //PSU_NoOverwrite
@@ -702,9 +704,10 @@ void initConfig(void)
 	setting->usbkbd_file[0] = '\0';
 	setting->kbdmap_file[0] = '\0';
 	setting->Menu_Title[0] = '\0';
-	setting->CNF_Path[0] = '\0';
-	setting->lang_file[0] = '\0';
-	setting->font_file[0] = '\0';
+		setting->CNF_Path[0] = '\0';
+		setting->lang_file[0] = '\0';
+		setting->font_file[0] = '\0';
+		setting->popstarter_file[0] = '\0';
 	setting->timeout = DEF_TIMEOUT;
 	setting->Hide_Paths = DEF_HIDE_PATHS;
 	setting->color[COLOR_BACKGR] = DEF_COLOR1;
@@ -727,7 +730,7 @@ void initConfig(void)
 	setting->Init_Delay = DEF_INIT_DELAY;
 	setting->usbkbd_used = DEF_USBKBD_USED;
 	setting->language = DEF_LANGUAGE;
-	setting->reboot_iop_elf_load = DEF_STARTUP_RESET_IOP_ELFOAD;
+	setting->reboot_iop_elf_load = DEF_STARTUP_RESET_IOP_ELFLOAD;
 	setting->virtual_keyboard_layout = DEF_VIRTUAL_KEYBOARD_LAYOUT;
 	setting->Hide_Hdd = DEF_HIDE_HDD;
 	setting->Show_Titles = DEF_SHOW_TITLES;
@@ -907,6 +910,8 @@ int loadConfig(char *mainMsg, char *CNF)
 			strcpy(setting->lang_file, value);
 		else if (!strcmp(name, "FONT_FILE"))
 			strcpy(setting->font_file, value);
+		else if (!strcmp(name, "POPSTARTER_ELF"))
+			strcpy(setting->popstarter_file, value);
 		//----------
 		else if (!strcmp(name, "PSU_HugeNames"))
 			setting->PSU_HugeNames = atoi(value);

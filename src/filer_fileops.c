@@ -193,8 +193,8 @@ limited:
 int genRmdir(char *path)
 {
 	int ret;
-	u64 t0, t1;
 #if FILEOP_TRACE
+	u64 t0, t1;
 	char log_path[MAX_PATH];
 #endif
 #if defined(ETH) || defined(UDPFS)
@@ -205,10 +205,12 @@ int genRmdir(char *path)
 #endif
 
 	genLimObjName(path, 0);
-	t0 = Timer();
-	ret = fileXioRmdir(path);
-	t1 = Timer();
 #if FILEOP_TRACE
+	t0 = Timer();
+#endif
+	ret = fileXioRmdir(path);
+#if FILEOP_TRACE
+	t1 = Timer();
 	printf("[FILEOP] rmdir path=%s ret=%d dt=%llu ms\n",
 	       fileopTraceDisplayPath(path, log_path, sizeof(log_path)),
 	       ret, (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
@@ -221,8 +223,8 @@ int genRmdir(char *path)
 int genRemove(char *path)
 {
 	int ret;
-	u64 t0, t1;
 #if FILEOP_TRACE
+	u64 t0, t1;
 	char log_path[MAX_PATH];
 #endif
 #if defined(ETH) || defined(UDPFS)
@@ -236,10 +238,12 @@ int genRemove(char *path)
 #endif
 
 	genLimObjName(path, 0);
-	t0 = Timer();
-	ret = fileXioRemove(path);
-	t1 = Timer();
 #if FILEOP_TRACE
+	t0 = Timer();
+#endif
+	ret = fileXioRemove(path);
+#if FILEOP_TRACE
+	t1 = Timer();
 	printf("[FILEOP] remove path=%s ret=%d dt=%llu ms\n",
 	       fileopTraceDisplayPath(path, log_path, sizeof(log_path)),
 	       ret, (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
@@ -253,8 +257,8 @@ int genOpen(const char *path, int mode)
 {
 	char open_path[MAX_PATH], alt_path[MAX_PATH], *sep;
 	int fd;
-	u64 t0, t1;
 #if FILEOP_TRACE
+	u64 t0, t1;
 	char req_log_path[MAX_PATH];
 	char mapped_log_path[MAX_PATH];
 #endif
@@ -267,10 +271,12 @@ int genOpen(const char *path, int mode)
 	makeHostPath(open_path, open_path);
 #endif
 	genLimObjName(open_path, 0);
-	t0 = Timer();
-	fd = fileXioOpen(open_path, mode, fileMode);
-	t1 = Timer();
 #if FILEOP_TRACE
+	t0 = Timer();
+#endif
+	fd = fileXioOpen(open_path, mode, fileMode);
+#if FILEOP_TRACE
+	t1 = Timer();
 	printf("[FILEOP] open req=%s mapped=%s mode=0x%x fd=%d dt=%llu ms\n",
 	       fileopTraceDisplayPath(path, req_log_path, sizeof(req_log_path)),
 	       fileopTraceDisplayPath(open_path, mapped_log_path, sizeof(mapped_log_path)),
@@ -307,10 +313,12 @@ int genOpen(const char *path, int mode)
 	}
 
 	genLimObjName(alt_path, 0);
-	t0 = Timer();
-	fd = fileXioOpen(alt_path, mode, fileMode);
-	t1 = Timer();
 #if FILEOP_TRACE
+	t0 = Timer();
+#endif
+	fd = fileXioOpen(alt_path, mode, fileMode);
+#if FILEOP_TRACE
+	t1 = Timer();
 	printf("[FILEOP] open-fallback req=%s mapped=%s mode=0x%x fd=%d dt=%llu ms\n",
 	       fileopTraceDisplayPath(path, req_log_path, sizeof(req_log_path)),
 	       fileopTraceDisplayPath(alt_path, mapped_log_path, sizeof(mapped_log_path)),
@@ -327,8 +335,8 @@ int genOpen(const char *path, int mode)
 int genDopen(char *path)
 {
 	int fd;
-	u64 t0, t1;
 #if FILEOP_TRACE
+	u64 t0, t1;
 	char req_log_path[MAX_PATH];
 	char mapped_log_path[MAX_PATH];
 #endif
@@ -347,10 +355,12 @@ int genDopen(char *path)
 		strcpy(tmp, path);
 		if (tmp[strlen(tmp) - 1] == '/')
 			tmp[strlen(tmp) - 1] = '\0';
-		t0 = Timer();
-		fd = fileXioDopen(tmp);
-		t1 = Timer();
 #if FILEOP_TRACE
+		t0 = Timer();
+#endif
+		fd = fileXioDopen(tmp);
+#if FILEOP_TRACE
+		t1 = Timer();
 		printf("[FILEOP] dopen req=%s mapped=%s fd=%d dt=%llu ms\n",
 		       fileopTraceDisplayPath(path, req_log_path, sizeof(req_log_path)),
 		       fileopTraceDisplayPath(tmp, mapped_log_path, sizeof(mapped_log_path)),
@@ -360,10 +370,12 @@ int genDopen(char *path)
 			fileopTraceSet(fd, tmp, 0, 1);
 #endif
 	} else {
-		t0 = Timer();
-		fd = fileXioDopen(path);
-		t1 = Timer();
 #if FILEOP_TRACE
+		t0 = Timer();
+#endif
+		fd = fileXioDopen(path);
+#if FILEOP_TRACE
+		t1 = Timer();
 		printf("[FILEOP] dopen req=%s mapped=%s fd=%d dt=%llu ms\n",
 		       fileopTraceDisplayPath(path, req_log_path, sizeof(req_log_path)),
 		       fileopTraceDisplayPath(path, mapped_log_path, sizeof(mapped_log_path)),
@@ -382,20 +394,28 @@ int genDopen(char *path)
 s64 genLseek(int fd, s64 where, int how)
 {
 	s64 ret64;
+#if FILEOP_TRACE
 	int ret32 = -1;
 	int fallback_used = 0;
 	u64 t0, t1, t2 = 0, t3 = 0;
 
 	t0 = Timer();
+#endif
 	ret64 = fileXioLseek64(fd, where, how);
+#if FILEOP_TRACE
 	t1 = Timer();
+#endif
 
 	if (ret64 < 0 && where <= 0x7FFFFFFFLL && where >= (-0x7FFFFFFFLL - 1)) {
+#if FILEOP_TRACE
 		fallback_used = 1;
 		t2 = Timer();
 		ret32 = fileXioLseek(fd, (int)where, how);
 		t3 = Timer();
 		ret64 = ret32;
+#else
+		ret64 = fileXioLseek(fd, (int)where, how);
+#endif
 	}
 
 #if FILEOP_TRACE
@@ -415,12 +435,14 @@ s64 genLseek(int fd, s64 where, int how)
 int genRead(int fd, void *buf, int size)
 {
 	int ret;
+#if FILEOP_TRACE
 	u64 t0, t1;
 
 	t0 = Timer();
+#endif
 	ret = fileXioRead(fd, buf, size);
-	t1 = Timer();
 #if FILEOP_TRACE
+	t1 = Timer();
 	fileopTraceLogRw("read", fd, size, ret, t0, t1);
 #endif
 	return ret;
@@ -431,12 +453,14 @@ int genRead(int fd, void *buf, int size)
 int genWrite(int fd, void *buf, int size)
 {
 	int ret;
+#if FILEOP_TRACE
 	u64 t0, t1;
 
 	t0 = Timer();
+#endif
 	ret = fileXioWrite(fd, buf, size);
-	t1 = Timer();
 #if FILEOP_TRACE
+	t1 = Timer();
 	fileopTraceLogRw("write", fd, size, ret, t0, t1);
 #endif
 	return ret;
@@ -447,12 +471,14 @@ int genWrite(int fd, void *buf, int size)
 int genClose(int fd)
 {
 	int ret;
+#if FILEOP_TRACE
 	u64 t0, t1;
 
 	t0 = Timer();
+#endif
 	ret = fileXioClose(fd);
-	t1 = Timer();
 #if FILEOP_TRACE
+	t1 = Timer();
 	printf("[FILEOP] close fd=%d ret=%d dt=%llu ms\n",
 	       fd, ret, (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
 	fileopTraceClear(fd);
@@ -465,12 +491,14 @@ int genClose(int fd)
 int genDclose(int fd)
 {
 	int ret;
+#if FILEOP_TRACE
 	u64 t0, t1;
 
 	t0 = Timer();
+#endif
 	ret = fileXioDclose(fd);
-	t1 = Timer();
 #if FILEOP_TRACE
+	t1 = Timer();
 	printf("[FILEOP] dclose fd=%d ret=%d dt=%llu ms\n",
 	       fd, ret, (unsigned long long)((t1 >= t0) ? (t1 - t0) : 0));
 	fileopTraceClear(fd);
