@@ -13,6 +13,36 @@ enum POPSTARTER_RESULT {
 	POPSTARTER_ERR_INVALID_POPSTARTER = -17
 };
 
+#define POPSTARTER_MAX_CANDIDATES 4
+
+typedef struct
+{
+	char path[MAX_PATH];
+} POPSTARTER_CANDIDATE;
+
+typedef struct
+{
+	POPSTARTER_CANDIDATE entry[POPSTARTER_MAX_CANDIDATES];
+	int count;
+} POPSTARTER_CANDIDATE_LIST;
+
+static void initPopstarterCandidates(POPSTARTER_CANDIDATE_LIST *candidates)
+{
+	if (candidates != NULL)
+		candidates->count = 0;
+}
+
+static int addPopstarterCandidate(POPSTARTER_CANDIDATE_LIST *candidates, const char *path)
+{
+	if (candidates == NULL || path == NULL || path[0] == '\0' ||
+	    candidates->count >= POPSTARTER_MAX_CANDIDATES)
+		return 0;
+
+	snprintf(candidates->entry[candidates->count].path, MAX_PATH, "%s", path);
+	candidates->count++;
+	return 1;
+}
+
 static int isHddDevicePath(const char *path)
 {
 	return (path != NULL &&
@@ -328,10 +358,11 @@ static int validateVcd(const char *path)
 	return POPSTARTER_OK;
 }
 
-static int prepareHddLaunch(const char *path, char *arg, size_t arg_size, char *default_popstarter, size_t default_popstarter_size)
+static int prepareHddLaunch(const char *path, char *arg, size_t arg_size, POPSTARTER_CANDIDATE_LIST *fallbacks)
 {
 	char hdd_device[6];
 	char partition[MAX_PART_NAME + 1];
+	char candidate[MAX_PATH];
 	const char *partition_start;
 	const char *subpath;
 	const char *name;
@@ -372,13 +403,17 @@ static int prepareHddLaunch(const char *path, char *arg, size_t arg_size, char *
 			return POPSTARTER_ERR_UNSUPPORTED_PATH;
 	}
 
-	snprintf(default_popstarter, default_popstarter_size, "%s__common:pfs:/POPS/POPSTARTER.ELF", hdd_device);
+	snprintf(candidate, sizeof(candidate), "%s__common:pfs:/POPS/POPSTARTER.ELF", hdd_device);
+	addPopstarterCandidate(fallbacks, candidate);
+	snprintf(candidate, sizeof(candidate), "%s__system:pfs:/launcher/POPSTARTER.ELF", hdd_device);
+	addPopstarterCandidate(fallbacks, candidate);
 	return POPSTARTER_OK;
 }
 
-static int prepareFatStyleLaunch(const char *path, char *arg, size_t arg_size, char *default_popstarter, size_t default_popstarter_size)
+static int prepareFatStyleLaunch(const char *path, char *arg, size_t arg_size, POPSTARTER_CANDIDATE_LIST *fallbacks)
 {
 	char device[16];
+	char candidate[MAX_PATH];
 	const char *suffix;
 	const char *relative_vcd;
 
@@ -391,29 +426,28 @@ static int prepareFatStyleLaunch(const char *path, char *arg, size_t arg_size, c
 	if (!buildArg(arg, arg_size, "uLE:XX.", relative_vcd))
 		return POPSTARTER_ERR_UNSUPPORTED_PATH;
 
-	snprintf(default_popstarter, default_popstarter_size, "%s/POPS/POPSTARTER.ELF", device);
+	snprintf(candidate, sizeof(candidate), "%s/POPS/POPSTARTER.ELF", device);
+	addPopstarterCandidate(fallbacks, candidate);
 	return POPSTARTER_OK;
 }
 
-static int prepareLaunch(const char *path, char *arg, size_t arg_size, char *popstarter_path, size_t popstarter_path_size)
+static int prepareLaunch(const char *path, char *arg, size_t arg_size, POPSTARTER_CANDIDATE_LIST *candidates)
 {
-	char default_popstarter[MAX_PATH];
 	int ret;
 
 	if (!IsPopstarterVcdPath(path))
 		return POPSTARTER_ERR_NOT_VCD;
 
-	default_popstarter[0] = '\0';
-	ret = prepareHddLaunch(path, arg, arg_size, default_popstarter, sizeof(default_popstarter));
+	initPopstarterCandidates(candidates);
+	if (setting != NULL && setting->popstarter_file[0] != '\0')
+		addPopstarterCandidate(candidates, setting->popstarter_file);
+
+	ret = prepareHddLaunch(path, arg, arg_size, candidates);
 	if (ret == 0)
-		ret = prepareFatStyleLaunch(path, arg, arg_size, default_popstarter, sizeof(default_popstarter));
+		ret = prepareFatStyleLaunch(path, arg, arg_size, candidates);
 	if (ret <= 0)
 		return (ret == 0) ? POPSTARTER_ERR_UNSUPPORTED_PATH : ret;
 
-	if (setting != NULL && setting->popstarter_file[0] != '\0')
-		snprintf(popstarter_path, popstarter_path_size, "%s", setting->popstarter_file);
-	else
-		snprintf(popstarter_path, popstarter_path_size, "%s", default_popstarter);
 	return POPSTARTER_OK;
 }
 
@@ -607,6 +641,32 @@ static int preparePopstarterElfLaunch(const char *path, char *fullpath, size_t f
 	return POPSTARTER_OK;
 }
 
+static int preparePopstarterCandidateLaunch(const POPSTARTER_CANDIDATE_LIST *candidates,
+                                            char *selected_path, size_t selected_path_size,
+                                            char *fullpath, size_t fullpath_size,
+                                            char *party, size_t party_size, int *exec_kind)
+{
+	int i;
+	int ret;
+
+	if (candidates == NULL || candidates->count <= 0)
+		return POPSTARTER_ERR_OPEN_POPSTARTER;
+
+	ret = POPSTARTER_ERR_OPEN_POPSTARTER;
+	for (i = 0; i < candidates->count; i++) {
+		if (selected_path != NULL && selected_path_size > 0)
+			snprintf(selected_path, selected_path_size, "%s", candidates->entry[i].path);
+
+		ret = preparePopstarterElfLaunch(candidates->entry[i].path, fullpath, fullpath_size, party, party_size, exec_kind);
+		if (ret == POPSTARTER_OK)
+			return POPSTARTER_OK;
+		if (ret != POPSTARTER_ERR_OPEN_POPSTARTER)
+			return ret;
+	}
+
+	return ret;
+}
+
 static void setPopstarterMessage(char *message, size_t message_size, int result, const char *vcd_path, const char *popstarter_path)
 {
 	if (message == NULL || message_size == 0)
@@ -644,6 +704,7 @@ int IsPopstarterVcdPath(const char *path)
 int LaunchPopstarterVcd(const char *path, char *message, size_t message_size)
 {
 	char arg0[MAX_PATH];
+	POPSTARTER_CANDIDATE_LIST popstarter_candidates;
 	char popstarter_path[MAX_PATH];
 	char popstarter_fullpath[MAX_PATH];
 	char popstarter_party[MAX_PATH];
@@ -657,8 +718,9 @@ int LaunchPopstarterVcd(const char *path, char *message, size_t message_size)
 	popstarter_party[0] = '\0';
 	exec_kind = 1;
 	reboot_iop_elf_load = 0;
+	initPopstarterCandidates(&popstarter_candidates);
 
-	ret = prepareLaunch(path, arg0, sizeof(arg0), popstarter_path, sizeof(popstarter_path));
+	ret = prepareLaunch(path, arg0, sizeof(arg0), &popstarter_candidates);
 	if (ret < 0)
 		goto fail;
 
@@ -666,8 +728,9 @@ int LaunchPopstarterVcd(const char *path, char *message, size_t message_size)
 	if (ret < 0)
 		goto fail;
 
-	ret = preparePopstarterElfLaunch(popstarter_path, popstarter_fullpath, sizeof(popstarter_fullpath),
-	                                 popstarter_party, sizeof(popstarter_party), &exec_kind);
+	ret = preparePopstarterCandidateLaunch(&popstarter_candidates, popstarter_path, sizeof(popstarter_path),
+	                                       popstarter_fullpath, sizeof(popstarter_fullpath),
+	                                       popstarter_party, sizeof(popstarter_party), &exec_kind);
 	if (ret < 0)
 		goto fail;
 
