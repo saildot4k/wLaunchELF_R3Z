@@ -9,7 +9,7 @@ enum CONFIG_STARTUP {
 	CONFIG_STARTUP_SELECT_BTN,
 	CONFIG_STARTUP_INIT_DELAY,
 	CONFIG_STARTUP_TIMEOUT,
-	CONFIG_STARTUP_RESET_IOP_ELFOAD,
+	CONFIG_STARTUP_RESET_IOP_ELFLOAD,
 	CONFIG_STARTUP_VKEY_LAYOUT,
 	CONFIG_STARTUP_KEYBOARD,
 	CONFIG_STARTUP_USBKBD,
@@ -61,7 +61,7 @@ static int getConfigStartupItemY(int s)
 
 	for (i = CONFIG_STARTUP_FIRST; i < s; i++) {
 		y += FONT_HEIGHT;
-		if (i == CONFIG_STARTUP_RESET_IOP_ELFOAD || i == CONFIG_STARTUP_KBDMAP || i == CONFIG_STARTUP_POPSTARTER || i == CONFIG_STARTUP_HIDE_HDD)
+		if (i == CONFIG_STARTUP_RESET_IOP_ELFLOAD || i == CONFIG_STARTUP_KBDMAP || i == CONFIG_STARTUP_POPSTARTER || i == CONFIG_STARTUP_HIDE_HDD)
 			y += FONT_HEIGHT / 2;
 	}
 
@@ -152,7 +152,7 @@ void Config_Startup(void)
 						setting->timeout++;
 					else if (s == CONFIG_STARTUP_KEYBOARD)
 						setting->usbkbd_used = !setting->usbkbd_used;
-					else if (s == CONFIG_STARTUP_RESET_IOP_ELFOAD)
+					else if (s == CONFIG_STARTUP_RESET_IOP_ELFLOAD)
 						setting->reboot_iop_elf_load = !setting->reboot_iop_elf_load;
 					else if (s == CONFIG_STARTUP_VKEY_LAYOUT)
 						setting->virtual_keyboard_layout = normalizeVirtualKeyboardLayout(setting->virtual_keyboard_layout + 1);
@@ -304,7 +304,7 @@ void Config_Startup(void)
 
 
 			//Tooltip section
-			if ((s == CONFIG_STARTUP_SELECT_BTN) || (s == CONFIG_STARTUP_KEYBOARD) || (s == CONFIG_STARTUP_RESET_IOP_ELFOAD)) {  //usbkbd_used
+			if ((s == CONFIG_STARTUP_SELECT_BTN) || (s == CONFIG_STARTUP_KEYBOARD) || (s == CONFIG_STARTUP_RESET_IOP_ELFLOAD)) {  //usbkbd_used
 				if (swapKeys)
 					len = sprintf(c, "\xFF"
 					                 "1:%s",

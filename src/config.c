@@ -730,7 +730,7 @@ void initConfig(void)
 	setting->Init_Delay = DEF_INIT_DELAY;
 	setting->usbkbd_used = DEF_USBKBD_USED;
 	setting->language = DEF_LANGUAGE;
-	setting->reboot_iop_elf_load = DEF_STARTUP_RESET_IOP_ELFOAD;
+	setting->reboot_iop_elf_load = DEF_STARTUP_RESET_IOP_ELFLOAD;
 	setting->virtual_keyboard_layout = DEF_VIRTUAL_KEYBOARD_LAYOUT;
 	setting->Hide_Hdd = DEF_HIDE_HDD;
 	setting->Show_Titles = DEF_SHOW_TITLES;
