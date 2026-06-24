@@ -1,35 +1,29 @@
-ifeq ($(SIO2MAN),1)
-$(info using ps2sdk mc/pad 1400-compatible drivers)
-MCMAN_SOURCE = $(PS2SDK)/iop/irx/mcman-1400.irx
-PADMAN_SOURCE = $(PS2SDK)/iop/irx/padman-1400.irx
-else
 $(info using ps2sdk mc/pad drivers)
 MCMAN_SOURCE = $(PS2SDK)/iop/irx/mcman.irx
 PADMAN_SOURCE = $(PS2SDK)/iop/irx/padman.irx
-endif
 MCSERV_SOURCE = $(PS2SDK)/iop/irx/mcserv.irx
 SIO2MAN_SOURCE = $(PS2SDK)/iop/irx/sio2man.irx
 DVRDRV_SOURCE = $(PS2SDK)/iop/irx/dvrdrv.irx
 DVRFILE_SOURCE = $(PS2SDK)/iop/irx/dvrfile.irx
 
 ifeq ($(wildcard $(MCMAN_SOURCE)),)
-  $(error Missing $(MCMAN_SOURCE). Update PS2SDK/ps2dev container)
+  $(error Missing $(MCMAN_SOURCE). Update PS2SDK/toolchain container)
 endif
 ifeq ($(wildcard $(MCSERV_SOURCE)),)
-  $(error Missing $(MCSERV_SOURCE). Update PS2SDK/ps2dev container)
+  $(error Missing $(MCSERV_SOURCE). Update PS2SDK/toolchain container)
 endif
 ifeq ($(wildcard $(SIO2MAN_SOURCE)),)
-  $(error Missing $(SIO2MAN_SOURCE). Update PS2SDK/ps2dev container)
+  $(error Missing $(SIO2MAN_SOURCE). Update PS2SDK/toolchain container)
 endif
 ifeq ($(wildcard $(PADMAN_SOURCE)),)
-  $(error Missing $(PADMAN_SOURCE). Update PS2SDK/ps2dev container)
+  $(error Missing $(PADMAN_SOURCE). Update PS2SDK/toolchain container)
 endif
 ifeq ($(DVRP),1)
   ifeq ($(wildcard $(DVRDRV_SOURCE)),)
-    $(error Missing $(DVRDRV_SOURCE). Update PS2SDK/ps2dev container)
+    $(error Missing $(DVRDRV_SOURCE). Update PS2SDK/toolchain container)
   endif
   ifeq ($(wildcard $(DVRFILE_SOURCE)),)
-    $(error Missing $(DVRFILE_SOURCE). Update PS2SDK/ps2dev container)
+    $(error Missing $(DVRFILE_SOURCE). Update PS2SDK/toolchain container)
   endif
 endif
 
@@ -44,7 +38,7 @@ ifeq ($(XFROM),1)
     XFROMMAN_SOURCE = $(PS2SDK)/iop/irx/xfromman.irx
   endif
   ifeq ($(wildcard $(XFORMSERV_SOURCE)),)
-    $(error Missing xfromserv.irx. Update PS2SDK/ps2dev container for XFROM support)
+    $(error Missing xfromserv.irx. Update PS2SDK/toolchain container for XFROM support)
   endif
 endif
 
