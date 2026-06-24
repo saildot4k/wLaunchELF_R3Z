@@ -30,8 +30,8 @@ jobs:
             pad_profile: "ds34"
             storage_profile: "all"
     runs-on: ubuntu-latest
-    # Track the current ps2dev toolchain so CI catches PS2SDK compatibility changes.
-    container: ps2dev/ps2dev:latest
+    # Track the current PS2 homebrew toolchain so CI catches PS2SDK compatibility changes.
+    container: ghcr.io/ps2homebrew/ps2homebrew:main
     steps:
 
     - name: Install dependencies
