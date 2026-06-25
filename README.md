@@ -22,6 +22,7 @@ Dual HDD/ATA support is built in for future development.
 
 ## Features:
 - RetroGem Game ID for [PIXEL FX RetroGem](https://www.pixelfx.co/hdmi-retro-gem)
+- Launch PS1 VCDs with option for custom POPStarter path, falls back to defaults.
 - Writes to history file for disc launches for mmce vmc change
 - Applies deckard disc patches
 - X/0 applied per region if no config file is found so O is only default for Japan
