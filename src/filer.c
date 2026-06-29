@@ -887,9 +887,9 @@ int readHDDDVRP(const char *path, FILEINFO *info, int max)
 //--------------------------------------------------------------
 #endif
 
-void scan_USB_mass(void)
+static void scanUsbMassDevices(int force)
 {
-	int i;
+	int i, found;
 	iox_stat_t chk_stat;
 #ifdef EXFAT
 	char usb_path[8] = "usb0:/";
@@ -902,9 +902,10 @@ void scan_USB_mass(void)
 		return;
 
 	if ((USB_mass_max_drives < 2)  //No need for dynamic lists with only one drive
-	    || (USB_mass_scanned && ((Timer() - USB_mass_scan_time) < 5000)))
+	    || (!force && USB_mass_scanned && ((Timer() - USB_mass_scan_time) < 5000)))
 		return;
 
+	found = 0;
 	for (i = 0; i < USB_mass_max_drives; i++) {
 #ifdef EXFAT
 		usb_path[3] = '0' + i;
@@ -916,19 +917,30 @@ void scan_USB_mass(void)
 			continue;
 		}
 		USB_mass_ix[i] = '0' + i;
-		USB_mass_scanned = 1;
-		USB_mass_scan_time = Timer();
+		found = 1;
 	}  //ends for loop
+
+	USB_mass_scanned = found;
+	if (found)
+		USB_mass_scan_time = Timer();
+}
+
+void scan_USB_mass(void)
+{
+	scanUsbMassDevices(0);
 }
 //------------------------------
 //endfunc scan_USB_mass
 //--------------------------------------------------------------
 static int addRootUsbDeviceEntry(FILEINFO *files, int nfiles, int unit)
 {
-	if ((unit < 0) || (unit > 9))
+	if (unit < 0) {
+		strcpy(files[nfiles].name, "usb:");
+	} else if (unit <= 9) {
+		snprintf(files[nfiles].name, sizeof(files[nfiles].name), "usb%d:", unit);
+	} else
 		return nfiles;
 
-	snprintf(files[nfiles].name, sizeof(files[nfiles].name), "usb%d:", unit);
 	files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
 
 	return nfiles;
@@ -950,7 +962,7 @@ static int addRootUsbDeviceEntries(FILEINFO *files, int nfiles)
 	}
 
 	if (!added)
-		nfiles = addRootUsbDeviceEntry(files, nfiles, 0);
+		nfiles = addRootUsbDeviceEntry(files, nfiles, -1);
 
 	return nfiles;
 }
@@ -1234,28 +1246,40 @@ int getDir(const char *path, FILEINFO *info)
 		n = readHDDDVRP(path, info, max);
 #endif
 	else if (!strncmp(path, "mass", 4)) {
+		int force_usb_scan = (!strcmp(path, "mass:") || !strcmp(path, "mass:/"));
 #ifdef EXFAT
 		char usb_path[MAX_PATH];
 
 		if (mapMassPathToUsbFatFsPath(path, usb_path) < 0)
 			return 0;
-		if (!USB_mass_scanned)
+		if (force_usb_scan)
+			scanUsbMassDevices(1);
+		else if (!USB_mass_scanned)
 			scan_USB_mass();
 		n = readGENERICWithFirstOpenRetry(usb_path, info, max, 2000);
 #else
-		if (!USB_mass_scanned)
+		if (force_usb_scan)
+			scanUsbMassDevices(1);
+		else if (!USB_mass_scanned)
 			scan_USB_mass();
 		n = readGENERICWithFirstOpenRetry(path, info, max, 2000);
 #endif
+		if (force_usb_scan)
+			scanUsbMassDevices(1);
 	}
 	else if (!strncmp(path, "usb", 3)) {
 		char usb_path[MAX_PATH];
+		int force_usb_scan = (!strcmp(path, "usb:") || !strcmp(path, "usb:/"));
 
 		if (mapUsbPathToFatFsPath(path, usb_path) < 0)
 			return 0;
-		if (!USB_mass_scanned)
+		if (force_usb_scan)
+			scanUsbMassDevices(1);
+		else if (!USB_mass_scanned)
 			scan_USB_mass();
 		n = readGENERICWithFirstOpenRetry(usb_path, info, max, 2000);
+		if (force_usb_scan)
+			scanUsbMassDevices(1);
 	}
 	else if (isAtaPath(path)) {
 		char ata_path[MAX_PATH];
