@@ -1,14 +1,20 @@
-EE_CFLAGS  := -G0 -O2 -EL -Wall -D_EE
+EE_CFLAGS  := -G0 -Os -EL -Wall -D_EE
 EE_ASFLAGS += -EL -G0
 
+# Match OSDMenu's compact embedded-loader build so the image fits in the
+# 0x84000..0xa0000 low-memory window.
+EE_NEWLIB_NANO ?= 1
+EE_COMPACT_EXECUTABLE ?= 1
+
 # Match OSDMenu's embedded loader placement: reserve 0x80000..0x81500
-# and link the loader body into the BIOS-unused 0x84000..0x100000 window.
+# and link the loader body into the BIOS-unused 0x84000..0xa0000 window.
 LOADADDR  = 0x84000
 STACKADDR = auto
 STACKSIZE = auto
 
-# EE kernel occupies first MiB. For low-loader mode, keep image below this.
-LOW_MEM_LIMIT = 0x100000
+# OSDMenu's bram window ends at 0xa0000; the loader image and auto stack must
+# fit below that boundary.
+LOW_MEM_LIMIT = 0xa0000
 LAYOUT_CHECK_SCRIPT = ../scripts/check_loader_layout.sh
 EE_NM ?= $(EE_TOOL_PREFIX)nm
 EE_LINKFILE := linkfile

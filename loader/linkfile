@@ -16,7 +16,7 @@ ENTRY(__start);
 
 MEMORY {
 	kram : ORIGIN = 0x0080000, LENGTH = 0x1500  /* 0x00080000 - 0x00081500: reserved like OSDMenu */
-	bram : ORIGIN = 0x0084000, LENGTH = 0x1c000 /* 0x00084000 - 0x00100000: loader body and stack */
+	bram : ORIGIN = 0x0084000, LENGTH = 0x1c000 /* 0x00084000 - 0x000a0000: loader body and stack */
 }
 
 PHDRS {

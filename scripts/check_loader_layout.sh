@@ -76,10 +76,13 @@ if [ "$stack_addr_expr" = "auto" ] || [ "$stack_size_expr" = "auto" ]; then
 		echo "layout-check: stack address and size must both be numeric or both be auto" >&2
 		exit 2
 	fi
-	stack_addr_hex="$(find_sym_hex _stack)"
-	stack_size_hex="$(find_sym_hex _stack_size)"
-	stack_addr=$((0x$stack_addr_hex))
-	stack_size=$((0x$stack_size_hex))
+	if stack_addr_hex="$(find_sym_hex _stack 2>/dev/null)" && stack_size_hex="$(find_sym_hex _stack_size 2>/dev/null)"; then
+		stack_addr=$((0x$stack_addr_hex))
+		stack_size=$((0x$stack_size_hex))
+	else
+		stack_addr=$image_hi
+		stack_size=$((low_limit - image_hi))
+	fi
 	stack_mode=up
 else
 	stack_addr=$((stack_addr_expr))
@@ -92,7 +95,7 @@ if [ "$image_hi" -le "$image_lo" ]; then
 	exit 1
 fi
 
-# In low-memory mode (loader linked below first MiB), keep image below 1 MiB.
+# In low-memory mode, keep the image below the configured low-memory boundary.
 if [ "$load_addr" -lt "$low_limit" ] && [ "$image_hi" -gt "$low_limit" ]; then
 	echo "layout-check: loader image crosses low-memory limit: _end=0x$(printf '%x' "$image_hi"), limit=0x$(printf '%x' "$low_limit")" >&2
 	exit 1

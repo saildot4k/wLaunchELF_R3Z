@@ -199,9 +199,15 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		if ((t = checkELFheader(path)) <= 0)
 			goto ELFnotFound;
 		party[0] = 0;
-		if (!strncmp(path, "ata:", 4))
-			snprintf(fullpath, sizeof(fullpath), "ata0:%s", path + 4);
-		else
+		if (!strncmp(path, "ata:", 4)) {
+			size_t tail_len;
+
+			tail_len = strlen(path + 4);
+			if (tail_len >= sizeof(fullpath) - 5)
+				goto ELFnotFound;
+			memcpy(fullpath, "ata0:", 5);
+			memcpy(fullpath + 5, path + 4, tail_len + 1);
+		} else
 			strcpy(fullpath, path);
 		pathSep = strchr(fullpath, '/');
 		if (pathSep && (pathSep - fullpath < 7) && pathSep[-1] == ':')

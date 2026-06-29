@@ -928,7 +928,7 @@ void loadCdModules(void)
 //---------------------------------------------------------------------------
 void applyXPARAM(const char *gameID)
 {
-	int ret, id;
+	int ret, id __attribute__((unused));
 
 	if (gameID == NULL || gameID[0] == '\0')
 		return;
