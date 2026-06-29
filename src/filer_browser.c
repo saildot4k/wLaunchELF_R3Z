@@ -17,6 +17,17 @@ static int isHddRootPath(const char *path)
 	return (isHddBrowserPath(path) && path[6] == '\0');
 }
 
+static const char *getUsbRootDeviceLabel(char unit)
+{
+	static char label[] = "usb0:/";
+
+	if ((unit < '0') || (unit > '9'))
+		return NULL;
+
+	label[3] = unit;
+	return label;
+}
+
 static const char *getRootDeviceLabel(const char *name)
 {
 	if (!strcmp(name, "mc0:"))
@@ -24,9 +35,13 @@ static const char *getRootDeviceLabel(const char *name)
 	if (!strcmp(name, "mc1:"))
 		return "mc1:/";
 	if (!strcmp(name, "mass:"))
-		return "usb:/";
+		return "usb0:/";
+	if (!strncmp(name, "mass", 4) && name[4] >= '0' && name[4] <= '9' && name[5] == ':' && name[6] == '\0')
+		return getUsbRootDeviceLabel(name[4]);
 	if (!strcmp(name, "usb:"))
-		return "usb:/";
+		return "usb0:/";
+	if (!strncmp(name, "usb", 3) && name[3] >= '0' && name[3] <= '9' && name[4] == ':' && name[5] == '\0')
+		return getUsbRootDeviceLabel(name[3]);
 #ifdef MMCE
 	if (!strcmp(name, "mmce0:"))
 		return "mmce0:/";

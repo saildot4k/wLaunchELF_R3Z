@@ -923,6 +923,41 @@ void scan_USB_mass(void)
 //------------------------------
 //endfunc scan_USB_mass
 //--------------------------------------------------------------
+static int addRootUsbDeviceEntry(FILEINFO *files, int nfiles, int unit)
+{
+	if ((unit < 0) || (unit > 9))
+		return nfiles;
+
+	snprintf(files[nfiles].name, sizeof(files[nfiles].name), "usb%d:", unit);
+	files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+
+	return nfiles;
+}
+
+static int addRootUsbDeviceEntries(FILEINFO *files, int nfiles)
+{
+	int i, added;
+
+	added = 0;
+	if (USB_mass_scanned) {
+		for (i = 0; (i < USB_mass_max_drives) && (i < 10); i++) {
+			if (USB_mass_ix[i] == 0)
+				continue;
+
+			nfiles = addRootUsbDeviceEntry(files, nfiles, i);
+			added = 1;
+		}
+	}
+
+	if (!added)
+		nfiles = addRootUsbDeviceEntry(files, nfiles, 0);
+
+	return nfiles;
+}
+
+//------------------------------
+//endfunc addRootUsbDeviceEntries
+//--------------------------------------------------------------
 int readGENERIC(const char *path, FILEINFO *info, int max)
 {
 	iox_dirent_t record;
@@ -1436,27 +1471,22 @@ int setFileList(const char *path, const char *ext, FILEINFO *files, int cnfmode)
 		files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
 
 		if (allow_usb_devices) {
-#ifdef EXFAT
-			strcpy(files[nfiles].name, "usb:");
-#else
-			strcpy(files[nfiles].name, "mass:");
-#endif
-			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+			nfiles = addRootUsbDeviceEntries(files, nfiles);
 		}
 
-	#ifdef MMCE
-			strcpy(files[nfiles].name, "mmce0:");
-			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
-			strcpy(files[nfiles].name, "mmce1:");
-			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
-	#endif
+#ifdef MMCE
+		strcpy(files[nfiles].name, "mmce0:");
+		files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+		strcpy(files[nfiles].name, "mmce1:");
+		files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+#endif
 
-	#ifdef MX4SIO
-			if (allow_usb_devices) {
-				strcpy(files[nfiles].name, "mx4sio:");
-				files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
-			}
-	#endif
+#ifdef MX4SIO
+		if (allow_usb_devices) {
+			strcpy(files[nfiles].name, "mx4sio:");
+			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+		}
+#endif
 
 		if (shouldShowHddDevice(0)) {
 			strcpy(files[nfiles].name, "hdd0:");
