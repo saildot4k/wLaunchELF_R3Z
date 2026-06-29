@@ -16,6 +16,20 @@
 
 #define USER_MEM_START_ADDR 0x100000
 
+void _libcglue_init(void)
+{
+}
+
+void _libcglue_deinit(void)
+{
+}
+
+void _libcglue_args_parse(int argc, char **argv)
+{
+	(void)argc;
+	(void)argv;
+}
+
 static int parseHex8(const char *text, u32 *value)
 {
 	u32 out;
