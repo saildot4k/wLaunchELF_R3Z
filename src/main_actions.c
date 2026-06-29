@@ -40,6 +40,16 @@ static int isHddLaunchPath(const char *path)
 	return (!strncmp(path, "hdd", 3) && path[3] >= '0' && path[3] <= '9' && path[4] == ':' && path[5] == '/');
 }
 
+#ifdef XFROM
+static int isMbrLaunchPath(const char *path)
+{
+	return (path != NULL &&
+	        (!stricmp(path, "xfrom:/BIEXEC-SYSTEM/xosdmain") ||
+	         !stricmp(path, "xfrom:/BIEXEC-SYSTEM/xosdmain.elf") ||
+	         !stricmp(path, "hdd0:__system:pfs:/BIEXEC-SYSTEM/xosdmain.elf")));
+}
+#endif
+
 // Execute. Execute an action. May be called recursively.
 // For any path specified, its device must be accessible.
 //------------------------------
@@ -53,6 +63,9 @@ void ExecuteMainAction(char *pathin, const MainExecuteContext *ctx)
 	int x, t = 0;
 	char dvdpl_path[] = "mc0:/BREXEC-DVDPLAYER/dvdplayer.elf";
 	int dvdpl_update;
+#ifdef XFROM
+	char mbr_mem_arg[32];
+#endif
 
 	if (ctx == NULL || pathin == NULL || pathin[0] == 0)
 		return;
@@ -83,7 +96,23 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		if ((x < 0) || (x > 1) || !vmcMounted[x])
 			goto ELFnotFound;
 		goto CheckELF_path;
-	} else if (isHddLaunchPath(path)) {
+	}
+#ifdef XFROM
+	else if (isMbrLaunchPath(path)) {
+		snprintf(fullpath, sizeof(fullpath), "%s", path);
+		t = 0;
+		if (!console_is_PSX)
+			goto ELFnotFound;
+		if (PrepareMbrLaunchPayload(path, mbr_mem_arg, sizeof(mbr_mem_arg)) < 0)
+			goto ELFnotFound;
+
+		x = setting->reboot_iop_elf_load;
+		CleanUpForExec();
+		RunLoaderMemory("rom0:HDDBOOT", mbr_mem_arg, x);
+		return;
+	}
+#endif
+	else if (isHddLaunchPath(path)) {
 		loadHddModules();
 		if ((t = checkELFheader(path)) <= 0)
 			goto ELFnotFound;

@@ -83,11 +83,20 @@ else
     CDVD_SOURCE = $(PS2SDK)/iop/irx/cdfs.irx
   endif
 endif
+SECR_LIB_SOURCE := thirdparty/ps2sdk-master/ee/rpc/secr/src/libsecr.c
 
 ifeq ($(XFROM),1)
     HAS_XFROM = -XFROM
     EE_CFLAGS += -DXFROM
-    EE_OBJS += xfromman_irx.o xfromserv_irx.o extflash_irx.o
+    EE_INCS += -Ithirdparty/ps2sdk-master/ee/rpc/secr/include -Ithirdparty/ps2sdk-master/common/include
+    EE_OBJS += xfromman_irx.o xfromserv_irx.o extflash_irx.o secrsif_irx.o
+    ifneq ($(wildcard $(PS2SDK)/ee/lib/libsecr.a),)
+        EE_LIBS += -lsecr
+    else ifneq ($(wildcard $(SECR_LIB_SOURCE)),)
+        EE_OBJS += libsecr.o
+    else
+        $(error Missing libsecr. Update PS2SDK or provide thirdparty/ps2sdk-master)
+    endif
 endif
 
 ifeq ($(DS34),1)
@@ -353,6 +362,10 @@ info2:
 
 #special recipe for compiling and dumping obj to subfolder
 $(EE_OBJS_DIR)%.o: $(EE_SRC_DIR)%.c | $(EE_OBJS_DIR)
+	@echo -e "\033[1m CC  - $@\033[0m"
+	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
+
+$(EE_OBJS_DIR)libsecr.o: $(SECR_LIB_SOURCE) | $(EE_OBJS_DIR)
 	@echo -e "\033[1m CC  - $@\033[0m"
 	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
 

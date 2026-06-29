@@ -133,6 +133,7 @@ static u8 have_ata_bd = 0;
 #ifdef XFROM
 static u8 have_Flash_modules = 0;
 static u8 xfromserv_loaded = 0;
+static u8 have_secrsif = 0;
 #endif
 #ifdef MMCE
 static u8 have_mmce = 0;
@@ -543,6 +544,23 @@ static int load_ps2atad_stack(void)
 IMPORT_BIN2C(extflash_irx);
 IMPORT_BIN2C(xfromman_irx);
 IMPORT_BIN2C(xfromserv_irx);
+IMPORT_BIN2C(secrsif_irx);
+int loadSecrSifModule(void)
+{
+	int ID __attribute__((unused)), ret;
+
+	ensureCoreIoStackReady();
+	if (!have_secrsif) {
+		ID = SifExecModuleBuffer(secrsif_irx, size_secrsif_irx, 0, NULL, &ret);
+		DPRINTF(" [SECRSIF]: ID=%d, ret=%d\n", ID, ret);
+		have_secrsif = (ID >= 0 && ret >= 0);
+	}
+
+	return have_secrsif;
+}
+//------------------------------
+//endfunc loadSecrSifModule
+//---------------------------------------------------------------------------
 static void load_pflash(void)
 {
 	int ID __attribute__((unused)), ret;
@@ -1807,6 +1825,7 @@ void Reset()
 	#ifdef XFROM
 		have_Flash_modules = 0;
 		xfromserv_loaded = 0;
+		have_secrsif = 0;
 	#endif
 #ifdef DVRP
 	have_DVRP_HDD_modules = 0;

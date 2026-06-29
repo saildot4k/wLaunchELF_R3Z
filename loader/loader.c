@@ -1,173 +1,257 @@
 //--------------------------------------------------------------
-//File name:    loader.c
+// File name: loader.c
 //--------------------------------------------------------------
-//dlanor: This subprogram has been modified to minimize the code
-//dlanor: size of the resident loader portion. Some of the parts
-//dlanor: that were moved into the main program include loading
-//dlanor: of all IRXs and mounting pfs0: for ELFs on hdd.
-//dlanor: Another change was to skip threading in favor of ExecPS2
-/*==================================================================
-==											==
-==	Copyright(c)2004  Adam Metcalf(gamblore_@hotmail.com)		==
-==	Copyright(c)2004  Thomas Hawcroft(t0mb0la@yahoo.com)		==
-==	This file is subject to terms and conditions shown in the	==
-==	file LICENSE which should be kept in the top folder of	==
-==	this distribution.							==
-==											==
-==	Portions of this code taken from PS2Link:				==
-==				pkoLoadElf						==
-==				wipeUserMemory					==
-==				(C) 2003 Tord Lindstrom (pukko@home.se)	==
-==				(C) 2003 adresd (adresd_ps2dev@yahoo.com)	==
-==	Portions of this code taken from Independence MC exploit	==
-==				tLoadElf						==
-==				LoadAndRunHDDElf					==
-==				(C) 2003 Marcus Brown <mrbrown@0xd6.org>	==
-==											==
-==================================================================*/
+// Reduced embedded loader for wLaunchELF R3Z.
+// Based on the OSDMenu embeddable loader design, with wLE-specific
+// argv handoff and without GSM, PATINFO, DEV9, title ID, or CNF support.
+
 #include "tamtypes.h"
-#include "debug.h"
 #include "kernel.h"
 #include "iopcontrol.h"
 #include "sifrpc.h"
 #include "loadfile.h"
-#include "sio.h"
 #include "string.h"
-#include "iopheap.h"
 #include "errno.h"
-//--------------------------------------------------------------
+#include <elf.h>
 
-//--------------------------------------------------------------
-//End of data declarations
-//--------------------------------------------------------------
-//Start of function code:
-//--------------------------------------------------------------
-// Clear user memory
-// PS2Link (C) 2003 Tord Lindstrom (pukko@home.se)
-//         (C) 2003 adresd (adresd_ps2dev@yahoo.com)
-//--------------------------------------------------------------
-static void wipeUserMem(void)
+#define USER_MEM_START_ADDR 0x100000
+
+static int parseHex8(const char *text, u32 *value)
 {
+	u32 out;
 	int i;
-	for (i = 0x100000; i < GetMemorySize(); i += 64) {
+
+	if (text == NULL || value == NULL)
+		return -EINVAL;
+
+	out = 0;
+	for (i = 0; i < 8; i++) {
+		char c = text[i];
+		u32 digit;
+
+		if (c >= '0' && c <= '9')
+			digit = c - '0';
+		else if (c >= 'A' && c <= 'F')
+			digit = c - 'A' + 10;
+		else if (c >= 'a' && c <= 'f')
+			digit = c - 'a' + 10;
+		else
+			return -EINVAL;
+
+		out = (out << 4) | digit;
+	}
+
+	*value = out;
+	return 0;
+}
+
+static int parseMemPath(const char *path, u32 *addr, u32 *size)
+{
+	if (path == NULL || strncmp(path, "mem:", 4) != 0)
+		return -EINVAL;
+	if (parseHex8(path + 4, addr) < 0)
+		return -EINVAL;
+	if (path[12] != ':')
+		return -EINVAL;
+	if (parseHex8(path + 13, size) < 0)
+		return -EINVAL;
+	return 0;
+}
+
+static void clearUserMem(void)
+{
+	u32 addr, end;
+
+	end = GetMemorySize();
+	for (addr = USER_MEM_START_ADDR; addr < end; addr += 64) {
 		asm volatile(
 		    "\tsq $0, 0(%0) \n"
 		    "\tsq $0, 16(%0) \n"
 		    "\tsq $0, 32(%0) \n"
-		    "\tsq $0, 48(%0) \n" ::"r"(i));
+		    "\tsq $0, 48(%0) \n" ::"r"(addr));
 	}
 }
 
-static void wle_log(const char *msg)
+static void clearUserMemPreserving(u32 preserve_addr, u32 preserve_size)
 {
-	sio_putsn(msg);
+	u32 end, preserve_end;
+
+	end = GetMemorySize();
+	if (preserve_addr < USER_MEM_START_ADDR || preserve_addr >= end || preserve_size == 0) {
+		clearUserMem();
+		return;
+	}
+
+	preserve_end = preserve_addr + preserve_size;
+	if (preserve_end < preserve_addr || preserve_end > end)
+		preserve_end = end;
+
+	if (preserve_addr > USER_MEM_START_ADDR)
+		memset((void *)USER_MEM_START_ADDR, 0, preserve_addr - USER_MEM_START_ADDR);
+	if (preserve_end < end)
+		memset((void *)preserve_end, 0, end - preserve_end);
 }
 
-//--------------------------------------------------------------
-//End of func:  void wipeUserMem(void)
-//--------------------------------------------------------------
-// *** MAIN ***
-//--------------------------------------------------------------
-int main(int argc, char *argv[])
+static int loadELFImage(u32 elf_addr, u32 *entry)
 {
-	static t_ExecData elfdata;
-	char *target, *path;
-	char *args[1];
-	int ret, rebootiop = 0, prefer_encrypted = 0;
-	u32 loader_epc;
+	Elf32_Ehdr *eh;
+	Elf32_Phdr *ph;
+	void *src;
+	int i;
 
-	// Initialize
-	SifInitRpc(0);
-	wle_log("# wle: loader start\n");
-	/*
-	 * In DEBUG builds this loader can be linked above 0x100000.
-	 * Avoid wiping memory in that case, or we may erase the currently
-	 * running loader image before SifLoadElf executes.
-	 */
-	loader_epc = (u32)&main;
-	if (loader_epc < 0x100000)
-		wipeUserMem();
-
-	if (argc < 2) {  // arg1=path to ELF, arg2=partition to mount
-		wle_log("# wle: argc < 2\n");
-		SifExitRpc();
+	if (entry == NULL)
 		return -EINVAL;
+
+	eh = (Elf32_Ehdr *)elf_addr;
+	if (memcmp(eh->e_ident, ELFMAG, SELFMAG) != 0)
+		return -ENOEXEC;
+	if ((eh->e_type != ET_EXEC) && (eh->e_type != ET_DYN))
+		return -ENOEXEC;
+	if (eh->e_machine != EM_MIPS)
+		return -ENOEXEC;
+	if (eh->e_entry == 0 || (eh->e_entry & 0x3) != 0)
+		return -ENOEXEC;
+
+	ph = (Elf32_Phdr *)(elf_addr + eh->e_phoff);
+	for (i = 0; i < eh->e_phnum; i++) {
+		if (ph[i].p_type != PT_LOAD)
+			continue;
+
+		src = (void *)(elf_addr + ph[i].p_offset);
+		memcpy((void *)ph[i].p_vaddr, src, ph[i].p_filesz);
+		if (ph[i].p_memsz > ph[i].p_filesz)
+			memset((void *)(ph[i].p_vaddr + ph[i].p_filesz), 0, ph[i].p_memsz - ph[i].p_filesz);
 	}
 
-	target = argv[0];
-	path = argv[1];
-	if (argc > 2) {
-		if (!strcmp("-r", argv[2])) {
-			rebootiop = 1;
-		} else if (!strcmp("-nr", argv[2])) {
-			rebootiop = 0;
-		} else if (!strcmp("-er", argv[2])) {
-			prefer_encrypted = 1;
-			rebootiop = 1;
-		} else if (!strcmp("-enr", argv[2])) {
-			prefer_encrypted = 1;
-			rebootiop = 0;
-		}
-	}
-
-	//Writeback data cache before loading ELF.
+	*entry = eh->e_entry;
 	FlushCache(0);
-	SifLoadFileInit();
+	FlushCache(2);
+	return 0;
+}
 
-	memset(&elfdata, 0, sizeof(elfdata));
-	wle_log("# wle: try target\n");
-	if (prefer_encrypted) {
-		ret = SifLoadElfEncrypted(target, &elfdata);
-		wle_log("# wle: tried SifLoadElfEncrypted\n");
-		if (ret != 0 || elfdata.epc == 0)
-			ret = SifLoadElf(target, &elfdata);
-		wle_log("# wle: tried SifLoadElf\n");
-	} else {
-		ret = SifLoadElf(target, &elfdata);
-		wle_log("# wle: tried SifLoadElf\n");
-		if (ret != 0 || elfdata.epc == 0) {
-			ret = SifLoadElfEncrypted(target, &elfdata);
-			wle_log("# wle: tried SifLoadElfEncrypted\n");
-		}
+static void resetIOP(void)
+{
+	while (!SifIopReset("", 0)) {
 	}
+	while (!SifIopSync()) {
+	}
+	SifInitRpc(0);
+}
 
-	if (!(ret == 0 && elfdata.epc != 0 && (elfdata.epc & 0x3) == 0))
-		ret = -ENOENT;
-	SifLoadFileExit();
+static int loadEmbeddedPayload(char *elf_path, int argc, char *argv[], int reset_iop)
+{
+	u32 elf_addr, elf_size, entry;
+	int ret;
 
-	if (ret == 0) {
-		args[0] = path;
-		///ISRA: based on config
-		/* if (strncmp(path, "hdd", 3) == 0 && (path[3] >= '0' && path[3] <= ':')) { Final IOP reset, to fill the IOP with the default modules.
-	               It appears that it was once a thing for the booting software to leave the IOP with the required IOP modules.
-	               This can be seen in OSDSYS v1.0x (no IOP reboot) and the mechanism to boot DVD player updates (OSDSYS will get LoadExecPS2 to load SIO2 modules).
-	               However, it changed with the introduction of the HDD unit, as the software booted may be built with a different SDK revision.
+	ret = parseMemPath(elf_path, &elf_addr, &elf_size);
+	if (ret < 0)
+		return ret;
+	if (elf_addr < USER_MEM_START_ADDR || elf_size == 0)
+		return -EINVAL;
 
-	               Reboot the IOP, to leave it in a clean & consistent state.
-	               But do not do that for boot targets on other devices, for backward-compatibility with older (homebrew) software.
-		} */
-		if (rebootiop) {
-			wle_log("# wle: rst iop\n");
-			while (!SifIopReset("", 0));
-			while (!SifIopSync());
-		}
+	clearUserMemPreserving(elf_addr, elf_size);
 
-		SifExitRpc();
+	if (reset_iop)
+		resetIOP();
 
+	ret = loadELFImage(elf_addr, &entry);
+	if (ret < 0) {
+		entry = USER_MEM_START_ADDR;
+		memcpy((void *)entry, (void *)elf_addr, elf_size);
 		FlushCache(0);
 		FlushCache(2);
-
-		ExecPS2((void *)elfdata.epc, (void *)elfdata.gp, 1, args);
-		wle_log("# wle: post ExecPS2\n");
-		return 0;
-	} else {
-		wle_log("# wle: SifLoadElf fail\n");
-		SifExitRpc();
-		return -ENOENT;
 	}
+
+	SifExitRpc();
+	ExecPS2((void *)entry, NULL, argc, argv);
+	return 0;
 }
+
+static int loadFilePayload(char *elf_path, int argc, char *argv[], int reset_iop)
+{
+	static t_ExecData elfdata;
+	int ret;
+
+	clearUserMem();
+	FlushCache(0);
+
+	memset(&elfdata, 0, sizeof(elfdata));
+	SifLoadFileInit();
+	ret = SifLoadElf(elf_path, &elfdata);
+	if (ret != 0 || elfdata.epc == 0)
+		ret = SifLoadElfEncrypted(elf_path, &elfdata);
+	SifLoadFileExit();
+
+	if (ret != 0 || elfdata.epc == 0 || (elfdata.epc & 0x3) != 0)
+		return -ENOENT;
+
+	FlushCache(0);
+	FlushCache(2);
+
+	if (reset_iop)
+		resetIOP();
+
+	SifExitRpc();
+	ExecPS2((void *)elfdata.epc, (void *)elfdata.gp, argc, argv);
+	return 0;
+}
+
+int main(int argc, char *argv[])
+{
+	char *elf_path;
+	int reset_iop, skip_argv0;
+
+	if (argc < 1)
+		return -EINVAL;
+
+	SifInitRpc(0);
+
+	elf_path = NULL;
+	reset_iop = 0;
+	skip_argv0 = 0;
+
+	if (argc > 0 && !strncmp(argv[argc - 1], "-la=", 4)) {
+		char *flags;
+		int i;
+
+		flags = argv[argc - 1] + 4;
+		for (i = 0; flags[i] != '\0'; i++) {
+			switch (flags[i]) {
+			case 'R':
+				reset_iop = 1;
+				break;
+			case 'E':
+				if (argc < 2)
+					return -EINVAL;
+				elf_path = argv[argc - 2];
+				argc--;
+				break;
+			case 'A':
+				skip_argv0 = 1;
+				break;
+			default:
+				break;
+			}
+		}
+		argc--;
+	}
+
+	if (elf_path == NULL)
+		elf_path = argv[0];
+
+	if (skip_argv0) {
+		if (argc < 1)
+			return -EINVAL;
+		argc--;
+		argv = &argv[1];
+	}
+
+	if (!strncmp(elf_path, "mem:", 4))
+		return loadEmbeddedPayload(elf_path, argc, argv, reset_iop);
+
+	return loadFilePayload(elf_path, argc, argv, reset_iop);
+}
+
 //--------------------------------------------------------------
-//End of func:  int main(int argc, char *argv[])
-//--------------------------------------------------------------
-//End of file:  loader.c
+// End of file: loader.c
 //--------------------------------------------------------------

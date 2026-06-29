@@ -30,6 +30,7 @@ endif
 EXTFLASH_SOURCE = iop/__precompiled/extflash.irx
 XFROMMAN_SOURCE = iop/__precompiled/xfromman.irx
 XFORMSERV_SOURCE = $(PS2SDK)/iop/irx/xfromserv.irx
+SECRSIF_SOURCE = $(PS2SDK)/iop/irx/secrsif.irx
 ifeq ($(XFROM),1)
   ifneq ($(wildcard $(PS2SDK)/iop/irx/extflash.irx),)
     EXTFLASH_SOURCE = $(PS2SDK)/iop/irx/extflash.irx
@@ -37,8 +38,16 @@ ifeq ($(XFROM),1)
   ifneq ($(wildcard $(PS2SDK)/iop/irx/xfromman.irx),)
     XFROMMAN_SOURCE = $(PS2SDK)/iop/irx/xfromman.irx
   endif
+  ifeq ($(wildcard $(SECRSIF_SOURCE)),)
+    ifneq ($(wildcard thirdparty/KELFbinder-UMCS-main/iop/secrsif.irx),)
+      SECRSIF_SOURCE = thirdparty/KELFbinder-UMCS-main/iop/secrsif.irx
+    endif
+  endif
   ifeq ($(wildcard $(XFORMSERV_SOURCE)),)
     $(error Missing xfromserv.irx. Update PS2SDK/toolchain container for XFROM support)
+  endif
+  ifeq ($(wildcard $(SECRSIF_SOURCE)),)
+    $(error Missing secrsif.irx. Update PS2SDK/toolchain container for XFROM support)
   endif
 endif
 
@@ -312,6 +321,9 @@ $(EE_ASM_DIR)xfromman_irx.s: $(XFROMMAN_SOURCE) | $(EE_ASM_DIR)
 
 $(EE_ASM_DIR)xfromserv_irx.s: $(XFORMSERV_SOURCE) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ xfromserv_irx
+
+$(EE_ASM_DIR)secrsif_irx.s: $(SECRSIF_SOURCE) | $(EE_ASM_DIR)
+	$(BIN2S) $< $@ secrsif_irx
 
 #---{ USB }---#
 

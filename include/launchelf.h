@@ -388,6 +388,10 @@ int loadAtaModules(void);
 /* elf.c */
 int checkELFheader(char *filename);
 void RunLoaderElf(char *filename, char *party, const char *selected_path, int exec_kind, int reboot_iop_elf_load);
+void RunLoaderMemory(const char *arg0, const char *mem_arg, int reboot_iop);
+#ifdef XFROM
+int PrepareMbrLaunchPayload(const char *path, char *mem_arg, size_t mem_arg_size);
+#endif
 
 /* popstarter.c */
 int IsPopstarterVcdPath(const char *path);
