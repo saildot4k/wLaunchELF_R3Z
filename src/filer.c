@@ -960,16 +960,24 @@ void scan_USB_mass(void)
 //--------------------------------------------------------------
 int prepareUsbRootBrowse(void)
 {
-	int attempt;
+	int attempt, first_unit, unit;
 
+	first_unit = -1;
 	for (attempt = 0; attempt < USB_DISCOVERY_ATTEMPTS; attempt++) {
 		scanUsbMassDevices(1);
-		if (USB_mass_ix[0] && (USB_mass_ix[1] || attempt == USB_DISCOVERY_ATTEMPTS - 1))
+		first_unit = -1;
+		for (unit = 0; unit < USB_BROWSER_MAX_DRIVES; unit++) {
+			if (USB_mass_ix[unit]) {
+				first_unit = unit;
+				break;
+			}
+		}
+		if ((USB_mass_ix[0] && USB_mass_ix[1]) || attempt == USB_DISCOVERY_ATTEMPTS - 1)
 			break;
 		waitUsbDiscoverySettle();
 	}
 
-	return USB_mass_ix[0] ? 0 : -1;
+	return first_unit;
 }
 
 //------------------------------

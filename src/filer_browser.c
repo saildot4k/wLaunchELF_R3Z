@@ -818,6 +818,7 @@ int getFilePath(char *out, int cnfmode)
 	int top = 0, rows;
 	int x, y, y0, y1;
 	int i, j, ret, rv = -1;  //NB: rv is for return value of this function
+	int usb_unit;
 	int event, post_event = 0;
 	int font_height;
 	int iconbase, iconcolr;
@@ -1294,8 +1295,11 @@ int getFilePath(char *out, int cnfmode)
 		}  //ends 'if(browser_up)'
 		//----- Process newly entered directory here (incl initial entry)
 		if (browser_cd) {
-			if (isGenericUsbRootPath(path) && prepareUsbRootBrowse() == 0)
-				strcpy(path, "usb0:/");
+			if (isGenericUsbRootPath(path)) {
+				usb_unit = prepareUsbRootBrowse();
+				if (usb_unit >= 0)
+					snprintf(path, sizeof(path), "usb%d:/", usb_unit);
+			}
 			browser_nfiles = setFileList(path, ext, files, cnfmode);
 			if (!cnfmode) {  //Calculate free space (unless configuring)
 				if (!strncmp(path, "mc", 2)) {
