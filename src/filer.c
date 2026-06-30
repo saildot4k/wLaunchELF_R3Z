@@ -137,8 +137,6 @@ int USB_mass_loaded = 0;   //0==none, 1==internal, 2==external
 int readGENERIC(const char *path, FILEINFO *info, int max);
 
 #define USB_BROWSER_MAX_DRIVES 2
-#define USB_DISCOVERY_ATTEMPTS 3
-#define USB_DISCOVERY_SETTLE_MS 500
 
 static int mapUsbPathToFatFsPath(const char *usb_path, char *fatfs_path)
 {
@@ -891,15 +889,6 @@ int readHDDDVRP(const char *path, FILEINFO *info, int max)
 //--------------------------------------------------------------
 #endif
 
-static void waitUsbDiscoverySettle(void)
-{
-	u64 wait_start;
-
-	wait_start = Timer();
-	while (Timer() < wait_start + USB_DISCOVERY_SETTLE_MS) {
-	}
-}
-
 static void scanUsbMassDevices(int force)
 {
 	int i, found, max_drives;
@@ -960,24 +949,15 @@ void scan_USB_mass(void)
 //--------------------------------------------------------------
 int prepareUsbRootBrowse(void)
 {
-	int attempt, first_unit, unit;
+	int unit;
 
-	first_unit = -1;
-	for (attempt = 0; attempt < USB_DISCOVERY_ATTEMPTS; attempt++) {
-		scanUsbMassDevices(1);
-		first_unit = -1;
-		for (unit = 0; unit < USB_BROWSER_MAX_DRIVES; unit++) {
-			if (USB_mass_ix[unit]) {
-				first_unit = unit;
-				break;
-			}
-		}
-		if ((USB_mass_ix[0] && USB_mass_ix[1]) || attempt == USB_DISCOVERY_ATTEMPTS - 1)
-			break;
-		waitUsbDiscoverySettle();
+	scanUsbMassDevices(1);
+	for (unit = 0; unit < USB_BROWSER_MAX_DRIVES; unit++) {
+		if (USB_mass_ix[unit])
+			return unit;
 	}
 
-	return first_unit;
+	return -1;
 }
 
 //------------------------------
