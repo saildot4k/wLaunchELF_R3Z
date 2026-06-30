@@ -310,6 +310,177 @@ void RunLoaderMemory(const char *arg0, const char *mem_arg, int reboot_iop)
 //End of func:  void RunLoaderMemory(const char *arg0, const char *mem_arg, int reboot_iop)
 //--------------------------------------------------------------
 #ifdef XFROM
+#define WLE_APA_MAGIC 0x00415041
+#define WLE_HDD_SECTOR_SIZE 512
+#define WLE_MBR_READ_CHUNK_SECTORS 64
+#define WLE_OSDMBR_MAGIC "Sony Computer Entertainment Inc."
+
+typedef struct
+{
+	u32 checksum;
+	u32 magic;
+	u32 next;
+	u32 prev;
+	char id[APA_IDMAX];
+	char rpwd[APA_PASSMAX];
+	char fpwd[APA_PASSMAX];
+	u32 start;
+	u32 length;
+	u16 type;
+	u16 flags;
+	u32 nsub;
+	u8 created[8];
+	u32 main;
+	u32 number;
+	u32 modver;
+	u32 padding1[7];
+	char padding2[128];
+	struct
+	{
+		char magic[32];
+		u32 version;
+		u32 nsector;
+		u8 created[8];
+		u32 osdStart;
+		u32 osdSize;
+	} mbr;
+} wle_apa_mbr_header_t;
+
+static int isXfromMbrLaunchPath(const char *path)
+{
+	return (path != NULL &&
+	        !stricmp(path, "xfrom:/BIEXEC-SYSTEM/xosdmain.elf"));
+}
+
+static int isHddSystemMbrLaunchPath(const char *path)
+{
+	return (isHddPartyPath(path) &&
+	        !stricmp(path + 5, "__system:pfs:/BIEXEC-SYSTEM/xosdmain.elf"));
+}
+
+static int isRawHddMbrLaunchPath(const char *path)
+{
+	const char *suffix;
+
+	if (!isHddPartyPath(path))
+		return 0;
+
+	suffix = path + 5;
+	return (!stricmp(suffix, "__mbr") ||
+	        !stricmp(suffix, "/__mbr"));
+}
+
+int IsMbrLaunchPath(const char *path)
+{
+	return (isXfromMbrLaunchPath(path) ||
+	        isHddSystemMbrLaunchPath(path) ||
+	        isRawHddMbrLaunchPath(path));
+}
+
+int MbrLaunchRequiresPsx(const char *path)
+{
+	return (isXfromMbrLaunchPath(path) || isHddSystemMbrLaunchPath(path));
+}
+
+static int getRawHddMbrDevice(const char *path, char *device, size_t device_size)
+{
+	if (!isRawHddMbrLaunchPath(path) || device == NULL || device_size < 6)
+		return -1;
+
+	snprintf(device, device_size, "hdd%c:", path[3]);
+	return 0;
+}
+
+static int readHddSectors(const char *device, u32 lba, u32 count, void *buf)
+{
+	u8 transfer_buf[sizeof(hddAtaTransfer_t)] __attribute__((aligned(64)));
+	hddAtaTransfer_t *transfer = (hddAtaTransfer_t *)transfer_buf;
+
+	if (device == NULL || buf == NULL || count == 0)
+		return -1;
+
+	transfer->lba = lba;
+	transfer->size = count;
+	return fileXioDevctl(device, APA_DEVCTL_ATA_READ,
+	                     transfer, sizeof(transfer_buf),
+	                     buf, count * WLE_HDD_SECTOR_SIZE);
+}
+
+static int readHddMbrHeader(const char *device, wle_apa_mbr_header_t *header)
+{
+	u8 sector[WLE_HDD_SECTOR_SIZE] __attribute__((aligned(64)));
+	int ret;
+
+	if (header == NULL)
+		return -1;
+
+	ret = readHddSectors(device, 0, 1, sector);
+	if (ret < 0)
+		return -1;
+
+	memcpy(header, sector, sizeof(*header));
+	if (header->magic != WLE_APA_MAGIC ||
+	    header->type != APA_TYPE_MBR ||
+	    strncmp(header->id, "__mbr", APA_IDMAX) ||
+	    strncmp(header->mbr.magic, WLE_OSDMBR_MAGIC, sizeof(header->mbr.magic)) ||
+	    header->mbr.osdStart == 0 ||
+	    header->mbr.osdSize == 0)
+		return -1;
+
+	return 0;
+}
+
+static int getRawHddMbrPayloadInfo(const char *path, char *device, size_t device_size,
+                                   u32 *start_sector, u32 *sector_count)
+{
+	wle_apa_mbr_header_t header;
+	iox_stat_t stat;
+	char part_path[16];
+	u64 part_start, part_end, payload_end;
+
+	if (getRawHddMbrDevice(path, device, device_size) < 0)
+		return -1;
+
+	if (!loadHddModules())
+		return -1;
+
+	snprintf(part_path, sizeof(part_path), "%s__mbr", device);
+	if (fileXioGetStat(part_path, &stat) < 0 || stat.mode != APA_TYPE_MBR)
+		return -1;
+
+	if (readHddMbrHeader(device, &header) < 0)
+		return -1;
+
+	part_start = stat.private_5;
+	part_end = part_start + stat.size;
+	payload_end = (u64)header.mbr.osdStart + header.mbr.osdSize;
+	if ((u64)header.mbr.osdStart < part_start || payload_end > part_end)
+		return -1;
+
+	*start_sector = header.mbr.osdStart;
+	*sector_count = header.mbr.osdSize;
+	return 0;
+}
+
+int GetHddMbrPayloadSize(const char *path, u32 *payload_size)
+{
+	char device[6];
+	u32 start_sector, sector_count;
+
+	if (payload_size == NULL)
+		return -1;
+
+	if (getRawHddMbrPayloadInfo(path, device, sizeof(device), &start_sector, &sector_count) < 0)
+		return -1;
+
+	(void)start_sector;
+	if (sector_count > (0xFFFFFFFFu / WLE_HDD_SECTOR_SIZE))
+		return -1;
+
+	*payload_size = sector_count * WLE_HDD_SECTOR_SIZE;
+	return 0;
+}
+
 static int isElfPayload(const u8 *payload, int payload_size)
 {
 	const Elf32_Ehdr *eh;
@@ -370,6 +541,43 @@ static int getMbrOpenPath(const char *path, char *open_path, size_t open_path_si
 	return 0;
 }
 
+static int readRawHddMbrPayload(const char *path, u8 *payload, u32 payload_capacity, int *payload_size)
+{
+	char device[6];
+	u32 start_sector, sector_count, sector;
+	u32 chunk, copied;
+	u64 payload_bytes;
+
+	if (payload == NULL || payload_size == NULL)
+		return -1;
+
+	if (getRawHddMbrPayloadInfo(path, device, sizeof(device), &start_sector, &sector_count) < 0)
+		return -1;
+
+	payload_bytes = (u64)sector_count * WLE_HDD_SECTOR_SIZE;
+	if (payload_bytes == 0 ||
+	    payload_bytes > payload_capacity ||
+	    payload_bytes > 0x7FFFFFFFu)
+		return -1;
+
+	copied = 0;
+	sector = 0;
+	while (sector < sector_count) {
+		chunk = sector_count - sector;
+		if (chunk > WLE_MBR_READ_CHUNK_SECTORS)
+			chunk = WLE_MBR_READ_CHUNK_SECTORS;
+
+		if (readHddSectors(device, start_sector + sector, chunk, payload + copied) < 0)
+			return -1;
+
+		copied += chunk * WLE_HDD_SECTOR_SIZE;
+		sector += chunk;
+	}
+
+	*payload_size = (int)payload_bytes;
+	return 0;
+}
+
 int PrepareMbrLaunchPayload(const char *path, char *mem_arg, size_t mem_arg_size)
 {
 	char open_path[MAX_PATH];
@@ -384,36 +592,43 @@ int PrepareMbrLaunchPayload(const char *path, char *mem_arg, size_t mem_arg_size
 	if (path == NULL || mem_arg == NULL || mem_arg_size < 22)
 		return -1;
 
-	if (getMbrOpenPath(path, open_path, sizeof(open_path)) < 0)
-		return -1;
-
-	fd = genOpen(open_path, FIO_O_RDONLY);
-	if (fd < 0)
-		return -1;
-
 	ee_mem_end = GetMemorySize();
-	payload_size64 = genLseek(fd, 0, SEEK_END);
-	if (ee_mem_end <= MBR_PAYLOAD_LOAD_ADDR ||
-	    payload_size64 <= 0 ||
-	    payload_size64 > (s64)(ee_mem_end - MBR_PAYLOAD_LOAD_ADDR)) {
-		genClose(fd);
+	if (ee_mem_end <= MBR_PAYLOAD_LOAD_ADDR)
 		return -1;
-	}
-	genLseek(fd, 0, SEEK_SET);
 
 	payload = (u8 *)MBR_PAYLOAD_LOAD_ADDR;
-	payload_size = (int)payload_size64;
-	total = 0;
-	while (total < payload_size) {
-		rd = genRead(fd, payload + total, payload_size - total);
-		if (rd <= 0)
-			break;
-		total += rd;
-	}
-	genClose(fd);
+	if (isRawHddMbrLaunchPath(path)) {
+		if (readRawHddMbrPayload(path, payload, ee_mem_end - MBR_PAYLOAD_LOAD_ADDR, &payload_size) < 0)
+			return -1;
+	} else {
+		if (getMbrOpenPath(path, open_path, sizeof(open_path)) < 0)
+			return -1;
 
-	if (total != payload_size)
-		return -1;
+		fd = genOpen(open_path, FIO_O_RDONLY);
+		if (fd < 0)
+			return -1;
+
+		payload_size64 = genLseek(fd, 0, SEEK_END);
+		if (payload_size64 <= 0 ||
+		    payload_size64 > (s64)(ee_mem_end - MBR_PAYLOAD_LOAD_ADDR)) {
+			genClose(fd);
+			return -1;
+		}
+		genLseek(fd, 0, SEEK_SET);
+
+		payload_size = (int)payload_size64;
+		total = 0;
+		while (total < payload_size) {
+			rd = genRead(fd, payload + total, payload_size - total);
+			if (rd <= 0)
+				break;
+			total += rd;
+		}
+		genClose(fd);
+
+		if (total != payload_size)
+			return -1;
+	}
 
 	launch_payload = payload;
 	encrypted_payload = isLikelyEncryptedPayload(payload, payload_size);

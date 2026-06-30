@@ -72,6 +72,10 @@ int IsTextEditorFileType(const char *path)
 int IsSupportedFileType(char *path)
 {
 	if (strchr(path, ':') != NULL) {
+#ifdef XFROM
+		if (IsMbrLaunchPath(path))
+			return 1;
+#endif
 		if (genCmpFileExt(path, "ELF") || genCmpFileExt(path, "XLF") || genCmpFileExt(path, "KELF"))
 			return (checkELFheader(path) >= 0);
 		if (IsPopstarterVcdPath(path))

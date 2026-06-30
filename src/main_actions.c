@@ -40,16 +40,6 @@ static int isHddLaunchPath(const char *path)
 	return (!strncmp(path, "hdd", 3) && path[3] >= '0' && path[3] <= '9' && path[4] == ':' && path[5] == '/');
 }
 
-#ifdef XFROM
-static int isMbrLaunchPath(const char *path)
-{
-	return (path != NULL &&
-	        (!stricmp(path, "xfrom:/BIEXEC-SYSTEM/xosdmain") ||
-	         !stricmp(path, "xfrom:/BIEXEC-SYSTEM/xosdmain.elf") ||
-	         !stricmp(path, "hdd0:__system:pfs:/BIEXEC-SYSTEM/xosdmain.elf")));
-}
-#endif
-
 // Execute. Execute an action. May be called recursively.
 // For any path specified, its device must be accessible.
 //------------------------------
@@ -98,10 +88,10 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		goto CheckELF_path;
 	}
 #ifdef XFROM
-	else if (isMbrLaunchPath(path)) {
+	else if (IsMbrLaunchPath(path)) {
 		snprintf(fullpath, sizeof(fullpath), "%s", path);
 		t = 0;
-		if (!console_is_PSX)
+		if (MbrLaunchRequiresPsx(path) && !console_is_PSX)
 			goto ELFnotFound;
 		if (PrepareMbrLaunchPayload(path, mbr_mem_arg, sizeof(mbr_mem_arg)) < 0)
 			goto ELFnotFound;

@@ -494,6 +494,28 @@ static void setPartyListForDevice(const char *device)
 	fileXioDclose(hddFd);
 }
 
+#ifdef XFROM
+static int addHddMbrRootEntry(const char *hdd_device, FILEINFO *info, int index, int max)
+{
+	char mbr_path[16];
+	u32 payload_size;
+
+	if (index >= max)
+		return index;
+
+	snprintf(mbr_path, sizeof(mbr_path), "%s/__mbr", hdd_device);
+	if (GetHddMbrPayloadSize(mbr_path, &payload_size) < 0)
+		return index;
+
+	strcpy(info[index].name, "__mbr");
+	clearMcTable(&info[index].stats);
+	info[index].stats.AttrFile = MC_ATTR_norm_file;
+	info[index].stats.FileSizeByte = payload_size;
+	snprintf((char *)info[index].stats.EntryName, 32, "%.31s", info[index].name);
+	return index + 1;
+}
+#endif
+
 void setPartyList(void)
 {
 	setPartyListForDevice("hdd0:");
@@ -775,11 +797,14 @@ int readHDD(const char *path, FILEINFO *info, int max)
 
 	if (isHddRootPath(path)) {
 		unmountHddPartiesNotNeededByClipboard();
-		for (i = 0; i < nparties; i++) {
+		for (i = 0; i < nparties && i < max; i++) {
 			strcpy(info[i].name, parties[i]);
 			info[i].stats.AttrFile = MC_ATTR_norm_folder;
 		}
-		return nparties;
+#ifdef XFROM
+		i = addHddMbrRootEntry(hdd_device, info, i, max);
+#endif
+		return i;
 	}
 
 	getHddParty(path, NULL, party, dir);

@@ -391,6 +391,9 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 void RunLoaderMemory(const char *arg0, const char *mem_arg, int reboot_iop);
 #ifdef XFROM
 int PrepareMbrLaunchPayload(const char *path, char *mem_arg, size_t mem_arg_size);
+int IsMbrLaunchPath(const char *path);
+int MbrLaunchRequiresPsx(const char *path);
+int GetHddMbrPayloadSize(const char *path, u32 *payload_size);
 #endif
 
 /* popstarter.c */
