@@ -17,6 +17,11 @@ static int isHddRootPath(const char *path)
 	return (isHddBrowserPath(path) && path[6] == '\0');
 }
 
+static int isGenericUsbRootPath(const char *path)
+{
+	return (!strcmp(path, "usb:") || !strcmp(path, "usb:/"));
+}
+
 static const char *getUsbRootDeviceLabel(char unit)
 {
 	static char label[] = "usb0:/";
@@ -1289,6 +1294,8 @@ int getFilePath(char *out, int cnfmode)
 		}  //ends 'if(browser_up)'
 		//----- Process newly entered directory here (incl initial entry)
 		if (browser_cd) {
+			if (isGenericUsbRootPath(path) && prepareUsbRootBrowse() == 0)
+				strcpy(path, "usb0:/");
 			browser_nfiles = setFileList(path, ext, files, cnfmode);
 			if (!cnfmode) {  //Calculate free space (unless configuring)
 				if (!strncmp(path, "mc", 2)) {

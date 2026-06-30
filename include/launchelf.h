@@ -649,6 +649,7 @@ extern u64 USB_mass_scan_time;
 extern int USB_mass_scanned;
 extern int USB_mass_loaded;  //0==none, 1==internal, 2==external
 void loadUsbModules(void);
+int prepareUsbRootBrowse(void);
 int ensureUsbKeyboardReady(void);
 
 #endif
