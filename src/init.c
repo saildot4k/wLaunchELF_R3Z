@@ -95,12 +95,11 @@ static u8 have_filexio_ready = 0;
 static u8 have_filexio_rwbuf_tuned = 0;
 static u8 have_mc_rpc_ready = 0;
 
-#define USB_MASS_USBD_SETTLE_MS 500
+#define USB_MASS_BDMFS_SETTLE_MS 1000
 
 //State of Uncheckable Modules (invalid header)
 static u8 have_cdvd = 0;
 static u8 have_usbd = 0;
-static u64 usbd_load_time = 0;
 #ifdef DS34
 static u8 have_ds34 = 0;
 #endif
@@ -228,7 +227,7 @@ static void loadBasicModules(void);
 static int loadExternalFile(char *argPath, void **fileBaseP, int *fileSizeP);
 static int loadExternalModule(char *modPath, void *defBase, int defSize);
 static void loadUsbDModule(void);
-static void waitForUsbMassUsbdSettle(void);
+static void waitForUsbMassBdmfsSettle(void);
 static void loadKbdModules(void);
 static int pathUsesUsbMass(const char *path);
 void loadUsbModules(void);
@@ -1151,26 +1150,21 @@ static void loadUsbDModule(void)
 		ID = SifExecModuleBuffer(usbd_irx, size_usbd_irx, 0, NULL, &ret);
 		DPRINTF(" [USBD] ID=%d, ret=%d\n", ID, ret);
 		have_usbd = (ID >= 0 && ret >= 0);
-		if (have_usbd)
-			usbd_load_time = Timer();
 	}
 }
 //------------------------------
 //endfunc loadUsbDModule
 //---------------------------------------------------------------------------
-static void waitForUsbMassUsbdSettle(void)
+static void waitForUsbMassBdmfsSettle(void)
 {
 	u64 ready_time;
 
-	if (usbd_load_time == 0)
-		return;
-
-	ready_time = usbd_load_time + USB_MASS_USBD_SETTLE_MS;
+	ready_time = Timer() + USB_MASS_BDMFS_SETTLE_MS;
 	while (Timer() < ready_time) {
 	}
 }
 //------------------------------
-//endfunc waitForUsbMassUsbdSettle
+//endfunc waitForUsbMassBdmfsSettle
 //---------------------------------------------------------------------------
 static int pathUsesUsbMass(const char *path)
 {
@@ -1221,8 +1215,6 @@ void loadUsbModules(void)
 
 	ensureCoreIoStackReady();
 	loadUsbDModule();
-	if (have_usbd && !have_usb_mass)
-		waitForUsbMassUsbdSettle();
 
 #ifdef EXFAT
 	if (have_usbd && !have_usb_mass) {
@@ -1242,6 +1234,8 @@ void loadUsbModules(void)
 			ID = SifExecModuleBuffer(bdmfs_fatfs_irx, size_bdmfs_fatfs_irx, 0, NULL, &ret);
 			DPRINTF(" [BDMFS_FATFS] ID=%d, ret=%d\n", ID, ret);
 			have_bdmfs = (ID >= 0 && ret >= 0);
+			if (have_bdmfs)
+				waitForUsbMassBdmfsSettle();
 		}
 		if (!have_bdmfs)
 			loaded_ok = 0;
@@ -1805,7 +1799,6 @@ void Reset()
 	have_mc_rpc_ready = 0;
 	have_cdvd = 0;
 	have_usbd = 0;
-	usbd_load_time = 0;
 	have_usb_mass = 0;
 #ifdef DS34
 	have_ds34 = 0;
