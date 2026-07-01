@@ -1,0 +1,111 @@
+/*
+# _____     ___ ____     ___ ____
+#  ____|   |    ____|   |        | |____|
+# |     ___|   |____ ___|    ____| |    \    PS2DEV Open Source Project.
+#-----------------------------------------------------------------------
+# Copyright 2001-2004, ps2dev - http://www.ps2dev.org
+# Licenced under Academic Free License version 2.0
+# Review ps2sdk README & LICENSE files for further details.
+#
+# Linkfile script for ee-ld.
+# Based on OSDMenu's embeddable loader layout, with the eGSM low-memory
+# area reserved and the loader body placed in BIOS-unused memory.
+*/
+
+ENTRY(__start);
+
+MEMORY {
+	kram : ORIGIN = 0x0080000, LENGTH = 0x1500  /* 0x00080000 - 0x00081500: reserved like OSDMenu */
+	bram : ORIGIN = 0x0084000, LENGTH = 0x1c000 /* 0x00084000 - 0x000a0000: loader body and stack */
+}
+
+PHDRS {
+	text PT_LOAD;
+}
+
+SECTIONS {
+	.text : {
+		_ftext = . ;
+		*(.text)
+		*(.text.*)
+		*(.gnu.linkonce.t*)
+		KEEP(*(.init))
+		KEEP(*(.fini))
+		QUAD(0)
+	} >bram :text
+
+	PROVIDE(_etext = .);
+	PROVIDE(etext = .);
+
+	.ctors ALIGN(16): {
+		KEEP(*crtbegin*.o(.ctors))
+		KEEP(*(EXCLUDE_FILE(*crtend*.o) .ctors))
+		KEEP(*(SORT(.ctors.*)))
+		KEEP(*(.ctors))
+	} >bram
+	.dtors ALIGN(16): {
+		KEEP(*crtbegin*.o(.dtors))
+		KEEP(*(EXCLUDE_FILE(*crtend*.o) .dtors))
+		KEEP(*(SORT(.dtors.*)))
+		KEEP(*(.dtors))
+	} >bram
+
+	.reginfo : { *(.reginfo) } >bram
+
+	.data ALIGN(128): {
+		_fdata = . ;
+		*(.data)
+		*(.data.*)
+		*(.gnu.linkonce.d*)
+		SORT(CONSTRUCTORS)
+	} >bram
+
+	.rodata ALIGN(128): {
+		*(.rodata)
+		*(.rodata.*)
+		*(.gnu.linkonce.r*)
+	} >bram
+
+	.rdata ALIGN(128): { *(.rdata) } >bram
+	.gcc_except_table ALIGN(128): { *(.gcc_except_table) } >bram
+
+	_gp = ALIGN(128) + 0x7ff0;
+	.lit4 ALIGN(128): { *(.lit4) } >bram
+	.lit8 ALIGN(128): { *(.lit8) } >bram
+
+	.sdata ALIGN(128): {
+		*(.sdata)
+		*(.sdata.*)
+		*(.gnu.linkonce.s*)
+	} >bram
+
+	_edata = .;
+	PROVIDE(edata = .);
+
+	.sbss ALIGN(128) : {
+		_fbss = . ;
+		*(.sbss)
+		*(.sbss.*)
+		*(.gnu.linkonce.sb*)
+		*(.scommon)
+	} >bram
+
+	.bss ALIGN(128) : {
+		*(.bss)
+		*(.bss.*)
+		*(.gnu.linkonce.b*)
+		*(COMMON)
+	} >bram
+	_end_bss = .;
+
+	_end = . ;
+	PROVIDE(end = .);
+
+	.spad 0x70000000: {
+		*(.spad)
+	}
+
+	PROVIDE(_heap_size = -1);
+	PROVIDE(_stack = .);
+	PROVIDE(_stack_size = ORIGIN(bram) + LENGTH(bram) - _stack);
+}

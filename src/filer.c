@@ -136,6 +136,10 @@ int USB_mass_loaded = 0;   //0==none, 1==internal, 2==external
 
 int readGENERIC(const char *path, FILEINFO *info, int max);
 
+#define USB_BROWSER_MAX_DRIVES 2
+#define USB_DISCOVERY_ATTEMPTS 3
+#define USB_DISCOVERY_SETTLE_MS 500
+
 static int mapUsbPathToFatFsPath(const char *usb_path, char *fatfs_path)
 {
 	const char *suffix;
@@ -887,9 +891,18 @@ int readHDDDVRP(const char *path, FILEINFO *info, int max)
 //--------------------------------------------------------------
 #endif
 
-void scan_USB_mass(void)
+static void waitUsbDiscoverySettle(void)
 {
-	int i;
+	u64 wait_start;
+
+	wait_start = Timer();
+	while (Timer() < wait_start + USB_DISCOVERY_SETTLE_MS) {
+	}
+}
+
+static void scanUsbMassDevices(int force)
+{
+	int i, found, max_drives;
 	iox_stat_t chk_stat;
 #ifdef EXFAT
 	char usb_path[8] = "usb0:/";
@@ -898,14 +911,26 @@ void scan_USB_mass(void)
 #endif
 
 	loadUsbModules();
-	if (!USB_mass_loaded)
+	if (!USB_mass_loaded) {
+		if (force) {
+			for (i = 0; i < 10; i++)
+				USB_mass_ix[i] = 0;
+			USB_mass_scanned = 0;
+		}
+		return;
+	}
+
+	if ((USB_mass_max_drives < 1)
+	    || (!force && ((USB_mass_max_drives < 2)  //No need for dynamic lists with only one drive
+	                  || (USB_mass_scanned && ((Timer() - USB_mass_scan_time) < 5000)))))
 		return;
 
-	if ((USB_mass_max_drives < 2)  //No need for dynamic lists with only one drive
-	    || (USB_mass_scanned && ((Timer() - USB_mass_scan_time) < 5000)))
-		return;
+	max_drives = USB_mass_max_drives;
+	if (max_drives > USB_BROWSER_MAX_DRIVES)
+		max_drives = USB_BROWSER_MAX_DRIVES;
 
-	for (i = 0; i < USB_mass_max_drives; i++) {
+	found = 0;
+	for (i = 0; i < max_drives; i++) {
 #ifdef EXFAT
 		usb_path[3] = '0' + i;
 #else
@@ -916,12 +941,85 @@ void scan_USB_mass(void)
 			continue;
 		}
 		USB_mass_ix[i] = '0' + i;
-		USB_mass_scanned = 1;
-		USB_mass_scan_time = Timer();
+		found = 1;
 	}  //ends for loop
+	for (i = max_drives; i < 10; i++)
+		USB_mass_ix[i] = 0;
+
+	USB_mass_scanned = found;
+	if (found)
+		USB_mass_scan_time = Timer();
+}
+
+void scan_USB_mass(void)
+{
+	scanUsbMassDevices(0);
 }
 //------------------------------
 //endfunc scan_USB_mass
+//--------------------------------------------------------------
+int prepareUsbRootBrowse(void)
+{
+	int attempt, first_unit, unit;
+
+	first_unit = -1;
+	for (attempt = 0; attempt < USB_DISCOVERY_ATTEMPTS; attempt++) {
+		scanUsbMassDevices(1);
+		first_unit = -1;
+		for (unit = 0; unit < USB_BROWSER_MAX_DRIVES; unit++) {
+			if (USB_mass_ix[unit]) {
+				first_unit = unit;
+				break;
+			}
+		}
+		if ((USB_mass_ix[0] && USB_mass_ix[1]) || attempt == USB_DISCOVERY_ATTEMPTS - 1)
+			break;
+		waitUsbDiscoverySettle();
+	}
+
+	return first_unit;
+}
+
+//------------------------------
+//endfunc prepareUsbRootBrowse
+//--------------------------------------------------------------
+static int addRootUsbDeviceEntry(FILEINFO *files, int nfiles, int unit)
+{
+	if (unit < 0) {
+		strcpy(files[nfiles].name, "usb:");
+	} else if (unit <= 9) {
+		snprintf(files[nfiles].name, sizeof(files[nfiles].name), "usb%d:", unit);
+	} else
+		return nfiles;
+
+	files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+
+	return nfiles;
+}
+
+static int addRootUsbDeviceEntries(FILEINFO *files, int nfiles)
+{
+	int i, added;
+
+	added = 0;
+	if (USB_mass_scanned) {
+		for (i = 0; (i < USB_mass_max_drives) && (i < USB_BROWSER_MAX_DRIVES); i++) {
+			if (USB_mass_ix[i] == 0)
+				continue;
+
+			nfiles = addRootUsbDeviceEntry(files, nfiles, i);
+			added = 1;
+		}
+	}
+
+	if (!added)
+		nfiles = addRootUsbDeviceEntry(files, nfiles, -1);
+
+	return nfiles;
+}
+
+//------------------------------
+//endfunc addRootUsbDeviceEntries
 //--------------------------------------------------------------
 int readGENERIC(const char *path, FILEINFO *info, int max)
 {
@@ -1199,28 +1297,40 @@ int getDir(const char *path, FILEINFO *info)
 		n = readHDDDVRP(path, info, max);
 #endif
 	else if (!strncmp(path, "mass", 4)) {
+		int force_usb_scan = (!strcmp(path, "mass:") || !strcmp(path, "mass:/"));
 #ifdef EXFAT
 		char usb_path[MAX_PATH];
 
 		if (mapMassPathToUsbFatFsPath(path, usb_path) < 0)
 			return 0;
-		if (!USB_mass_scanned)
+		if (force_usb_scan)
+			scanUsbMassDevices(1);
+		else if (!USB_mass_scanned)
 			scan_USB_mass();
 		n = readGENERICWithFirstOpenRetry(usb_path, info, max, 2000);
 #else
-		if (!USB_mass_scanned)
+		if (force_usb_scan)
+			scanUsbMassDevices(1);
+		else if (!USB_mass_scanned)
 			scan_USB_mass();
 		n = readGENERICWithFirstOpenRetry(path, info, max, 2000);
 #endif
+		if (force_usb_scan)
+			scanUsbMassDevices(1);
 	}
 	else if (!strncmp(path, "usb", 3)) {
 		char usb_path[MAX_PATH];
+		int force_usb_scan = (!strcmp(path, "usb:") || !strcmp(path, "usb:/"));
 
 		if (mapUsbPathToFatFsPath(path, usb_path) < 0)
 			return 0;
-		if (!USB_mass_scanned)
+		if (force_usb_scan)
+			scanUsbMassDevices(1);
+		else if (!USB_mass_scanned)
 			scan_USB_mass();
 		n = readGENERICWithFirstOpenRetry(usb_path, info, max, 2000);
+		if (force_usb_scan)
+			scanUsbMassDevices(1);
 	}
 	else if (isAtaPath(path)) {
 		char ata_path[MAX_PATH];
@@ -1436,27 +1546,22 @@ int setFileList(const char *path, const char *ext, FILEINFO *files, int cnfmode)
 		files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
 
 		if (allow_usb_devices) {
-#ifdef EXFAT
-			strcpy(files[nfiles].name, "usb:");
-#else
-			strcpy(files[nfiles].name, "mass:");
-#endif
-			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+			nfiles = addRootUsbDeviceEntries(files, nfiles);
 		}
 
-	#ifdef MMCE
-			strcpy(files[nfiles].name, "mmce0:");
-			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
-			strcpy(files[nfiles].name, "mmce1:");
-			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
-	#endif
+#ifdef MMCE
+		strcpy(files[nfiles].name, "mmce0:");
+		files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+		strcpy(files[nfiles].name, "mmce1:");
+		files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+#endif
 
-	#ifdef MX4SIO
-			if (allow_usb_devices) {
-				strcpy(files[nfiles].name, "mx4sio:");
-				files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
-			}
-	#endif
+#ifdef MX4SIO
+		if (allow_usb_devices) {
+			strcpy(files[nfiles].name, "mx4sio:");
+			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+		}
+#endif
 
 		if (shouldShowHddDevice(0)) {
 			strcpy(files[nfiles].name, "hdd0:");

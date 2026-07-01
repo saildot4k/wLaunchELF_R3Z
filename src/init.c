@@ -95,6 +95,8 @@ static u8 have_filexio_ready = 0;
 static u8 have_filexio_rwbuf_tuned = 0;
 static u8 have_mc_rpc_ready = 0;
 
+#define USB_MASS_BDMFS_SETTLE_MS 1000
+
 //State of Uncheckable Modules (invalid header)
 static u8 have_cdvd = 0;
 static u8 have_usbd = 0;
@@ -133,6 +135,7 @@ static u8 have_ata_bd = 0;
 #ifdef XFROM
 static u8 have_Flash_modules = 0;
 static u8 xfromserv_loaded = 0;
+static u8 have_secrsif = 0;
 #endif
 #ifdef MMCE
 static u8 have_mmce = 0;
@@ -224,6 +227,7 @@ static void loadBasicModules(void);
 static int loadExternalFile(char *argPath, void **fileBaseP, int *fileSizeP);
 static int loadExternalModule(char *modPath, void *defBase, int defSize);
 static void loadUsbDModule(void);
+static void waitForUsbMassBdmfsSettle(void);
 static void loadKbdModules(void);
 static int pathUsesUsbMass(const char *path);
 void loadUsbModules(void);
@@ -543,6 +547,23 @@ static int load_ps2atad_stack(void)
 IMPORT_BIN2C(extflash_irx);
 IMPORT_BIN2C(xfromman_irx);
 IMPORT_BIN2C(xfromserv_irx);
+IMPORT_BIN2C(secrsif_irx);
+int loadSecrSifModule(void)
+{
+	int ID __attribute__((unused)), ret;
+
+	ensureCoreIoStackReady();
+	if (!have_secrsif) {
+		ID = SifExecModuleBuffer(secrsif_irx, size_secrsif_irx, 0, NULL, &ret);
+		DPRINTF(" [SECRSIF]: ID=%d, ret=%d\n", ID, ret);
+		have_secrsif = (ID >= 0 && ret >= 0);
+	}
+
+	return have_secrsif;
+}
+//------------------------------
+//endfunc loadSecrSifModule
+//---------------------------------------------------------------------------
 static void load_pflash(void)
 {
 	int ID __attribute__((unused)), ret;
@@ -910,7 +931,7 @@ void loadCdModules(void)
 //---------------------------------------------------------------------------
 void applyXPARAM(const char *gameID)
 {
-	int ret, id;
+	int ret, id __attribute__((unused));
 
 	if (gameID == NULL || gameID[0] == '\0')
 		return;
@@ -1134,6 +1155,17 @@ static void loadUsbDModule(void)
 //------------------------------
 //endfunc loadUsbDModule
 //---------------------------------------------------------------------------
+static void waitForUsbMassBdmfsSettle(void)
+{
+	u64 ready_time;
+
+	ready_time = Timer() + USB_MASS_BDMFS_SETTLE_MS;
+	while (Timer() < ready_time) {
+	}
+}
+//------------------------------
+//endfunc waitForUsbMassBdmfsSettle
+//---------------------------------------------------------------------------
 static int pathUsesUsbMass(const char *path)
 {
 	if (path == NULL)
@@ -1202,6 +1234,8 @@ void loadUsbModules(void)
 			ID = SifExecModuleBuffer(bdmfs_fatfs_irx, size_bdmfs_fatfs_irx, 0, NULL, &ret);
 			DPRINTF(" [BDMFS_FATFS] ID=%d, ret=%d\n", ID, ret);
 			have_bdmfs = (ID >= 0 && ret >= 0);
+			if (have_bdmfs)
+				waitForUsbMassBdmfsSettle();
 		}
 		if (!have_bdmfs)
 			loaded_ok = 0;
@@ -1807,6 +1841,7 @@ void Reset()
 	#ifdef XFROM
 		have_Flash_modules = 0;
 		xfromserv_loaded = 0;
+		have_secrsif = 0;
 	#endif
 #ifdef DVRP
 	have_DVRP_HDD_modules = 0;

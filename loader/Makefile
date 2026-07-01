@@ -1,22 +1,25 @@
-EE_CFLAGS  := -G0 -O2 -EL -Wall -D_EE
+EE_CFLAGS  := -G0 -Os -EL -Wall -D_EE
 EE_ASFLAGS += -EL -G0
 
-###dlanor: adjust these three, for PS2Link compatibility tests
-###dlanor: old LaunchELF used LA=0x90000, SA=0xB0000, SS=0x08000
-###dlanor: The values below were implemented in LaunchELF v3.50
-LOADADDR  = 0x90000
-# Keep stack near top of first MiB while avoiding overlap with current loader.
-STACKADDR = 0x0F0000
-STACKSIZE = 0x08000
+# Match OSDMenu's compact embedded-loader build so the image fits in the
+# 0x84000..0xa0000 low-memory window.
+EE_NEWLIB_NANO ?= 1
+EE_COMPACT_EXECUTABLE ?= 1
 
-# EE kernel occupies first MiB. For low-loader mode, keep image below this.
-LOW_MEM_LIMIT = 0x100000
+# Match OSDMenu's embedded loader placement: reserve 0x80000..0x81500
+# and link the loader body into the BIOS-unused 0x84000..0xa0000 window.
+LOADADDR  = 0x84000
+STACKADDR = auto
+STACKSIZE = auto
+
+# OSDMenu's bram window ends at 0xa0000; the loader image and auto stack must
+# fit below that boundary.
+LOW_MEM_LIMIT = 0xa0000
 LAYOUT_CHECK_SCRIPT = ../scripts/check_loader_layout.sh
 EE_NM ?= $(EE_TOOL_PREFIX)nm
+EE_LINKFILE := linkfile
 
-LDPARAMS := -Wl,--defsym -Wl,_stack_size=$(STACKSIZE) -Wl,--defsym -Wl,_stack=$(STACKADDR)
-
-EE_LDFLAGS += -Wl,-Ttext -Wl,$(LOADADDR) -s $(LDPARAMS)
+EE_LDFLAGS += -s
 
 EE_BIN = loader.elf
 

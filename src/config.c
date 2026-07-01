@@ -1003,6 +1003,8 @@ enum CONFIG_MAIN {
 static void configFormatPromptLabel(char *dst, size_t dst_size, const char *label)
 {
 	size_t label_len;
+	size_t copy_len;
+	int append_colon;
 
 	if (dst_size == 0)
 		return;
@@ -1010,10 +1012,15 @@ static void configFormatPromptLabel(char *dst, size_t dst_size, const char *labe
 		label = "";
 
 	label_len = strlen(label);
-	if (label_len > 0 && label[label_len - 1] == ':')
-		snprintf(dst, dst_size, "%s", label);
-	else
-		snprintf(dst, dst_size, "%s:", label);
+	append_colon = !(label_len > 0 && label[label_len - 1] == ':');
+	copy_len = label_len;
+	if (copy_len >= dst_size)
+		copy_len = dst_size - 1;
+
+	memcpy(dst, label, copy_len);
+	if (append_colon && copy_len + 1 < dst_size)
+		dst[copy_len++] = ':';
+	dst[copy_len] = '\0';
 }
 
 static void configFormatSavePromptLine(char *dst, size_t dst_size, const char *path, const char *loaded_path, int max_chars)

@@ -830,14 +830,16 @@ non_PSU_RESTORE_init:
 			genRemove(out);
 		goto copy_file_exit_mem_err;
 	}
-	buff2 = (char *)memalign(64, buffSize);
-	if (buff2 != NULL)
-		buffCount = 2;
+	if (buffSize == COPY_BUFFER_FAST_DEFAULT) {
+		buff2 = (char *)memalign(64, buffSize);
+		if (buff2 != NULL)
+			buffCount = 2;
 #if FILEOP_TRACE
-	else if (trace_net_copy || trace_vmc_copy)
-		printf("[FILEOP] copy-double-buffer fallback in=%s out=%s buff=%d\n",
-		       in, out, buffSize);
+		else if (trace_net_copy || trace_vmc_copy)
+			printf("[FILEOP] copy-double-buffer fallback in=%s out=%s buff=%d\n",
+			       in, out, buffSize);
 #endif
+	}
 
 	old_size = written_size;  //Note initial progress data pos
 	OldTime = Timer();        //Note initial progress time

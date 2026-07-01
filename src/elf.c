@@ -2,46 +2,17 @@
 //File name:    elf.c
 //--------------------------------------------------------------
 #include "launchelf.h"
+#include "init.h"
+#include <elf.h>
+#ifdef XFROM
+#include <libsecr.h>
+#endif
 
 #define MAX_PATH 1025
+#define MBR_PAYLOAD_LOAD_ADDR 0x01000000
 
 extern u8 loader_elf[];
 extern int size_loader_elf;
-
-// ELF-loading stuff
-#define ELF_MAGIC 0x464c457f
-#define ELF_PT_LOAD 1
-
-//------------------------------
-typedef struct
-{
-	u8 ident[16];  // struct definition for ELF object header
-	u16 type;
-	u16 machine;
-	u32 version;
-	u32 entry;
-	u32 phoff;
-	u32 shoff;
-	u32 flags;
-	u16 ehsize;
-	u16 phentsize;
-	u16 phnum;
-	u16 shentsize;
-	u16 shnum;
-	u16 shstrndx;
-} elf_header_t;
-//------------------------------
-typedef struct
-{
-	u32 type;  // struct definition for ELF program section header
-	u32 offset;
-	void *vaddr;
-	u32 paddr;
-	u32 filesz;
-	u32 memsz;
-	u32 flags;
-	u32 align;
-} elf_pheader_t;
 
 static int readExecHeader(const char *path, u8 *header, int header_len, int *opened_file)
 {
@@ -77,12 +48,10 @@ static int readExecHeader(const char *path, u8 *header, int header_len, int *ope
 
 static int classifyExecHeader(const u8 *header, int header_len)
 {
-	u32 magic;
+	const Elf32_Ehdr *eh;
 
-	if (header_len < 4)
+	if (header_len < SELFMAG)
 		return -1;
-
-	memcpy(&magic, header, sizeof(magic));
 
 	/*
 	 * Heuristic requested for additional encrypted KELF variants:
@@ -91,20 +60,14 @@ static int classifyExecHeader(const u8 *header, int header_len)
 	if (header[0] == 0x01 && header[2] == 0x00)
 		return 2;
 
-	if (magic != ELF_MAGIC)
+	if (memcmp(header, ELFMAG, SELFMAG) != 0)
 		return -1;
 
-	/*
-	 * Validate key ELF header fields when enough bytes are available:
-	 *  e_type at 0x10, e_machine at 0x12.
-	 */
-	if (header_len >= 20) {
-		u16 e_type, e_machine;
-		memcpy(&e_type, header + 16, sizeof(e_type));
-		memcpy(&e_machine, header + 18, sizeof(e_machine));
-		if ((e_type != 2) && (e_type != 3))
+	if (header_len >= (int)sizeof(Elf32_Ehdr)) {
+		eh = (const Elf32_Ehdr *)header;
+		if ((eh->e_type != ET_EXEC) && (eh->e_type != ET_DYN))
 			return -1;
-		if (e_machine != 8)
+		if (eh->e_machine != EM_MIPS)
 			return -1;
 	}
 
@@ -157,11 +120,31 @@ static int isExplicitHddHandoffPath(const char *path)
 
 static const char *normalizeExecArg0Path(const char *path, char *buffer, size_t buffer_size)
 {
+	const char *partition;
+	const char *subpath;
 	const char *suffix;
+	int part_len;
 	int unit = 0;
 
 	if (path == NULL || path[0] == '\0' || buffer == NULL || buffer_size == 0)
 		return path;
+
+	if (isHddBrowserPath(path)) {
+		partition = path + 6;
+		if (partition[0] == '\0')
+			return path;
+
+		subpath = strchr(partition, '/');
+		if (subpath == NULL) {
+			snprintf(buffer, buffer_size, "hdd%c:%s:pfs:/", path[3], partition);
+		} else {
+			part_len = (int)(subpath - partition);
+			if (part_len <= 0)
+				return path;
+			snprintf(buffer, buffer_size, "hdd%c:%.*s:pfs:%s", path[3], part_len, partition, subpath);
+		}
+		return buffer;
+	}
 
 	if (!parseUsbMassPathUnit(path, "usb", 3, &unit, &suffix) &&
 	    !parseUsbMassPathUnit(path, "mass", 4, &unit, &suffix))
@@ -286,38 +269,38 @@ error:
 static void RunEmbeddedLoader(int argc, char **argv)
 {
 	u8 *boot_elf;
-	elf_header_t *eh;
-	elf_pheader_t *eph;
+	Elf32_Ehdr *eh;
+	Elf32_Phdr *eph;
 	void *pdata;
 	int i;
 
 	/* NB: LOADER.ELF is embedded  */
 	boot_elf = (u8 *)loader_elf;
-	eh = (elf_header_t *)boot_elf;
-	if (_lw((u32)&eh->ident) != ELF_MAGIC)
+	eh = (Elf32_Ehdr *)boot_elf;
+	if (memcmp(eh->e_ident, ELFMAG, SELFMAG) != 0)
 		asm volatile("break\n");
 	DPRINTF("RunEmbeddedLoader: loader embedded entry=0x%08x phoff=0x%08x phnum=%u\n",
-	        eh->entry, eh->phoff, eh->phnum);
+	        eh->e_entry, eh->e_phoff, eh->e_phnum);
 
-	eph = (elf_pheader_t *)(boot_elf + eh->phoff);
+	eph = (Elf32_Phdr *)(boot_elf + eh->e_phoff);
 
 	/* Scan through the ELF's program headers and copy them into RAM, then
 									zero out any non-loaded regions.  */
-	for (i = 0; i < eh->phnum; i++) {
-		if (eph[i].type != ELF_PT_LOAD)
+	for (i = 0; i < eh->e_phnum; i++) {
+		if (eph[i].p_type != PT_LOAD)
 			continue;
 		DPRINTF("RunEmbeddedLoader: loader phdr[%d] vaddr=%p offset=0x%08x filesz=0x%08x memsz=0x%08x\n",
-		        i, eph[i].vaddr, eph[i].offset, eph[i].filesz, eph[i].memsz);
+		        i, (void *)eph[i].p_vaddr, eph[i].p_offset, eph[i].p_filesz, eph[i].p_memsz);
 
-		pdata = (void *)(boot_elf + eph[i].offset);
-		memcpy(eph[i].vaddr, pdata, eph[i].filesz);
+		pdata = (void *)(boot_elf + eph[i].p_offset);
+		memcpy((void *)eph[i].p_vaddr, pdata, eph[i].p_filesz);
 
-		if (eph[i].memsz > eph[i].filesz)
-			memset(eph[i].vaddr + eph[i].filesz, 0,
-			       eph[i].memsz - eph[i].filesz);
+		if (eph[i].p_memsz > eph[i].p_filesz)
+			memset((void *)(eph[i].p_vaddr + eph[i].p_filesz), 0,
+			       eph[i].p_memsz - eph[i].p_filesz);
 	}
-	if (eh->entry == 0 || (eh->entry & 0x3) != 0) {
-		DPRINTF("RunEmbeddedLoader: invalid embedded loader entry=0x%08x\n", eh->entry);
+	if (eh->e_entry == 0 || (eh->e_entry & 0x3) != 0) {
+		DPRINTF("RunEmbeddedLoader: invalid embedded loader entry=0x%08x\n", eh->e_entry);
 		return;
 	}
 	/* Let's go.  */
@@ -325,10 +308,162 @@ static void RunEmbeddedLoader(int argc, char **argv)
 	FlushCache(0);
 	FlushCache(2);
 
-	ExecPS2((void *)eh->entry, NULL, argc, argv);
+	ExecPS2((void *)eh->e_entry, NULL, argc, argv);
 }
 //--------------------------------------------------------------
 //End of func:  void RunEmbeddedLoader(int argc, char **argv)
+//--------------------------------------------------------------
+void RunLoaderMemory(const char *arg0, const char *mem_arg, int reboot_iop)
+{
+#define MEMLOAD_ARGC 3
+	char *argv[MEMLOAD_ARGC];
+	static char loader_arg[8];
+
+	snprintf(loader_arg, sizeof(loader_arg), "%s", (reboot_iop) ? "-la=ER" : "-la=E");
+	argv[0] = (char *)arg0;
+	argv[1] = (char *)mem_arg;
+	argv[2] = loader_arg;
+
+	RunEmbeddedLoader(MEMLOAD_ARGC, argv);
+}
+//--------------------------------------------------------------
+//End of func:  void RunLoaderMemory(const char *arg0, const char *mem_arg, int reboot_iop)
+//--------------------------------------------------------------
+#ifdef XFROM
+static int isElfPayload(const u8 *payload, int payload_size)
+{
+	const Elf32_Ehdr *eh;
+
+	if (payload == NULL || payload_size < (int)sizeof(Elf32_Ehdr))
+		return 0;
+
+	eh = (const Elf32_Ehdr *)payload;
+	return (memcmp(eh->e_ident, ELFMAG, SELFMAG) == 0 &&
+	        ((eh->e_type == ET_EXEC) || (eh->e_type == ET_DYN)) &&
+	        eh->e_machine == EM_MIPS);
+}
+
+static int isLikelyEncryptedPayload(const u8 *payload, int payload_size)
+{
+	return (payload != NULL && payload_size >= 4 && payload[0] == 0x01 && payload[2] == 0x00);
+}
+
+static int getMbrOpenPath(const char *path, char *open_path, size_t open_path_size)
+{
+	const char *pfs;
+	char party[MAX_PATH];
+	size_t party_len;
+	int party_ix;
+
+	if (path == NULL || open_path == NULL || open_path_size == 0)
+		return -1;
+
+	if (!strncmp(path, "xfrom:", 6)) {
+		if (!loadFlashModules())
+			return -1;
+		snprintf(open_path, open_path_size, "%s", path);
+		return 0;
+	}
+
+	if (strncmp(path, "hdd", 3) || path[3] < '0' || path[3] > '9' || path[4] != ':')
+		return -1;
+
+	if (!loadHddModules())
+		return -1;
+
+	pfs = strstr(path, ":pfs:");
+	if (pfs == NULL)
+		return -1;
+
+	party_len = (size_t)(pfs - path);
+	if (party_len == 0 || party_len >= sizeof(party))
+		return -1;
+
+	memcpy(party, path, party_len);
+	party[party_len] = '\0';
+
+	party_ix = mountParty(party);
+	if (party_ix < 0)
+		return -1;
+
+	snprintf(open_path, open_path_size, "pfs%d:%s", party_ix, pfs + 5);
+	return 0;
+}
+
+int PrepareMbrLaunchPayload(const char *path, char *mem_arg, size_t mem_arg_size)
+{
+	char open_path[MAX_PATH];
+	u8 *payload;
+	u8 *launch_payload;
+	s64 payload_size64;
+	u32 ee_mem_end;
+	int payload_size;
+	int encrypted_payload;
+	int fd, total, rd;
+
+	if (path == NULL || mem_arg == NULL || mem_arg_size < 22)
+		return -1;
+
+	if (getMbrOpenPath(path, open_path, sizeof(open_path)) < 0)
+		return -1;
+
+	fd = genOpen(open_path, FIO_O_RDONLY);
+	if (fd < 0)
+		return -1;
+
+	ee_mem_end = GetMemorySize();
+	payload_size64 = genLseek(fd, 0, SEEK_END);
+	if (ee_mem_end <= MBR_PAYLOAD_LOAD_ADDR ||
+	    payload_size64 <= 0 ||
+	    payload_size64 > (s64)(ee_mem_end - MBR_PAYLOAD_LOAD_ADDR)) {
+		genClose(fd);
+		return -1;
+	}
+	genLseek(fd, 0, SEEK_SET);
+
+	payload = (u8 *)MBR_PAYLOAD_LOAD_ADDR;
+	payload_size = (int)payload_size64;
+	total = 0;
+	while (total < payload_size) {
+		rd = genRead(fd, payload + total, payload_size - total);
+		if (rd <= 0)
+			break;
+		total += rd;
+	}
+	genClose(fd);
+
+	if (total != payload_size)
+		return -1;
+
+	launch_payload = payload;
+	encrypted_payload = isLikelyEncryptedPayload(payload, payload_size);
+	if (!isElfPayload(payload, payload_size) && encrypted_payload) {
+		void *decrypted_payload;
+
+		if (!loadSecrSifModule())
+			return -1;
+
+		if (!SecrInit())
+			return -1;
+		decrypted_payload = SecrDiskBootFile(payload);
+		SecrDeinit();
+
+		if (decrypted_payload == NULL)
+			return -1;
+
+		launch_payload = (u8 *)decrypted_payload;
+		if (launch_payload < payload || launch_payload >= payload + payload_size)
+			return -1;
+		payload_size -= (int)(launch_payload - payload);
+	}
+
+	snprintf(mem_arg, mem_arg_size, "mem:%08X:%08X", (u32)launch_payload, (u32)payload_size);
+	return 0;
+}
+//--------------------------------------------------------------
+//End of func:  int PrepareMbrLaunchPayload(const char *path, char *mem_arg, size_t mem_arg_size)
+//--------------------------------------------------------------
+#endif
 //--------------------------------------------------------------
 // RunLoaderElf loads LOADER.ELF from program memory and passes
 // args of selected ELF and partition to it
@@ -341,6 +476,7 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 	char *argv[ELFLOAD_ARGC], bootpath[256];
 	static char exec_target[MAX_PATH];
 	static char exec_arg0[MAX_PATH];
+	static char loader_arg[8];
 	const char *handoff_path = NULL;
 #ifdef DVRP
 	int dvr_pfs_ix = -1;
@@ -411,10 +547,9 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 		argv[1] = (char *)((handoff_path != NULL) ? handoff_path : filename);
 	}
 
-	if (exec_kind == 2)
-		argv[2] = (reboot_iop_elf_load) ? "-er" : "-enr";
-	else
-		argv[2] = (reboot_iop_elf_load) ? "-r" : "-nr";
+	(void)exec_kind;
+	snprintf(loader_arg, sizeof(loader_arg), "%s", (reboot_iop_elf_load) ? "-la=AR" : "-la=A");
+	argv[2] = loader_arg;
 	DPRINTF("RunLoaderElf: loader mode arg='%s'\n", argv[2]);
 
 	RunEmbeddedLoader(ELFLOAD_ARGC, argv);

@@ -17,6 +17,22 @@ static int isHddRootPath(const char *path)
 	return (isHddBrowserPath(path) && path[6] == '\0');
 }
 
+static int isGenericUsbRootPath(const char *path)
+{
+	return (!strcmp(path, "usb:") || !strcmp(path, "usb:/"));
+}
+
+static const char *getUsbRootDeviceLabel(char unit)
+{
+	static char label[] = "usb0:/";
+
+	if ((unit < '0') || (unit > '9'))
+		return NULL;
+
+	label[3] = unit;
+	return label;
+}
+
 static const char *getRootDeviceLabel(const char *name)
 {
 	if (!strcmp(name, "mc0:"))
@@ -25,8 +41,12 @@ static const char *getRootDeviceLabel(const char *name)
 		return "mc1:/";
 	if (!strcmp(name, "mass:"))
 		return "usb:/";
+	if (!strncmp(name, "mass", 4) && name[4] >= '0' && name[4] <= '9' && name[5] == ':' && name[6] == '\0')
+		return getUsbRootDeviceLabel(name[4]);
 	if (!strcmp(name, "usb:"))
 		return "usb:/";
+	if (!strncmp(name, "usb", 3) && name[3] >= '0' && name[3] <= '9' && name[4] == ':' && name[5] == '\0')
+		return getUsbRootDeviceLabel(name[3]);
 #ifdef MMCE
 	if (!strcmp(name, "mmce0:"))
 		return "mmce0:/";
@@ -798,6 +818,7 @@ int getFilePath(char *out, int cnfmode)
 	int top = 0, rows;
 	int x, y, y0, y1;
 	int i, j, ret, rv = -1;  //NB: rv is for return value of this function
+	int usb_unit;
 	int event, post_event = 0;
 	int font_height;
 	int iconbase, iconcolr;
@@ -1274,6 +1295,11 @@ int getFilePath(char *out, int cnfmode)
 		}  //ends 'if(browser_up)'
 		//----- Process newly entered directory here (incl initial entry)
 		if (browser_cd) {
+			if (isGenericUsbRootPath(path)) {
+				usb_unit = prepareUsbRootBrowse();
+				if (usb_unit >= 0)
+					snprintf(path, sizeof(path), "usb%d:/", usb_unit);
+			}
 			browser_nfiles = setFileList(path, ext, files, cnfmode);
 			if (!cnfmode) {  //Calculate free space (unless configuring)
 				if (!strncmp(path, "mc", 2)) {

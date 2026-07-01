@@ -20,6 +20,17 @@ EE_CXXFLAGS := -D_EE -O2 -G0 -Wall $(EE_CXXFLAGS)
 # Linker flags
 EE_LDFLAGS := -L$(PS2SDK)/ee/lib $(EE_LDFLAGS)
 
+# Helpers for compact embedded binaries. This mirrors the PS2SDK rules used by
+# OSDMenu while keeping this legacy local rules file self-contained.
+EE_NEWLIB_NANO ?= 0
+EE_COMPACT_EXECUTABLE ?= 0
+
+ifneq (x$(EE_COMPACT_EXECUTABLE), x0)
+EE_CFLAGS += -fdata-sections -ffunction-sections
+EE_CXXFLAGS += -fdata-sections -ffunction-sections
+EE_LDFLAGS += -Wl,-zmax-page-size=128 -s -Wl,--gc-sections
+endif
+
 # Assembler flags
 EE_ASFLAGS := -G0 $(EE_ASFLAGS)
 
@@ -36,7 +47,11 @@ EE_KERNEL_LIB := -lkernel-nopatch
 ifeq ($(wildcard $(PS2SDK)/ee/lib/libkernel-nopatch.a),)
 EE_KERNEL_LIB := -lkernel
 endif
+ifneq (x$(EE_NEWLIB_NANO), x0)
+EE_LDFLAGS += -nodefaultlibs -lm_nano -lgcc -Wl,--start-group -lc_nano $(EE_KERNEL_LIB) -Wl,--end-group
+else
 EE_LIBS += -lc $(EE_KERNEL_LIB)
+endif
 
 # Externally defined variables: EE_BIN, EE_OBJS, EE_LIB
 

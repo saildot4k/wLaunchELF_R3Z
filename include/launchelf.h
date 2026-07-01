@@ -14,7 +14,7 @@
 #define ULE_VERSION_DEBUG_SUFFIX ""
 #endif
 
-#define ULE_VERSION "v4.60_R3Z" ULE_VERSION_DEBUG_SUFFIX
+#define ULE_VERSION "v4.70_R3Z" ULE_VERSION_DEBUG_SUFFIX
 //#ifndef ULE_VERDATE
 //#define ULE_VERDATE __DATE__
 //#endif
@@ -388,6 +388,10 @@ int loadAtaModules(void);
 /* elf.c */
 int checkELFheader(char *filename);
 void RunLoaderElf(char *filename, char *party, const char *selected_path, int exec_kind, int reboot_iop_elf_load);
+void RunLoaderMemory(const char *arg0, const char *mem_arg, int reboot_iop);
+#ifdef XFROM
+int PrepareMbrLaunchPayload(const char *path, char *mem_arg, size_t mem_arg_size);
+#endif
 
 /* popstarter.c */
 int IsPopstarterVcdPath(const char *path);
@@ -645,6 +649,7 @@ extern u64 USB_mass_scan_time;
 extern int USB_mass_scanned;
 extern int USB_mass_loaded;  //0==none, 1==internal, 2==external
 void loadUsbModules(void);
+int prepareUsbRootBrowse(void);
 int ensureUsbKeyboardReady(void);
 
 #endif
