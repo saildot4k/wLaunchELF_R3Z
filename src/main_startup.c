@@ -14,6 +14,7 @@ static unsigned short ROMVersion;
 static int hide_hdd_ata_devices = -1;
 
 static void normalizeBootPath(char *path);
+static int isSlashRootedBootPathDevice(const char *path);
 static int isDevicePathTerminator(char c);
 static int isBootUsbMassPath(const char *path);
 static int isBootAtaPath(const char *path);
@@ -291,6 +292,7 @@ static void initializeBootExecPath(void)
 //---------------------------------------------------------------------------
 static void normalizeBootPath(char *path)
 {
+	char *colon;
 	int i;
 
 	if (path == NULL || path[0] == '\0')
@@ -310,9 +312,37 @@ static void normalizeBootPath(char *path)
 		memmove(path + 4, path + 3, strlen(path + 3) + 1);
 		path[3] = '0';
 	}
+
+	colon = strchr(path, ':');
+	if (colon != NULL && colon[1] != '\0' && colon[1] != '/' &&
+	    isSlashRootedBootPathDevice(path) && strlen(path) + 1 < MAX_PATH) {
+		memmove(colon + 2, colon + 1, strlen(colon + 1) + 1);
+		colon[1] = '/';
+	}
 }
 //------------------------------
 //endfunc normalizeBootPath
+//---------------------------------------------------------------------------
+static int isSlashRootedBootPathDevice(const char *path)
+{
+	if (isBootHddPath(path))
+		return 0;
+
+	if (isBootUsbMassPath(path) || isBootAtaPath(path) || isBootXfromPath(path))
+		return 1;
+	if (!strncmp(path, "mc", 2) && path[2] >= '0' && path[2] <= '9' && path[3] == ':')
+		return 1;
+	if (!strncmp(path, "mmce", 4) && path[4] >= '0' && path[4] <= '9' && path[5] == ':')
+		return 1;
+	if (!strncmp(path, "mx4sio", 6) && (path[6] == ':' || (path[6] >= '0' && path[6] <= '9' && path[7] == ':')))
+		return 1;
+	if (!strncmp(path, "host:", 5) || !strncmp(path, "udpfs:", 6))
+		return 1;
+
+	return 0;
+}
+//------------------------------
+//endfunc isSlashRootedBootPathDevice
 //---------------------------------------------------------------------------
 static int isDevicePathTerminator(char c)
 {
