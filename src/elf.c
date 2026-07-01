@@ -120,11 +120,31 @@ static int isExplicitHddHandoffPath(const char *path)
 
 static const char *normalizeExecArg0Path(const char *path, char *buffer, size_t buffer_size)
 {
+	const char *partition;
+	const char *subpath;
 	const char *suffix;
+	int part_len;
 	int unit = 0;
 
 	if (path == NULL || path[0] == '\0' || buffer == NULL || buffer_size == 0)
 		return path;
+
+	if (isHddBrowserPath(path)) {
+		partition = path + 6;
+		if (partition[0] == '\0')
+			return path;
+
+		subpath = strchr(partition, '/');
+		if (subpath == NULL) {
+			snprintf(buffer, buffer_size, "hdd%c:%s:pfs:/", path[3], partition);
+		} else {
+			part_len = (int)(subpath - partition);
+			if (part_len <= 0)
+				return path;
+			snprintf(buffer, buffer_size, "hdd%c:%.*s:pfs:%s", path[3], part_len, partition, subpath);
+		}
+		return buffer;
+	}
 
 	if (!parseUsbMassPathUnit(path, "usb", 3, &unit, &suffix) &&
 	    !parseUsbMassPathUnit(path, "mass", 4, &unit, &suffix))
