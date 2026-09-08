@@ -58,13 +58,29 @@ static int launchArgsSetPlainError(char *message, size_t message_size, const cha
 	return -1;
 }
 
+static void launchArgsCopyPath(char *dst, size_t dst_size, const char *src)
+{
+	size_t copy_len;
+
+	if (dst == NULL || dst_size == 0)
+		return;
+	if (src == NULL) {
+		dst[0] = '\0';
+		return;
+	}
+
+	copy_len = strlen(src);
+	if (copy_len >= dst_size)
+		copy_len = dst_size - 1;
+	memcpy(dst, src, copy_len);
+	dst[copy_len] = '\0';
+}
+
 static void launchArgsMakeOpenPath(const char *path, char *file_path, size_t file_path_size)
 {
-	strncpy(file_path, path, file_path_size - 1);
-	file_path[file_path_size - 1] = '\0';
+	launchArgsCopyPath(file_path, file_path_size, path);
 	if (genFixPath(path, file_path) < 0) {
-		strncpy(file_path, path, file_path_size - 1);
-		file_path[file_path_size - 1] = '\0';
+		launchArgsCopyPath(file_path, file_path_size, path);
 	}
 }
 

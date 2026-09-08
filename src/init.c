@@ -265,7 +265,7 @@ static int loadAtaBlockDriver(void);
 static void pauseAfterAtaBlockDriverLoad(void);
 #endif
 #ifdef DVRP
-static int load_ps2atad_stack(void);
+static int load_ps2atad_stack(void) __attribute__((unused));
 static void switchPsxHddDriverStack(int use_dvr_stack);
 #endif
 #ifdef DS34
@@ -531,7 +531,7 @@ static int load_ps2hdd_stack(int with_ata_bd)
 //endfunc load_ps2hdd_stack
 //---------------------------------------------------------------------------
 #ifdef DVRP
-static int load_ps2atad_stack(void)
+static int __attribute__((unused)) load_ps2atad_stack(void)
 {
 	int ret, ID __attribute__((unused));
 	static char hddarg[] = "-o"

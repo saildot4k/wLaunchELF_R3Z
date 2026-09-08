@@ -50,7 +50,7 @@ endif
 ifneq (x$(EE_NEWLIB_NANO), x0)
 EE_NANO_LIBS := $(EE_LIBS)
 EE_LIBS :=
-EE_LDFLAGS += -nodefaultlibs -lm_nano -lgcc -Wl,--start-group $(EE_NANO_LIBS) -lc_nano $(EE_KERNEL_LIB) -Wl,--end-group
+EE_LDFLAGS += -nodefaultlibs -lm_nano -lgcc -Wl,--start-group -lc_nano $(EE_NANO_LIBS) $(EE_KERNEL_LIB) -lcglue -lpthread -lpthreadglue -Wl,--end-group
 else
 EE_LIBS += -lc $(EE_KERNEL_LIB)
 endif

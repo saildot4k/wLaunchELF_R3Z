@@ -13,6 +13,7 @@
 #include "string.h"
 #include "errno.h"
 #include <elf.h>
+#include <ps2sdkapi.h>
 
 #define NEWLIB_PORT_AWARE
 #include <fileXio_rpc.h>
@@ -40,6 +41,18 @@ void _libcglue_args_parse(int argc, char **argv)
 	(void)argc;
 	(void)argv;
 }
+
+void _libcglue_timezone_update(void)
+{
+}
+
+void _libcglue_rtc_update(void)
+{
+}
+
+DISABLE_PATCHED_FUNCTIONS();
+DISABLE_EXTRA_TIMERS_FUNCTIONS();
+PS2_DISABLE_AUTOSTART_PTHREAD();
 
 static int parseHex8(const char *text, u32 *value)
 {
@@ -256,6 +269,7 @@ int main(int argc, char *argv[])
 		return -EINVAL;
 
 	SifInitRpc(0);
+	fileXioInit();
 
 	elf_path = NULL;
 	reset_iop = 0;
