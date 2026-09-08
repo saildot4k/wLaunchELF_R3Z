@@ -48,7 +48,9 @@ ifeq ($(wildcard $(PS2SDK)/ee/lib/libkernel-nopatch.a),)
 EE_KERNEL_LIB := -lkernel
 endif
 ifneq (x$(EE_NEWLIB_NANO), x0)
-EE_LDFLAGS += -nodefaultlibs -lm_nano -lgcc -Wl,--start-group -lc_nano $(EE_KERNEL_LIB) -Wl,--end-group
+EE_NANO_LIBS := $(EE_LIBS)
+EE_LIBS :=
+EE_LDFLAGS += -nodefaultlibs -lm_nano -lgcc -Wl,--start-group $(EE_NANO_LIBS) -lc_nano $(EE_KERNEL_LIB) -Wl,--end-group
 else
 EE_LIBS += -lc $(EE_KERNEL_LIB)
 endif

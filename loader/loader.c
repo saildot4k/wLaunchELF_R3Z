@@ -3,7 +3,7 @@
 //--------------------------------------------------------------
 // Reduced embedded loader for wLaunchELF R3Z.
 // Based on the OSDMenu embeddable loader design, with wLE-specific
-// argv handoff and without GSM, PATINFO, DEV9, title ID, or CNF support.
+// argv handoff and without GSM, PATINFO, title ID, or CNF support.
 
 #include "tamtypes.h"
 #include "kernel.h"
@@ -14,7 +14,18 @@
 #include "errno.h"
 #include <elf.h>
 
+#define NEWLIB_PORT_AWARE
+#include <fileXio_rpc.h>
+#include <hdd-ioctl.h>
+
 #define USER_MEM_START_ADDR 0x100000
+#define PFS_MOUNTPOINT_COUNT 4
+
+enum dev9_cleanup_mode {
+	DEV9_CLEANUP_NONE = 0,
+	DEV9_CLEANUP_HDD,
+	DEV9_CLEANUP_ALL
+};
 
 void _libcglue_init(void)
 {
@@ -106,6 +117,28 @@ static void clearUserMemPreserving(u32 preserve_addr, u32 preserve_size)
 		memset((void *)preserve_end, 0, end - preserve_end);
 }
 
+static void cleanupDev9ForLaunch(int mode)
+{
+	char pfs_dev[] = "pfs0:";
+	int i;
+
+	if (mode == DEV9_CLEANUP_NONE)
+		return;
+
+	fileXioDevctl("pfs:", PDIOC_CLOSEALL, NULL, 0, NULL, 0);
+	for (i = 0; i < PFS_MOUNTPOINT_COUNT; i++) {
+		pfs_dev[3] = '0' + i;
+		fileXioSync(pfs_dev, FXIO_WAIT);
+		fileXioUmount(pfs_dev);
+	}
+
+	fileXioDevctl("hdd0:", HDIOC_IDLEIMM, NULL, 0, NULL, 0);
+	fileXioDevctl("hdd1:", HDIOC_IDLEIMM, NULL, 0, NULL, 0);
+
+	if (mode == DEV9_CLEANUP_ALL)
+		fileXioDevctl("dev9x:", DDIOC_OFF, NULL, 0, NULL, 0);
+}
+
 static int loadELFImage(u32 elf_addr, u32 *entry)
 {
 	Elf32_Ehdr *eh;
@@ -152,7 +185,7 @@ static void resetIOP(void)
 	SifInitRpc(0);
 }
 
-static int loadEmbeddedPayload(char *elf_path, int argc, char *argv[], int reset_iop)
+static int loadEmbeddedPayload(char *elf_path, int argc, char *argv[], int reset_iop, int dev9_cleanup)
 {
 	u32 elf_addr, elf_size, entry;
 	int ret;
@@ -164,6 +197,8 @@ static int loadEmbeddedPayload(char *elf_path, int argc, char *argv[], int reset
 		return -EINVAL;
 
 	clearUserMemPreserving(elf_addr, elf_size);
+
+	cleanupDev9ForLaunch(dev9_cleanup);
 
 	if (reset_iop)
 		resetIOP();
@@ -181,7 +216,7 @@ static int loadEmbeddedPayload(char *elf_path, int argc, char *argv[], int reset
 	return 0;
 }
 
-static int loadFilePayload(char *elf_path, int argc, char *argv[], int reset_iop)
+static int loadFilePayload(char *elf_path, int argc, char *argv[], int reset_iop, int dev9_cleanup)
 {
 	static t_ExecData elfdata;
 	int ret;
@@ -202,6 +237,8 @@ static int loadFilePayload(char *elf_path, int argc, char *argv[], int reset_iop
 	FlushCache(0);
 	FlushCache(2);
 
+	cleanupDev9ForLaunch(dev9_cleanup);
+
 	if (reset_iop)
 		resetIOP();
 
@@ -213,7 +250,7 @@ static int loadFilePayload(char *elf_path, int argc, char *argv[], int reset_iop
 int main(int argc, char *argv[])
 {
 	char *elf_path;
-	int reset_iop, skip_argv0;
+	int reset_iop, skip_argv0, dev9_cleanup;
 
 	if (argc < 1)
 		return -EINVAL;
@@ -223,11 +260,13 @@ int main(int argc, char *argv[])
 	elf_path = NULL;
 	reset_iop = 0;
 	skip_argv0 = 0;
+	dev9_cleanup = DEV9_CLEANUP_NONE;
 
 	if (argc > 0 && !strncmp(argv[argc - 1], "-la=", 4)) {
 		char *flags;
 		int i;
 
+		/* R: reset IOP, E: memory ELF path, A: skip argv0, H/N/D: DEV9 cleanup. */
 		flags = argv[argc - 1] + 4;
 		for (i = 0; flags[i] != '\0'; i++) {
 			switch (flags[i]) {
@@ -242,6 +281,15 @@ int main(int argc, char *argv[])
 				break;
 			case 'A':
 				skip_argv0 = 1;
+				break;
+			case 'H':
+				dev9_cleanup = DEV9_CLEANUP_ALL;
+				break;
+			case 'N':
+				dev9_cleanup = DEV9_CLEANUP_HDD;
+				break;
+			case 'D':
+				dev9_cleanup = DEV9_CLEANUP_NONE;
 				break;
 			default:
 				break;
@@ -261,9 +309,9 @@ int main(int argc, char *argv[])
 	}
 
 	if (!strncmp(elf_path, "mem:", 4))
-		return loadEmbeddedPayload(elf_path, argc, argv, reset_iop);
+		return loadEmbeddedPayload(elf_path, argc, argv, reset_iop, dev9_cleanup);
 
-	return loadFilePayload(elf_path, argc, argv, reset_iop);
+	return loadFilePayload(elf_path, argc, argv, reset_iop, dev9_cleanup);
 }
 
 //--------------------------------------------------------------

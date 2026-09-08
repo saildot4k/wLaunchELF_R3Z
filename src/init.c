@@ -98,6 +98,11 @@ static u8 have_mc_rpc_ready = 0;
 static unsigned int iop_reset_generation = 0;
 
 #define USB_MASS_BDMFS_SETTLE_MS 1000
+#define OHCI_REG_BASE 0xbf801600
+#define OHCI_HC_CONTROL (OHCI_REG_BASE + 0x04)
+#define OHCI_HC_COMMAND_STATUS (OHCI_REG_BASE + 0x08)
+#define OHCI_HC_INTERRUPT_DISABLE (OHCI_REG_BASE + 0x14)
+#define OHCI_COM_HCR (1 << 0)
 
 //State of Uncheckable Modules (invalid header)
 static u8 have_cdvd = 0;
@@ -223,6 +228,7 @@ static void load_ps2ip(void);
 static int load_ps2hdd_stack(int with_ata_bd);
 static void showLoadingModulesMsg(const char *device_name);
 static void showRebootingIopMsg(void);
+static void resetUsbHostControllerBeforeIopReset(void);
 #ifdef ETH
 static void load_ps2ftpd(void);
 static void load_ps2netfs(void);
@@ -318,6 +324,34 @@ static void showRebootingIopMsg(void)
 {
 	if (!is_early_init)
 		drawMsg(LNG(Rebooting_IOP));
+}
+
+static void resetUsbHostControllerBeforeIopReset(void)
+{
+	volatile u32 *hc_control;
+	volatile u32 *hc_command_status;
+	volatile u32 *hc_interrupt_disable;
+	int i;
+
+	hc_control = (volatile u32 *)OHCI_HC_CONTROL;
+	hc_command_status = (volatile u32 *)OHCI_HC_COMMAND_STATUS;
+	hc_interrupt_disable = (volatile u32 *)OHCI_HC_INTERRUPT_DISABLE;
+
+	ee_kmode_enter();
+	*hc_interrupt_disable = ~0;
+	*hc_control &= ~0x3Cu;
+
+	i = 0x500;
+	while (i--)
+		asm("nop\nnop\nnop\nnop");
+
+	*hc_command_status = OHCI_COM_HCR;
+	*hc_control = 0;
+	for (i = 0; i < 1000; i++) {
+		if (!(*hc_command_status & OHCI_COM_HCR))
+			break;
+	}
+	ee_kmode_exit();
 }
 
 static void load_ps2dev9(void)
@@ -594,6 +628,7 @@ int prepareExploitSignerIop(void)
 	showRebootingIopMsg();
 
 	SifInitRpc(0);
+	resetUsbHostControllerBeforeIopReset();
 	ret = SifIopRebootBuffer(exploit_ioprp_img, size_exploit_ioprp_img);
 	if (ret <= 0) {
 		SifInitRpc(0);
@@ -1929,6 +1964,7 @@ static void clearIopModuleState(void)
 void Reset()
 {
 #ifndef NO_IOP_RESET
+	resetUsbHostControllerBeforeIopReset();
 	SifInitRpc(0);
 	while (!SifIopReset("", 0)) {
 	};
