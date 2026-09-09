@@ -117,6 +117,12 @@ static int get_console_dvd_player_region(char *region)
 	return TRUE;
 }
 
+static void initialize_console_rom1_driver(void)
+{
+	/* ADDDRV registers the rom1: device used by the internal DVD player. */
+	SifLoadModule("rom0:ADDDRV", 0, NULL);
+}
+
 int IsDtlConsoleIdentity(const char *romver, const char *model)
 {
 	if (romver != NULL && !strncmp(romver, "0180C", 5))
@@ -202,6 +208,7 @@ void GetConsoleDvdVersion(char *dst, size_t dst_size)
 	if (dst == NULL || dst_size == 0)
 		return;
 
+	initialize_console_rom1_driver();
 	fd = -1;
 	if (get_console_dvd_player_region(&regional_path[11]))
 		fd = genOpen(regional_path, FIO_O_RDONLY);
