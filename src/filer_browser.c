@@ -7,6 +7,7 @@
 #include "filer_shared.h"
 #include "gui_hdd0_format.h"
 #include "init.h"
+#include "main_title.h"
 
 #define SOURCE_DEVICE_WAIT_INTERVAL_MS 1000
 #define SOURCE_DEVICE_WAIT_TIMEOUT_MS 6000
@@ -992,6 +993,33 @@ static int getCenteredListTop(int selected, int count, int rows)
 	return top;
 }
 
+static void formatBrowserMissingTimestamp(char *dst, size_t dst_size, int use_12h, int date_format)
+{
+	const char *date_text;
+
+	if (date_format == 1 || date_format == 2)
+		date_text = "--/--/----";
+	else
+		date_text = "----/--/--";
+
+	if (use_12h)
+		snprintf(dst, dst_size, "%s --:--:-- --", date_text);
+	else
+		snprintf(dst, dst_size, "%s --:--:--", date_text);
+}
+
+static void formatBrowserTimestamp(char *dst, size_t dst_size, const PS2TIME *timestamp, int use_12h, int date_format)
+{
+	char date_text[16];
+	char time_text[16];
+	int year;
+
+	year = (timestamp->year < 2256) ? timestamp->year : (timestamp->year - 256);
+	menuTitleFormatClockDate(date_text, sizeof(date_text), year, timestamp->month, timestamp->day, date_format);
+	menuTitleFormatClockTime(time_text, sizeof(time_text), timestamp->hour, timestamp->min, timestamp->sec, use_12h);
+	snprintf(dst, dst_size, "%s %s", date_text, time_text);
+}
+
 int getFilePath(char *out, int cnfmode)
 {
 	char path[MAX_PATH], cursorEntry[MAX_PATH],
@@ -1007,6 +1035,7 @@ int getFilePath(char *out, int cnfmode)
 	int event, post_event = 0;
 	int font_height;
 	int iconbase, iconcolr;
+	int use_12h = 0, date_format = 0;
 
 	elisa_failed = FALSE;  //set at failure to load font, cleared at each browser entry
 
@@ -1652,6 +1681,9 @@ int getFilePath(char *out, int cnfmode)
 			}
 			rows = (Menu_end_y - Menu_start_y) / font_height;
 
+			if (file_show > 0)
+				menuTitleGetClockFormat(&use_12h, &date_format);
+
 			for (i = 0; i < rows; i++)  //Repeat loop for each browser text row
 			{
 				mcTitle = NULL;      //Assume that normal file/folder names are to be displayed
@@ -1711,6 +1743,7 @@ int getFilePath(char *out, int cnfmode)
 					u64 size = ((u64)files[top + i].stats.Reserve2 << 32) | files[top + i].stats.FileSizeByte;
 					int scale = 0;  //0==Bytes, 1==KBytes, 2==MBytes, 3==GB
 					char scale_s[6] = " KMGTP";
+					char timestamp_text[32];
 					PS2TIME timestamp = *(PS2TIME *)&files[top + i].stats._Modify;
 
 					if (!size_valid)
@@ -1731,16 +1764,11 @@ int getFilePath(char *out, int cnfmode)
 					}
 
 					if (!time_valid || !(top + i))
-						strcat(tmp, " ----.--.-- --:--:--");
+						formatBrowserMissingTimestamp(timestamp_text, sizeof(timestamp_text), use_12h, date_format);
 					else {
-						sprintf(tmp + strlen(tmp), " %04d.%02d.%02d %02d:%02d:%02d",
-						        ((timestamp.year < 2256) ? timestamp.year : (timestamp.year - 256)),
-						        timestamp.month,
-						        timestamp.day,
-						        timestamp.hour,
-						        timestamp.min,
-						        timestamp.sec);
+						formatBrowserTimestamp(timestamp_text, sizeof(timestamp_text), &timestamp, use_12h, date_format);
 					}
+					sprintf(tmp + strlen(tmp), " %s", timestamp_text);
 
 					printXY(tmp, x + 4 + 44 * FONT_WIDTH, y, color, TRUE, 0);
 				}

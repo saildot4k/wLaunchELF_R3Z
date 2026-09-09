@@ -224,7 +224,28 @@ static void readOsdClockFormats(int *use_12h, int *date_format, int *local_offse
 		*local_offset_minutes += 60;
 }
 
-static void formatClockTime(char *dst, size_t dst_size, int hour, int minute, int second, int use_12h)
+void menuTitleGetClockFormat(int *use_12h, int *date_format)
+{
+	int read_use_12h;
+	int read_date_format;
+	int local_offset_minutes;
+
+	if (title_clock.initialized) {
+		if (use_12h != NULL)
+			*use_12h = title_clock.use_12h;
+		if (date_format != NULL)
+			*date_format = title_clock.date_format;
+		return;
+	}
+
+	readOsdClockFormats(&read_use_12h, &read_date_format, &local_offset_minutes);
+	if (use_12h != NULL)
+		*use_12h = read_use_12h;
+	if (date_format != NULL)
+		*date_format = read_date_format;
+}
+
+void menuTitleFormatClockTime(char *dst, size_t dst_size, int hour, int minute, int second, int use_12h)
 {
 	if (use_12h) {
 		const char *suffix = (hour >= 12) ? "PM" : "AM";
@@ -238,7 +259,7 @@ static void formatClockTime(char *dst, size_t dst_size, int hour, int minute, in
 	}
 }
 
-static void formatClockDate(char *dst, size_t dst_size, int year, int month, int day, int date_format)
+void menuTitleFormatClockDate(char *dst, size_t dst_size, int year, int month, int day, int date_format)
 {
 	switch (date_format) {
 		case 1:
@@ -266,18 +287,18 @@ static int refreshClockText(int care_time, int care_date)
 	old_date[sizeof(old_date) - 1] = '\0';
 
 	if (title_clock.valid) {
-		formatClockTime(title_clock.time_text,
-		                sizeof(title_clock.time_text),
-		                title_clock.hour,
-		                title_clock.minute,
-		                title_clock.second,
-		                title_clock.use_12h);
-		formatClockDate(title_clock.date_text,
-		                sizeof(title_clock.date_text),
-		                title_clock.year,
-		                title_clock.month,
-		                title_clock.day,
-		                title_clock.date_format);
+		menuTitleFormatClockTime(title_clock.time_text,
+		                         sizeof(title_clock.time_text),
+		                         title_clock.hour,
+		                         title_clock.minute,
+		                         title_clock.second,
+		                         title_clock.use_12h);
+		menuTitleFormatClockDate(title_clock.date_text,
+		                         sizeof(title_clock.date_text),
+		                         title_clock.year,
+		                         title_clock.month,
+		                         title_clock.day,
+		                         title_clock.date_format);
 	} else {
 		snprintf(title_clock.time_text, sizeof(title_clock.time_text), "--:--:--");
 		snprintf(title_clock.date_text, sizeof(title_clock.date_text), "----/--/--");
