@@ -151,6 +151,10 @@ static const u8 user_header_dnasload[KELF_USER_HEADER_SIZE] = {
     0x01, 0x00, 0x00, 0x04, 0x00, 0x06, 0x00, 0x4a,
     0x00, 0x0e, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02};
 
+static const u8 user_header_dongle[KELF_USER_HEADER_SIZE] = {
+    0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
+    0x03, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00};
+
 static const u8 user_kbit_fmcb[KELF_KEY_SIZE] = {
     0x24, 0x25, 0x1d, 0x05, 0xd1, 0x5e, 0x2d, 0x7d,
     0x94, 0x3f, 0x4a, 0x30, 0x3f, 0x28, 0x24, 0xdb};
@@ -1000,7 +1004,9 @@ int KelfSignElfToMemory(const char *elf_path,
 
 	if (elf_path == NULL || keys_path == NULL || keyset == NULL || out_buf == NULL || out_size == NULL)
 		return -EINVAL;
-	if (header_id != KELF_SIGN_HEADER_FMCB && header_id != KELF_SIGN_HEADER_DNASLOAD)
+	if (header_id != KELF_SIGN_HEADER_FMCB &&
+	    header_id != KELF_SIGN_HEADER_DNASLOAD &&
+	    header_id != KELF_SIGN_HEADER_DONGLE)
 		return -EINVAL;
 	if (system_type != KELF_SIGN_SYSTEM_PS2 && system_type != KELF_SIGN_SYSTEM_PSX)
 		return -EINVAL;
@@ -1015,9 +1021,12 @@ int KelfSignElfToMemory(const char *elf_path,
 
 	content = buffer + KELF_OUTPUT_HEADER_SIZE;
 	memset(&header, 0, sizeof(header));
-	memcpy(header.user_defined,
-	       (header_id == KELF_SIGN_HEADER_DNASLOAD) ? user_header_dnasload : user_header_fmcb,
-	       sizeof(header.user_defined));
+	if (header_id == KELF_SIGN_HEADER_DNASLOAD)
+		memcpy(header.user_defined, user_header_dnasload, sizeof(header.user_defined));
+	else if (header_id == KELF_SIGN_HEADER_DONGLE)
+		memcpy(header.user_defined, user_header_dongle, sizeof(header.user_defined));
+	else
+		memcpy(header.user_defined, user_header_fmcb, sizeof(header.user_defined));
 	header.content_size = content_size;
 	header.header_size = KELF_OUTPUT_HEADER_SIZE;
 	header.system_type = (u8)system_type;
@@ -1108,11 +1117,16 @@ int main(int argc, char **argv)
 	}
 
 	if (argc != 7) {
-		fprintf(stderr, "usage: %s <keys.dat> <keyset> <fmcb|dnasload> <ps2|psx> <input.elf> <output.kelf>\n", argv[0]);
+		fprintf(stderr, "usage: %s <keys.dat> <keyset> <fmcb|dnasload|dongle> <ps2|psx> <input.elf> <output.kelf>\n", argv[0]);
 		return 1;
 	}
 
-	header = !strcmp(argv[3], "dnasload") ? KELF_SIGN_HEADER_DNASLOAD : KELF_SIGN_HEADER_FMCB;
+	if (!strcmp(argv[3], "dnasload"))
+		header = KELF_SIGN_HEADER_DNASLOAD;
+	else if (!strcmp(argv[3], "dongle"))
+		header = KELF_SIGN_HEADER_DONGLE;
+	else
+		header = KELF_SIGN_HEADER_FMCB;
 	system = !strcmp(argv[4], "psx") ? KELF_SIGN_SYSTEM_PSX : KELF_SIGN_SYSTEM_PS2;
 	ret = KelfSignElfToMemory(argv[5], argv[1], argv[2], header, system, &buffer, &size);
 	if (ret < 0) {
