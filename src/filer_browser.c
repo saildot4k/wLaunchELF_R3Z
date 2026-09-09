@@ -972,7 +972,7 @@ static int getBrowserListFontHeight(void)
 
 static int getBrowserDeviceInfoRows(const char *path)
 {
-	return (path[0] == '\0') ? 2 : 0;
+	return (path[0] == '\0') ? 3 : 0;
 }
 
 static int getBrowserListRows(const char *path, int font_height)
@@ -1039,21 +1039,14 @@ static void formatBrowserTimestamp(char *dst, size_t dst_size, const PS2TIME *ti
 	snprintf(dst, dst_size, "%s %s", time_text, date_text);
 }
 
-static void formatBrowserBootrom(char *dst, size_t dst_size, const char *romver)
-{
-	if (romver != NULL && strlen(romver) >= 5)
-		snprintf(dst, dst_size, "BOOTROM: %c.%c%c %c", romver[1], romver[2], romver[3], romver[4]);
-	else
-		snprintf(dst, dst_size, "BOOTROM: ?.?? ?");
-}
-
 int getFilePath(char *out, int cnfmode)
 {
 	char path[MAX_PATH], cursorEntry[MAX_PATH],
 	    msg0[MAX_PATH], msg1[MAX_PATH],
 	    tmp[MAX_PATH], tmp1[MAX_PATH], tmp2[MAX_PATH], ext[8], *p;
 	char device_model[CONSOLE_MODEL_NAME_MAX_LEN + 1];
-	char device_bootrom[20];
+	char device_bootrom[CONSOLE_INFO_LINE_MAX_LEN];
+	char device_dvdver[CONSOLE_INFO_LINE_MAX_LEN];
 	const unsigned char *mcTitle;
 	u64 color;
 	FILEINFO files[MAX_ENTRY];
@@ -1717,7 +1710,8 @@ int getFilePath(char *out, int cnfmode)
 				if (ROMVER_data[0] == '\0')
 					uLE_InitializeRegion();
 				GetConsoleModelName(ROMVER_data, device_model, sizeof(device_model));
-				formatBrowserBootrom(device_bootrom, sizeof(device_bootrom), ROMVER_data);
+				FormatConsoleBootrom(device_bootrom, sizeof(device_bootrom), ROMVER_data);
+				GetConsoleDvdVersion(device_dvdver, sizeof(device_dvdver));
 				device_info_ready = TRUE;
 			}
 
@@ -1864,6 +1858,7 @@ int getFilePath(char *out, int cnfmode)
 				snprintf(tmp, sizeof(tmp), "MODEL: %s", device_model);
 				printXY(tmp, x + 4, list_end_y, setting->color[COLOR_TEXT], TRUE, 0);
 				printXY(device_bootrom, x + 4, list_end_y + font_height, setting->color[COLOR_TEXT], TRUE, 0);
+				printXY(device_dvdver, x + 4, list_end_y + 2 * font_height, setting->color[COLOR_TEXT], TRUE, 0);
 			}
 			if (nclipFiles) {  //if Something in clipboard, emulate LED indicator
 				u64 LED_colour, RIM_colour = GS_SETREG_RGBA(0, 0, 0, 0);

@@ -145,3 +145,63 @@ void GetConsoleModelName(const char *romver, char *model, size_t model_len)
 
 	get_model_fallback_name(romver, model, model_len);
 }
+
+void FormatConsoleBootrom(char *dst, size_t dst_size, const char *romver)
+{
+	if (dst == NULL || dst_size == 0)
+		return;
+
+	if (romver != NULL && strlen(romver) >= 5)
+		snprintf(dst, dst_size, "BOOTROM: %c.%c%c %c", romver[1], romver[2], romver[3], romver[4]);
+	else
+		snprintf(dst, dst_size, "BOOTROM: ?.?? ?");
+}
+
+void GetConsoleDvdVersion(char *dst, size_t dst_size)
+{
+	char dvdver[16];
+	int fd, read_len;
+	size_t i, version_len;
+
+	if (dst == NULL || dst_size == 0)
+		return;
+
+	fd = genOpen("rom1:DVDVER", FIO_O_RDONLY);
+	if (fd < 0) {
+		snprintf(dst, dst_size, "DVD: <unavailable>");
+		return;
+	}
+
+	memset(dvdver, 0, sizeof(dvdver));
+	read_len = genRead(fd, dvdver, sizeof(dvdver) - 1);
+	genClose(fd);
+	if (read_len <= 0) {
+		snprintf(dst, dst_size, "DVD: <unavailable>");
+		return;
+	}
+
+	dvdver[read_len] = '\0';
+	for (i = 0; dvdver[i] != '\0'; i++) {
+		if (dvdver[i] == '\r' || dvdver[i] == '\n') {
+			dvdver[i] = '\0';
+			break;
+		}
+	}
+	version_len = strlen(dvdver);
+
+	/* ROMs use either compact 0200E or already-readable 2.00E versions. */
+	if (version_len == 5 && dvdver[0] == '0' &&
+	    dvdver[1] >= '0' && dvdver[1] <= '9' &&
+	    dvdver[2] >= '0' && dvdver[2] <= '9' &&
+	    dvdver[3] >= '0' && dvdver[3] <= '9' &&
+	    ((dvdver[4] >= 'A' && dvdver[4] <= 'Z') || (dvdver[4] >= 'a' && dvdver[4] <= 'z')))
+		snprintf(dst, dst_size, "DVD: %c.%c%c %c", dvdver[1], dvdver[2], dvdver[3], dvdver[4]);
+	else if (version_len == 5 && dvdver[1] == '.' &&
+	         dvdver[0] >= '0' && dvdver[0] <= '9' &&
+	         dvdver[2] >= '0' && dvdver[2] <= '9' &&
+	         dvdver[3] >= '0' && dvdver[3] <= '9' &&
+	         ((dvdver[4] >= 'A' && dvdver[4] <= 'Z') || (dvdver[4] >= 'a' && dvdver[4] <= 'z')))
+		snprintf(dst, dst_size, "DVD: %.4s %c", dvdver, dvdver[4]);
+	else
+		snprintf(dst, dst_size, "DVD: %s", dvdver);
+}
