@@ -302,6 +302,16 @@ static int getCustomDateDaysInMonth(int year, int month)
 	return days_per_month[month - 1];
 }
 
+static int isCustomMemoryCardTimestampValid(int year, int month, int day, int hour, int minute, int second)
+{
+	if (year < 1 || year > 2099 || month < 1 || month > 12 || day < 1 || day > getCustomDateDaysInMonth(year, month) ||
+	    hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59)
+		return 0;
+
+	/* Reserve the final second for Set *Tuna Date. */
+	return !(year == 2099 && month == 12 && day == 31 && hour == 23 && minute == 59 && second == 59);
+}
+
 static int parseCustomDateValue(const char *text, int start, int digits)
 {
 	int i;
@@ -330,8 +340,7 @@ static int parseCustomMemoryCardTimestamp(const char *text, sceMcStDateTime *tim
 	hour = parseCustomDateValue(text, 11, 2);
 	minute = parseCustomDateValue(text, 14, 2);
 	second = parseCustomDateValue(text, 17, 2);
-	if (year < 1 || year > 2099 || month < 1 || month > 12 || day < 1 || day > getCustomDateDaysInMonth(year, month) ||
-	    hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59)
+	if (!isCustomMemoryCardTimestampValid(year, month, day, hour, minute, second))
 		return -1;
 
 	timestamp->Resv2 = 0;
@@ -405,9 +414,8 @@ int time_manip_custom(const char *path, const FILEINFO *file, char *message)
 
 	current_timestamp = (const PS2TIME *)&file->stats._Modify;
 	current_year = current_timestamp->year;
-	if (current_year < 1 || current_year > 2099 || current_timestamp->month < 1 || current_timestamp->month > 12 ||
-	    current_timestamp->day < 1 || current_timestamp->day > getCustomDateDaysInMonth(current_year, current_timestamp->month) ||
-	    current_timestamp->hour > 23 || current_timestamp->min > 59 || current_timestamp->sec > 59) {
+	if (!isCustomMemoryCardTimestampValid(current_year, current_timestamp->month, current_timestamp->day,
+	                                       current_timestamp->hour, current_timestamp->min, current_timestamp->sec)) {
 		snprintf(date_text, sizeof(date_text), "2000-01-01 00:00:00");
 	} else {
 		snprintf(date_text, sizeof(date_text), "%04d-%02d-%02d %02d:%02d:%02d", current_year,
@@ -419,7 +427,7 @@ int time_manip_custom(const char *path, const FILEINFO *file, char *message)
 	if (keyboard(date_text, CUSTOM_DATE_TEXT_LEN) < 0)
 		return 0;
 	if (parseCustomMemoryCardTimestamp(date_text, &timestamp) < 0) {
-		snprintf(message, MAX_PATH, "Invalid date. Use YYYY-MM-DD HH:MM:SS");
+		snprintf(message, MAX_PATH, "Invalid date. Maximum is 2099-12-31 23:59:58.");
 		return -1;
 	}
 
