@@ -286,64 +286,146 @@ u64 getFileSize(const char *path, const FILEINFO *file)
 //endfunc getFileSize
 //--------------------------------------------------------------
 //
-//this function will allow you to force the date of any memory-card save file...
-//... into the highest date available for a ps2 (1 second before year 2100)
-// ----------=====args=====----------
-// path: mc0:/ or mc1:/
-// const FILEINFO *file = the FILEINFO struct for that save, however, this function only cares about folder name
-//_msg0 = pointer to msg0 to report what happened to the user (uLaunchELF only)
-//#ifdef TMANIP
-	void time_manip(const char *path, const FILEINFO *file, char *_msg0)
-	{
-		int rett;  //this var will be used to store the result of mcSetFileInfo()
-		int slot;
-		slot = path[2] - '0';
-		ensureMemoryCardPortAccessible(slot);
-		#define ARRAY_ENTRIES 64
-		static sceMcTblGetDir mcDirAAA[ARRAY_ENTRIES] __attribute__((aligned(64)));  // save file properties
-		static sceMcStDateTime new_mtime;                                            //manipulated struct for savefile properties, this will be used to change the date of the save file properties
-																					//char *result,*end;
-																					/*=====================================================================================================*/
-	/*
-	#ifdef TMANIP_MORON
-		McGetDir(slot, 0, HACK_FOLDER, 0x2, ARRAY_ENTRIES, &mcDirAAA);
-	#else
-		McGetDir(slot, 0,  file->name, 0x2, ARRAY_ENTRIES, &mcDirAAA);
-	#endif*/ //till i find the real name of this func on ps2dev:1.0
-		new_mtime.Resv2 = 0;
-		new_mtime.Sec = 59;
-		new_mtime.Min = 59;
-		new_mtime.Hour = 23;
-		new_mtime.Day = 31;
-		new_mtime.Month = 12;
-		new_mtime.Year = 2099;
-		mcDirAAA->_Modify = new_mtime;
-		mcDirAAA->_Create = new_mtime;
-		/*=====================================================================================================*/
-	
-	#ifdef TMANIP_MORON
-		rett = mcSetFileInfo(slot, 0, HACK_FOLDER, mcDirAAA, 0x02);
-		if (rett == 0)
-			sprintf(_msg0, "success, folder [%s]  Mc Slot [%d] .", HACK_FOLDER, slot);
-		if (rett < 0)
-			sprintf(_msg0, "error [%d], folder[%s]  Mc Slot=[%d] .", rett, HACK_FOLDER, slot);
-	#else
-		rett = mcSetFileInfo(slot, 0, file->name, mcDirAAA, 0x02);
-		if (rett == 0)
-			sprintf(_msg0, "success, folder [%s]  Mc Slot [%d] .", file->name, slot);
-		if (rett < 0)
-			sprintf(_msg0, "error [%d], folder[%s]  Mc Slot=[%d] .", rett, file->name, slot);
-	#endif //TMANIP_MORON
-	
-	
-	
-		mcSync(0, NULL, &rett);
-	}  // TIMEMANIP
-	//------------------------------
-	//endfunc time_manip
-	//--------------------------------------------------------------
-	//
-//#endif //TMANIP
+#define CUSTOM_DATE_TEXT_LEN 19
+
+static int isCustomDateLeapYear(int year)
+{
+	return ((year % 4 == 0) && ((year % 100 != 0) || (year % 400 == 0)));
+}
+
+static int getCustomDateDaysInMonth(int year, int month)
+{
+	static const int days_per_month[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+
+	if (month == 2)
+		return days_per_month[month - 1] + isCustomDateLeapYear(year);
+	return days_per_month[month - 1];
+}
+
+static int parseCustomDateValue(const char *text, int start, int digits)
+{
+	int i;
+	int value = 0;
+
+	for (i = 0; i < digits; i++) {
+		if (text[start + i] < '0' || text[start + i] > '9')
+			return -1;
+		value = value * 10 + text[start + i] - '0';
+	}
+
+	return value;
+}
+
+static int parseCustomMemoryCardTimestamp(const char *text, sceMcStDateTime *timestamp)
+{
+	int year, month, day, hour, minute, second;
+
+	if (strlen(text) != CUSTOM_DATE_TEXT_LEN || text[4] != '-' || text[7] != '-' ||
+	    text[10] != ' ' || text[13] != ':' || text[16] != ':')
+		return -1;
+
+	year = parseCustomDateValue(text, 0, 4);
+	month = parseCustomDateValue(text, 5, 2);
+	day = parseCustomDateValue(text, 8, 2);
+	hour = parseCustomDateValue(text, 11, 2);
+	minute = parseCustomDateValue(text, 14, 2);
+	second = parseCustomDateValue(text, 17, 2);
+	if (year < 1 || year > 2099 || month < 1 || month > 12 || day < 1 || day > getCustomDateDaysInMonth(year, month) ||
+	    hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59)
+		return -1;
+
+	timestamp->Resv2 = 0;
+	timestamp->Year = year;
+	timestamp->Month = month;
+	timestamp->Day = day;
+	timestamp->Hour = hour;
+	timestamp->Min = minute;
+	timestamp->Sec = second;
+	return 0;
+}
+
+static int setMemoryCardFolderTimestamp(const char *path, const FILEINFO *file, const sceMcStDateTime *timestamp, char *message)
+{
+	static sceMcTblGetDir mc_dir __attribute__((aligned(64)));
+	const char *folder_name;
+	int result;
+	int slot;
+
+	if (path == NULL || file == NULL || timestamp == NULL || path[2] < '0' || path[2] > '1')
+		return -1;
+
+	slot = path[2] - '0';
+#ifdef TMANIP_MORON
+	folder_name = HACK_FOLDER;
+#else
+	folder_name = file->name;
+#endif
+	memcpy(&mc_dir, &file->stats, sizeof(mc_dir));
+	mc_dir._Modify = *timestamp;
+	mc_dir._Create = *timestamp;
+
+	ensureMemoryCardPortAccessible(slot);
+	mcSync(0, NULL, NULL);
+	result = mcSetFileInfo(slot, 0, folder_name, &mc_dir, 0x02);
+	if (result >= 0)
+		mcSync(0, NULL, &result);
+
+	if (result == 0)
+		snprintf(message, MAX_PATH, "success, folder [%s] Mc Slot [%d].", folder_name, slot);
+	else
+		snprintf(message, MAX_PATH, "error [%d], folder [%s] Mc Slot [%d].", result, folder_name, slot);
+
+	return result;
+}
+
+void time_manip(const char *path, const FILEINFO *file, char *message)
+{
+	sceMcStDateTime timestamp;
+
+	timestamp.Resv2 = 0;
+	timestamp.Sec = 59;
+	timestamp.Min = 59;
+	timestamp.Hour = 23;
+	timestamp.Day = 31;
+	timestamp.Month = 12;
+	timestamp.Year = 2099;
+	setMemoryCardFolderTimestamp(path, file, &timestamp, message);
+}
+
+int time_manip_custom(const char *path, const FILEINFO *file, char *message)
+{
+	const PS2TIME *current_timestamp;
+	sceMcStDateTime timestamp;
+	char date_text[CUSTOM_DATE_TEXT_LEN + 1];
+	int current_year;
+	int result;
+
+	if (path == NULL || file == NULL)
+		return -1;
+
+	current_timestamp = (const PS2TIME *)&file->stats._Modify;
+	current_year = current_timestamp->year;
+	if (current_year < 1 || current_year > 2099 || current_timestamp->month < 1 || current_timestamp->month > 12 ||
+	    current_timestamp->day < 1 || current_timestamp->day > getCustomDateDaysInMonth(current_year, current_timestamp->month) ||
+	    current_timestamp->hour > 23 || current_timestamp->min > 59 || current_timestamp->sec > 59) {
+		snprintf(date_text, sizeof(date_text), "2000-01-01 00:00:00");
+	} else {
+		snprintf(date_text, sizeof(date_text), "%04d-%02d-%02d %02d:%02d:%02d", current_year,
+		         current_timestamp->month, current_timestamp->day, current_timestamp->hour,
+		         current_timestamp->min, current_timestamp->sec);
+	}
+
+	drawMsg("Enter date: YYYY-MM-DD HH:MM:SS");
+	if (keyboard(date_text, CUSTOM_DATE_TEXT_LEN) < 0)
+		return 0;
+	if (parseCustomMemoryCardTimestamp(date_text, &timestamp) < 0) {
+		snprintf(message, MAX_PATH, "Invalid date. Use YYYY-MM-DD HH:MM:SS");
+		return -1;
+	}
+
+	result = setMemoryCardFolderTimestamp(path, file, &timestamp, message);
+	return result == 0 ? 1 : -1;
+}
 
 void make_title_cfg(const char *path, const FILEINFO *file, char *_msg0)
 {

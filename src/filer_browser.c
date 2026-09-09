@@ -397,6 +397,7 @@ static int menu(const char *path, FILEINFO *file)
 	menu_len = strlen(LNG(Launch_With_Args)) > menu_len ? strlen(LNG(Launch_With_Args)) : menu_len;
 	menu_len = strlen(psu_action_label) > menu_len ? strlen(psu_action_label) : menu_len;
 	menu_len = strlen(LNG(time_manip)) > menu_len ? strlen(LNG(time_manip)) : menu_len;
+	menu_len = strlen(LNG(Set_Custom_Date)) > menu_len ? strlen(LNG(Set_Custom_Date)) : menu_len;
 	menu_len = strlen(LNG(title_cfg)) > menu_len ? strlen(LNG(title_cfg)) : menu_len;
 	menu_len = (strlen(LNG(Mount)) + 6) > menu_len ? (strlen(LNG(Mount)) + 6) : menu_len;
 	
@@ -443,8 +444,10 @@ static int menu(const char *path, FILEINFO *file)
 	    ((!strcmp(path, "mc0:/")) || (!strcmp(path, "mc1:/")))  //we're on Memory card roots
 	) {
 		enable[TIMEMANIP] = TRUE;
+		enable[TIMEMANIP_CUSTOM] = TRUE;
 	} else {
 		enable[TIMEMANIP] = FALSE;
+		enable[TIMEMANIP_CUSTOM] = FALSE;
 	} 
 //#endif //TMANIP
 	if (genCmpFileExt(file->name, "ELF") && isTitleCfgPathEligible(path, menu_disabled))
@@ -566,10 +569,10 @@ static int menu(const char *path, FILEINFO *file)
 					strcpy(tmp, LNG(Launch_With_Args));
 				else if (i == TITLE_CFG)
 					strcpy(tmp, LNG(title_cfg));
-#ifdef TMANIP
 				else if (i == TIMEMANIP)
 					strcpy(tmp, LNG(time_manip));
-#endif //TMANIP
+				else if (i == TIMEMANIP_CUSTOM)
+					strcpy(tmp, LNG(Set_Custom_Date));
 
 				if (enable[i])
 					color = setting->color[COLOR_TEXT];
@@ -1535,7 +1538,17 @@ int getFilePath(char *out, int cnfmode)
 							browser_cd = TRUE;     //TEST
 						}
 					}
-//#endif //TMANIP
+					else if (ret == TIMEMANIP_CUSTOM) {
+						if (filerConfirmExploitModify(path, &files[browser_sel]) > 0) {
+							ret = time_manip_custom(path, &files[browser_sel], msg0);
+							if (ret != 0)
+								browser_pushed = FALSE;
+							if (ret > 0) {
+								browser_repos = TRUE;
+								browser_cd = TRUE;
+							}
+						}
+					}
 
 				else if (ret == TITLE_CFG) {
 					if (filerConfirmExploitModify(path, &files[browser_sel]) > 0) {
