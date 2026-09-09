@@ -85,6 +85,15 @@ static void saveNetworkSettings(char *Message, const char *target_path)
 	if (ipconfigfile != NULL)
 		free(ipconfigfile);
 }
+
+static void applyNetworkSettings(const data_ip_struct *ipdata)
+{
+	snprintf(ip, sizeof(ip), "%i.%i.%i.%i", ipdata->ip[0], ipdata->ip[1], ipdata->ip[2], ipdata->ip[3]);
+	snprintf(netmask, sizeof(netmask), "%i.%i.%i.%i", ipdata->nm[0], ipdata->nm[1], ipdata->nm[2], ipdata->nm[3]);
+	snprintf(gw, sizeof(gw), "%i.%i.%i.%i", ipdata->gw[0], ipdata->gw[1], ipdata->gw[2], ipdata->gw[3]);
+	updateIpConfigRuntimeState();
+}
+
 //---------------------------------------------------------------------------
 // Convert IP string to numbers
 //---------------------------------------------------------------------------
@@ -238,9 +247,7 @@ void Config_Network(void)
 					} else if (s == CONFIG_NET_SAVE) {
 						save_target = configSaveTargetPrompt(save_override_path, save_cwd_path, save_sysconf_path, LoadedIPConfigPath, has_override_path);
 						if (save_target != CONFIG_SAVE_TARGET_CANCEL) {
-							sprintf(ip, "%i.%i.%i.%i", ipdata.ip[0], ipdata.ip[1], ipdata.ip[2], ipdata.ip[3]);
-							sprintf(netmask, "%i.%i.%i.%i", ipdata.nm[0], ipdata.nm[1], ipdata.nm[2], ipdata.nm[3]);
-							sprintf(gw, "%i.%i.%i.%i", ipdata.gw[0], ipdata.gw[1], ipdata.gw[2], ipdata.gw[3]);
+							applyNetworkSettings(&ipdata);
 
 							if (save_target == CONFIG_SAVE_TARGET_OVERRIDE)
 								save_path = save_override_path;
@@ -251,10 +258,14 @@ void Config_Network(void)
 							configRefreshSaveTargetForWrite(save_target, save_path, MAX_PATH, "IPCONFIG.DAT", LoadedIPConfigPath);
 							saveNetworkSettings(NetMsg, save_path);
 						}
-					} else  //s == CONFIG_NET_RETURN
+					} else {  //s == CONFIG_NET_RETURN
+						applyNetworkSettings(&ipdata);
 						return;
-			} else if (new_pad & PAD_TRIANGLE)
+					}
+			} else if (new_pad & PAD_TRIANGLE) {
+				applyNetworkSettings(&ipdata);
 				return;
+			}
 		}
 
 		if (event || post_event) {  //NB: We need to update two frame buffers per event

@@ -368,6 +368,7 @@ int uLE_related(char *pathout, const char *pathin);
 int wleExists(const char *path);
 int IsTextEditorFileType(const char *path);
 void getIpConfig(void);
+void updateIpConfigRuntimeState(void);
 int readSystemCnf(void);
 int uLE_InitializeRegion(void);
 int uLE_cdDiscValid(void);
