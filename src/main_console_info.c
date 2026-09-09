@@ -67,6 +67,10 @@ static void get_model_fallback_name(const char *romver, char *model, size_t mode
 	snprintf(model, model_len, "Unknown");
 }
 
+static int mechacon_version_initialized = FALSE;
+static int mechacon_version_valid = FALSE;
+static unsigned int mechacon_version;
+
 static void initialize_model_cdvd_rpc(void)
 {
 	u8 mecha_version[3];
@@ -75,11 +79,42 @@ static void initialize_model_cdvd_rpc(void)
 
 	loadCdModules();
 	sceCdInit(SCECdINoD);
+	if (mechacon_version_initialized)
+		return;
+
+	mechacon_version_initialized = TRUE;
 
 	for (i = 0; i <= 100; i++) {
-		if (sceCdMV(mecha_version, &stat) != 0 && !(stat & 0x80))
+		if (sceCdMV(mecha_version, &stat) != 0 && !(stat & 0x80)) {
+			mechacon_version = mecha_version[2] | ((unsigned int)mecha_version[1] << 8) |
+			                  ((unsigned int)mecha_version[0] << 16);
+			mechacon_version_valid = TRUE;
 			return;
+		}
 	}
+}
+
+static int get_console_dvd_player_region(char *region)
+{
+	unsigned char region_data[16];
+
+	if (region == NULL)
+		return FALSE;
+
+	initialize_model_cdvd_rpc();
+	if (!mechacon_version_valid || mechacon_version <= 0x5FFFF)
+		return FALSE;
+
+	/* S36 returns the MagicGate DVD-player region used by rom1:DVDVER?. */
+	memset(region_data, 0, sizeof(region_data));
+	if (sceCdApplySCmd(0x36, NULL, 0, region_data) == 0 || (region_data[0] & (0x80 | 0x40)))
+		return FALSE;
+	if (!((region_data[9] >= 'A' && region_data[9] <= 'Z') ||
+	      (region_data[9] >= 'a' && region_data[9] <= 'z')))
+		return FALSE;
+
+	*region = region_data[9];
+	return TRUE;
 }
 
 int IsDtlConsoleIdentity(const char *romver, const char *model)
@@ -160,13 +195,18 @@ void FormatConsoleBootrom(char *dst, size_t dst_size, const char *romver)
 void GetConsoleDvdVersion(char *dst, size_t dst_size)
 {
 	char dvdver[16];
+	char regional_path[] = "rom1:DVDVER?";
 	int fd, read_len;
 	size_t i, version_len;
 
 	if (dst == NULL || dst_size == 0)
 		return;
 
-	fd = genOpen("rom1:DVDVER", FIO_O_RDONLY);
+	fd = -1;
+	if (get_console_dvd_player_region(&regional_path[11]))
+		fd = genOpen(regional_path, FIO_O_RDONLY);
+	if (fd < 0)
+		fd = genOpen("rom1:DVDVER", FIO_O_RDONLY);
 	if (fd < 0) {
 		snprintf(dst, dst_size, "DVD: <unavailable>");
 		return;
