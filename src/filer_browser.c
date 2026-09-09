@@ -963,6 +963,35 @@ static void skipRootSpacerSelection(const char *path, FILEINFO *files, int nfile
 	}
 }
 
+static int getBrowserListFontHeight(void)
+{
+	return ((file_show == 2) && (elisaFnt != NULL)) ? (FONT_HEIGHT + 2) : FONT_HEIGHT;
+}
+
+static int getCenteredListTop(int selected, int count, int rows)
+{
+	int top, max_top, center_row;
+
+	if (rows <= 0 || count <= rows)
+		return 0;
+
+	if (selected < 0)
+		selected = 0;
+	else if (selected >= count)
+		selected = count - 1;
+
+	center_row = (rows - 1) / 2;
+	max_top = count - rows;
+	top = selected - center_row;
+
+	if (top < 0)
+		top = 0;
+	else if (top > max_top)
+		top = max_top;
+
+	return top;
+}
+
 int getFilePath(char *out, int cnfmode)
 {
 	char path[MAX_PATH], cursorEntry[MAX_PATH],
@@ -1004,9 +1033,7 @@ int getFilePath(char *out, int cnfmode)
 	file_show = 1;
 	file_sort = 1;
 
-	font_height = FONT_HEIGHT;
-	if ((file_show == 2) && (elisaFnt != NULL))
-		font_height = FONT_HEIGHT + 2;
+	font_height = getBrowserListFontHeight();
 	rows = (Menu_end_y - Menu_start_y) / font_height;
 
 	event = 1;  //event = initial entry
@@ -1590,7 +1617,6 @@ int getFilePath(char *out, int cnfmode)
 				for (i = 0; i < browser_nfiles; i++) {
 					if (!strcmp(cursorEntry, files[i].name)) {
 						browser_sel = i;
-						top = browser_sel - 3;
 						break;
 					}
 				}
@@ -1602,20 +1628,16 @@ int getFilePath(char *out, int cnfmode)
 		}  //ends if(browser_cd)
 		if (!strncmp(path, "cdfs", 4))
 			uLE_cdStop();
-		if (top > browser_nfiles - rows)
-			top = browser_nfiles - rows;
-		if (top < 0)
-			top = 0;
+
+		font_height = getBrowserListFontHeight();
+		rows = (Menu_end_y - Menu_start_y) / font_height;
 		if (browser_sel >= browser_nfiles)
 			browser_sel = browser_nfiles - 1;
 		if (browser_sel < 0)
 			browser_sel = 0;
 		if (browser_nfiles > 0)
 			skipRootSpacerSelection(path, files, browser_nfiles, &browser_sel, 1);
-		if (browser_sel >= top + rows)
-			top = browser_sel - rows + 1;
-		if (browser_sel < top)
-			top = browser_sel;
+		top = getCenteredListTop(browser_sel, browser_nfiles, rows);
 
 		if (event || post_event) {  //NB: We need to update two frame buffers per event
 
@@ -1624,10 +1646,9 @@ int getFilePath(char *out, int cnfmode)
 
 			x = Menu_start_x;
 			y = Menu_start_y;
-			font_height = FONT_HEIGHT;
-			if ((file_show == 2) && (elisaFnt != NULL)) {
+			font_height = getBrowserListFontHeight();
+			if (font_height != FONT_HEIGHT) {
 				y -= 2;
-				font_height = FONT_HEIGHT + 2;
 			}
 			rows = (Menu_end_y - Menu_start_y) / font_height;
 

@@ -72,6 +72,30 @@ static u32 hddSize, hddFree, hddFreeSpace, hddUsed;
 static int hddConnected, hddFormated, hddRealStatus;
 static HddHeaderSourcePartition hdd_header_source_partitions[MAX_PARTITIONS];
 
+static int getCenteredListTop(int selected, int count, int rows)
+{
+	int top, max_top, center_row;
+
+	if (rows <= 0 || count <= rows)
+		return 0;
+
+	if (selected < 0)
+		selected = 0;
+	else if (selected >= count)
+		selected = count - 1;
+
+	center_row = (rows - 1) / 2;
+	max_top = count - rows;
+	top = selected - center_row;
+
+	if (top < 0)
+		top = 0;
+	else if (top > max_top)
+		top = max_top;
+
+	return top;
+}
+
 static int HddConfirmTwoButtonDialog(const char *message, const char *decline_label)
 {
 	char msg[512];
@@ -1663,18 +1687,11 @@ void hddManager(void)
 			browser_nfiles = numParty;
 			//printf("Number Of Partition: %d\n", numParty);
 
-			if (top > browser_nfiles - rows)
-				top = browser_nfiles - rows;
-			if (top < 0)
-				top = 0;
 			if (browser_sel >= browser_nfiles)
 				browser_sel = browser_nfiles - 1;
 			if (browser_sel < 0)
 				browser_sel = 0;
-			if (browser_sel >= top + rows)
-				top = browser_sel - rows + 1;
-			if (browser_sel < top)
-				top = browser_sel;
+			top = getCenteredListTop(browser_sel, browser_nfiles, rows);
 
 			y = Menu_start_y;
 
