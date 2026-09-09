@@ -465,6 +465,44 @@ static void appendText(char *out, size_t out_size, size_t *out_pos, const char *
 	}
 }
 
+void menuTitleFormatClock(char *out, size_t out_size)
+{
+	size_t out_pos = 0;
+
+	if (out == NULL || out_size == 0)
+		return;
+
+	out[0] = '\0';
+	if (!menuTitleUsesClock())
+		return;
+
+	menuTitleUpdateAsync(!title_clock.initialized);
+	if (menuTitleUsesTime())
+		appendText(out, out_size, &out_pos,
+		           title_clock.time_text[0] != '\0' ? title_clock.time_text : "--:--:--");
+	if (menuTitleUsesDate()) {
+		if (out_pos > 0)
+			appendChar(out, out_size, &out_pos, ' ');
+		appendText(out, out_size, &out_pos,
+		           title_clock.date_text[0] != '\0' ? title_clock.date_text : "----/--/--");
+	}
+}
+
+void menuTitleFormatTemperature(char *out, size_t out_size)
+{
+	size_t out_pos = 0;
+
+	if (out == NULL || out_size == 0)
+		return;
+
+	out[0] = '\0';
+	if (!menuTitleUsesTemp())
+		return;
+
+	menuTitleUpdateAsync(!title_temp.checked);
+	appendText(out, out_size, &out_pos, title_temp.text);
+}
+
 void menuTitleFormat(char *out, size_t out_size)
 {
 	const char *src;

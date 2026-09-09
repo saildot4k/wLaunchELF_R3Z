@@ -18,6 +18,9 @@ u64 updateScr_t = 0;  //dlanor: exit time of last drawScr()
 char LastMessage[MAX_TEXT_LINE + 2];
 static int menu_title_refresh_frames = 0;
 
+/* Match the file browser time/date field immediately before its scrollbar. */
+#define MENU_TITLE_CLOCK_RIGHT_X (SCREEN_WIDTH - SCREEN_MARGIN - LINE_THICKNESS * 8 - 1)
+
 int Menu_start_x = SCREEN_MARGIN + LINE_THICKNESS + FONT_WIDTH;
 int Menu_title_y = SCREEN_MARGIN;
 int Menu_message_y = SCREEN_MARGIN + FONT_HEIGHT;
@@ -31,24 +34,12 @@ int Menu_tooltip_y;  //Menus may also use this row for tooltips
 
 
 //--------------------------------------------------------------
-static int getMenuTitleCharLimit(const char *version_text)
-{
-	int title_chars;
-
-	title_chars = (SCREEN_WIDTH - (SCREEN_MARGIN * 2) - (FONT_WIDTH * ((int)strlen(version_text) + 1))) / FONT_WIDTH;
-	if (title_chars < 0)
-		title_chars = 0;
-	if (title_chars > MAX_TEXT_LINE)
-		title_chars = MAX_TEXT_LINE;
-
-	return title_chars;
-}
-//--------------------------------------------------------------
 static void drawMenuTitleLine(void)
 {
 	int x, y;
 	char app_title[64];
-	char status_title[MAX_TEXT_LINE + 1];
+	char clock_title[32];
+	char temp_title[8];
 
 	if (setting == NULL)
 		return;
@@ -59,9 +50,16 @@ static void drawMenuTitleLine(void)
 
 	drawSprite(setting->color[COLOR_BACKGR], 0, Menu_title_y - 1, SCREEN_WIDTH, Menu_message_y - 1);
 	printXY(app_title, x, y, setting->color[COLOR_FRAME], TRUE, 0);
-	menuTitleFormat(status_title, getMenuTitleCharLimit(app_title) + 1);
-	printXY(status_title, SCREEN_WIDTH - SCREEN_MARGIN - FONT_WIDTH * strlen(status_title), y,
-	        setting->color[COLOR_TEXT], TRUE, 0);
+	menuTitleFormatTemperature(temp_title, sizeof(temp_title));
+	if (temp_title[0] != '\0')
+		printXY(temp_title, (SCREEN_WIDTH - FONT_WIDTH * strlen(temp_title)) / 2, y,
+		        setting->color[COLOR_TEXT], TRUE, 0);
+
+	menuTitleFormatClock(clock_title, sizeof(clock_title));
+	if (clock_title[0] != '\0')
+		printXY(clock_title,
+		        MENU_TITLE_CLOCK_RIGHT_X - FONT_WIDTH * strlen(clock_title),
+		        y, setting->color[COLOR_TEXT], TRUE, 0);
 }
 //--------------------------------------------------------------
 static void updateDynamicMenuTitleLine(void)
