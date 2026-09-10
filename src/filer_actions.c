@@ -347,6 +347,72 @@ static void normalizeCustomMemoryCardTimestamp(sceMcStDateTime *timestamp)
 		timestamp->Sec = 58;
 }
 
+static void stepCustomMemoryCardTimestamp(sceMcStDateTime *timestamp, int delta)
+{
+	normalizeCustomMemoryCardTimestamp(timestamp);
+
+	if (delta > 0) {
+		if (timestamp->Year == 2099 && timestamp->Month == 12 && timestamp->Day == 31 &&
+		    timestamp->Hour == 23 && timestamp->Min == 59 && timestamp->Sec >= 58)
+			return;
+
+		timestamp->Sec++;
+		if (timestamp->Sec < 60)
+			return;
+		timestamp->Sec = 0;
+		timestamp->Min++;
+		if (timestamp->Min < 60)
+			return;
+		timestamp->Min = 0;
+		timestamp->Hour++;
+		if (timestamp->Hour < 24)
+			return;
+		timestamp->Hour = 0;
+		timestamp->Day++;
+		if (timestamp->Day <= getCustomDateDaysInMonth(timestamp->Year, timestamp->Month))
+			return;
+		timestamp->Day = 1;
+		timestamp->Month++;
+		if (timestamp->Month <= 12)
+			return;
+		timestamp->Month = 1;
+		timestamp->Year++;
+	} else {
+		if (timestamp->Year == 1 && timestamp->Month == 1 && timestamp->Day == 1 &&
+		    timestamp->Hour == 0 && timestamp->Min == 0 && timestamp->Sec == 0)
+			return;
+
+		if (timestamp->Sec > 0) {
+			timestamp->Sec--;
+			return;
+		}
+		timestamp->Sec = 59;
+		if (timestamp->Min > 0) {
+			timestamp->Min--;
+			return;
+		}
+		timestamp->Min = 59;
+		if (timestamp->Hour > 0) {
+			timestamp->Hour--;
+			return;
+		}
+		timestamp->Hour = 23;
+		if (timestamp->Day > 1) {
+			timestamp->Day--;
+			return;
+		}
+		if (timestamp->Month > 1)
+			timestamp->Month--;
+		else {
+			timestamp->Month = 12;
+			timestamp->Year--;
+		}
+		timestamp->Day = getCustomDateDaysInMonth(timestamp->Year, timestamp->Month);
+	}
+
+	normalizeCustomMemoryCardTimestamp(timestamp);
+}
+
 static int getCustomDateFieldForDisplayPosition(int position, int date_format)
 {
 	if (position < 3)
@@ -418,19 +484,185 @@ static void adjustCustomDateField(sceMcStDateTime *timestamp, int field, int del
 	normalizeCustomMemoryCardTimestamp(timestamp);
 }
 
-static int editCustomMemoryCardTimestamp(sceMcStDateTime *timestamp)
+static int compareCustomDateEditorFolders(const FILEINFO *left, const FILEINFO *right)
 {
-	char time_text[16];
+	const sceMcStDateTime *left_time = &left->stats._Modify;
+	const sceMcStDateTime *right_time = &right->stats._Modify;
+
+	if (left_time->Year != right_time->Year)
+		return (left_time->Year > right_time->Year) ? -1 : 1;
+	if (left_time->Month != right_time->Month)
+		return (left_time->Month > right_time->Month) ? -1 : 1;
+	if (left_time->Day != right_time->Day)
+		return (left_time->Day > right_time->Day) ? -1 : 1;
+	if (left_time->Hour != right_time->Hour)
+		return (left_time->Hour > right_time->Hour) ? -1 : 1;
+	if (left_time->Min != right_time->Min)
+		return (left_time->Min > right_time->Min) ? -1 : 1;
+	if (left_time->Sec != right_time->Sec)
+		return (left_time->Sec > right_time->Sec) ? -1 : 1;
+
+	return stricmp(left->name, right->name);
+}
+
+static void sortCustomDateEditorFolders(FILEINFO *folders, int count)
+{
+	FILEINFO folder;
+	int i, j;
+
+	for (i = 1; i < count; i++) {
+		folder = folders[i];
+		for (j = i; j > 0 && compareCustomDateEditorFolders(&folder, &folders[j - 1]) < 0; j--)
+			folders[j] = folders[j - 1];
+		folders[j] = folder;
+	}
+}
+
+static int loadCustomDateEditorFolders(const char *path, FILEINFO *folders)
+{
+	int count;
+	int i;
+	int folder_count;
+
+	count = getDir(path, folders);
+	if (count < 0)
+		return 0;
+
+	for (i = folder_count = 0; i < count; i++) {
+		if (!(folders[i].stats.AttrFile & sceMcFileAttrSubdir))
+			continue;
+		if (folder_count != i)
+			folders[folder_count] = folders[i];
+		folder_count++;
+	}
+
+	return folder_count;
+}
+
+static int updateCustomDateEditorFolders(FILEINFO *folders, int folder_count, const char *edited_name, const sceMcStDateTime *timestamp)
+{
+	int i;
+
+	for (i = 0; i < folder_count; i++) {
+		if (!stricmp(folders[i].name, edited_name)) {
+			folders[i].stats._Modify = *timestamp;
+			break;
+		}
+	}
+	if (i == folder_count)
+		return -1;
+
+	sortCustomDateEditorFolders(folders, folder_count);
+	for (i = 0; i < folder_count; i++) {
+		if (!stricmp(folders[i].name, edited_name))
+			return i;
+	}
+
+	return -1;
+}
+
+static int moveCustomDateEditorNextToFolder(FILEINFO *folders, int folder_count, const char *edited_name, sceMcStDateTime *timestamp, int newer)
+{
+	int editing_index;
+	int reference_index;
+
+	editing_index = updateCustomDateEditorFolders(folders, folder_count, edited_name, timestamp);
+	if (editing_index < 0)
+		return 0;
+
+	reference_index = editing_index + (newer ? -1 : 1);
+	if (reference_index < 0 || reference_index >= folder_count)
+		return 0;
+
+	*timestamp = folders[reference_index].stats._Modify;
+	stepCustomMemoryCardTimestamp(timestamp, newer ? 1 : -1);
+	return 1;
+}
+
+static int getCustomDateEditorListTop(int selected, int count, int rows)
+{
+	int center_row;
+	int max_top;
+	int top;
+
+	if (rows <= 0 || count <= rows)
+		return 0;
+
+	center_row = (rows - 1) / 2;
+	max_top = count - rows;
+	top = selected - center_row;
+	if (top < 0)
+		return 0;
+	if (top > max_top)
+		return max_top;
+
+	return top;
+}
+
+static void formatCustomDateEditorTimestamp(char *dst, size_t dst_size, const sceMcStDateTime *timestamp, int use_12h, int date_format)
+{
 	char date_text[16];
-	char display_text[40];
+	char time_text[16];
+
+	menuTitleFormatClockTime(time_text, sizeof(time_text), timestamp->Hour, timestamp->Min, timestamp->Sec, use_12h);
+	menuTitleFormatClockDate(date_text, sizeof(date_text), timestamp->Year, timestamp->Month, timestamp->Day, date_format);
+	snprintf(dst, dst_size, "%s %s", time_text, date_text);
+}
+
+static void drawCustomDateEditorFolderRow(const FILEINFO *folder, int x, int y, int details_column, int use_12h, int date_format, int selected)
+{
+	char details_text[48];
+	char folder_name[MAX_NAME + 2];
+	char timestamp_text[32];
+	int color;
+	int name_end;
+	int name_limit;
+
+	color = setting->color[selected ? COLOR_SELECT : COLOR_TEXT];
+	name_limit = (details_column - 1) * FONT_WIDTH;
+	snprintf(folder_name, sizeof(folder_name), "%s/", folder->name);
+	name_end = name_limit / 7 - 1;
+	if (name_end > 1 && strlen(folder_name) > name_end) {
+		folder_name[name_end - 1] = '~';
+		folder_name[name_end] = '\0';
+	}
+
+	formatCustomDateEditorTimestamp(timestamp_text, sizeof(timestamp_text), &folder->stats._Modify, use_12h, date_format);
+	snprintf(details_text, sizeof(details_text), "    - B %s", timestamp_text);
+	printXY(folder_name, x + 4, y, color, TRUE, name_limit);
+	printXY(details_text, x + 4 + details_column * FONT_WIDTH, y, color, TRUE, 0);
+	if (!setting->FB_NoIcons) {
+		drawChar(ICON_FOLDER, x - 3 - FONT_WIDTH, y, setting->color[COLOR_GRAPH1]);
+		drawChar(ICON_FOLDER + 1, x - 3, y, setting->color[COLOR_GRAPH1]);
+	}
+}
+
+static int editCustomMemoryCardTimestamp(const char *path, const FILEINFO *file, sceMcStDateTime *timestamp)
+{
+	static FILEINFO folders[MAX_ENTRY];
+	char edited_name[MAX_NAME];
 	char tooltip[MAX_PATH];
 	int use_12h;
 	int date_format;
 	int display_position = 0;
 	int event = 1;
 	int post_event = 0;
+	int details_column;
+	int editing_index;
 	int field;
-	int x, y;
+	int folder_count;
+	int folder_rows;
+	int i;
+	int list_top;
+	int list_end_y;
+	int timestamp_x;
+	int x, y, y0, y1;
+
+	if (path == NULL || file == NULL || timestamp == NULL)
+		return 0;
+
+	snprintf(edited_name, sizeof(edited_name), "%s", file->name);
+	folder_count = loadCustomDateEditorFolders(path, folders);
 
 	while (1) {
 		waitPadReady(0, 0);
@@ -449,6 +681,12 @@ static int editCustomMemoryCardTimestamp(sceMcStDateTime *timestamp)
 				menuTitleGetClockFormat(NULL, &date_format);
 				adjustCustomDateField(timestamp, getCustomDateFieldForDisplayPosition(display_position, date_format), -1);
 				event |= 2;
+			} else if (new_pad & PAD_L1) {
+				if (moveCustomDateEditorNextToFolder(folders, folder_count, edited_name, timestamp, TRUE))
+					event |= 2;
+			} else if (new_pad & PAD_R1) {
+				if (moveCustomDateEditorNextToFolder(folders, folder_count, edited_name, timestamp, FALSE))
+					event |= 2;
 			} else if (new_pad & PAD_START) {
 				return 1;
 			} else if (new_pad & PAD_TRIANGLE) {
@@ -458,23 +696,49 @@ static int editCustomMemoryCardTimestamp(sceMcStDateTime *timestamp)
 
 		if (event || post_event) {
 			menuTitleGetClockFormat(&use_12h, &date_format);
-			menuTitleFormatClockTime(time_text, sizeof(time_text), timestamp->Hour, timestamp->Min, timestamp->Sec, use_12h);
-			menuTitleFormatClockDate(date_text, sizeof(date_text), timestamp->Year, timestamp->Month, timestamp->Day, date_format);
-			snprintf(display_text, sizeof(display_text), "%s %s", time_text, date_text);
-			snprintf(tooltip, sizeof(tooltip), "\xFF<\xFF::%s \xFF1:%s \xFF0:%s START:%s \xFF3:%s",
+			snprintf(tooltip, sizeof(tooltip), "\xFF" "<\xFF" ":" ":%s \xFF" "1:%s \xFF" "0:%s L1:+1s R1:-1s START:%s \xFF" "3:%s",
 		         LNG(Select), LNG(Add), LNG(Subtract), LNG(Set), LNG(Return));
+			editing_index = updateCustomDateEditorFolders(folders, folder_count, edited_name, timestamp);
+			details_column = use_12h ? 41 : 44;
+			list_end_y = Menu_end_y;
+			folder_rows = (list_end_y - Menu_start_y) / FONT_HEIGHT - 2;
+			if (folder_rows < 1)
+				folder_rows = 1;
+			list_top = (editing_index >= 0) ? getCustomDateEditorListTop(editing_index, folder_count, folder_rows) : 0;
 
 			clrScr(setting->color[COLOR_BACKGR]);
 			setScrTmp(LNG(Set_Custom_Date), tooltip);
-			x = (SCREEN_WIDTH - FONT_WIDTH * strlen(display_text)) / 2;
-			y = Menu_start_y + FONT_HEIGHT;
-			printXY(display_text, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-			field = getCustomDateFieldForDisplayPosition(display_position, date_format);
-			if (field < CUSTOM_DATE_YEAR)
-				x += getCustomDateFieldOffset(field, date_format) * FONT_WIDTH;
-			else
-				x += (strlen(time_text) + 1 + getCustomDateFieldOffset(field, date_format)) * FONT_WIDTH;
-			drawChar(UP_ARROW, x, y + FONT_HEIGHT, setting->color[COLOR_SELECT]);
+			x = Menu_start_x;
+			y = Menu_start_y;
+			for (i = list_top; i < folder_count && i < list_top + folder_rows; i++) {
+				if (i == editing_index)
+					y += FONT_HEIGHT;
+				drawCustomDateEditorFolderRow(&folders[i], x, y, details_column, use_12h, date_format, i == editing_index);
+				if (i == editing_index) {
+					char time_text[16];
+
+					menuTitleFormatClockTime(time_text, sizeof(time_text), timestamp->Hour, timestamp->Min, timestamp->Sec, use_12h);
+					field = getCustomDateFieldForDisplayPosition(display_position, date_format);
+					timestamp_x = x + 4 + details_column * FONT_WIDTH + strlen("    - B ") * FONT_WIDTH;
+					if (field < CUSTOM_DATE_YEAR)
+						timestamp_x += getCustomDateFieldOffset(field, date_format) * FONT_WIDTH;
+					else
+						timestamp_x += (strlen(time_text) + 1 + getCustomDateFieldOffset(field, date_format)) * FONT_WIDTH;
+					drawChar(UP_ARROW, timestamp_x, y + FONT_HEIGHT, setting->color[COLOR_SELECT]);
+				}
+				y += FONT_HEIGHT;
+				if (i == editing_index)
+					y += FONT_HEIGHT;
+			}
+			if (folder_count > folder_rows) {
+				drawFrame(SCREEN_WIDTH - SCREEN_MARGIN - LINE_THICKNESS * 8, Frame_start_y,
+				          SCREEN_WIDTH - SCREEN_MARGIN, list_end_y + 4, setting->color[COLOR_FRAME]);
+				y0 = (list_end_y - Menu_start_y + 8) * ((double)list_top / folder_count);
+				y1 = (list_end_y - Menu_start_y + 8) * ((double)(list_top + folder_rows) / folder_count);
+				drawOpSprite(setting->color[COLOR_FRAME],
+				             SCREEN_WIDTH - SCREEN_MARGIN - LINE_THICKNESS * 6, y0 + Menu_start_y - 4,
+				             SCREEN_WIDTH - SCREEN_MARGIN - LINE_THICKNESS * 2, y1 + Menu_start_y - 4);
+			}
 		}
 		drawScr();
 		post_event = event;
@@ -562,7 +826,7 @@ int time_manip_custom(const char *path, const FILEINFO *file, char *message)
 	}
 	normalizeCustomMemoryCardTimestamp(&timestamp);
 
-	if (!editCustomMemoryCardTimestamp(&timestamp))
+	if (!editCustomMemoryCardTimestamp(path, file, &timestamp))
 		return 0;
 
 	result = setMemoryCardFolderTimestamp(path, file, &timestamp, message);
