@@ -3,6 +3,7 @@
 #include "filer_shared.h"
 #include "gui_hdd0_format.h"
 #include "init.h"
+#include "main_title.h"
 
 #define IOCTL_RENAME 0xFEEDC0DE
 
@@ -286,7 +287,15 @@ u64 getFileSize(const char *path, const FILEINFO *file)
 //endfunc getFileSize
 //--------------------------------------------------------------
 //
-#define CUSTOM_DATE_TEXT_LEN 19
+enum {
+	CUSTOM_DATE_HOUR,
+	CUSTOM_DATE_MINUTE,
+	CUSTOM_DATE_SECOND,
+	CUSTOM_DATE_YEAR,
+	CUSTOM_DATE_MONTH,
+	CUSTOM_DATE_DAY,
+	CUSTOM_DATE_FIELD_COUNT
+};
 
 static int isCustomDateLeapYear(int year)
 {
@@ -302,55 +311,175 @@ static int getCustomDateDaysInMonth(int year, int month)
 	return days_per_month[month - 1];
 }
 
-static int isCustomMemoryCardTimestampValid(int year, int month, int day, int hour, int minute, int second)
+static int isCustomMemoryCardTimestampInRange(int year, int month, int day, int hour, int minute, int second)
 {
 	if (year < 1 || year > 2099 || month < 1 || month > 12 || day < 1 || day > getCustomDateDaysInMonth(year, month) ||
 	    hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59)
 		return 0;
 
-	/* Reserve the final second for Set *Tuna Date. */
-	return !(year == 2099 && month == 12 && day == 31 && hour == 23 && minute == 59 && second == 59);
+	return 1;
 }
 
-static int parseCustomDateValue(const char *text, int start, int digits)
+static void normalizeCustomMemoryCardTimestamp(sceMcStDateTime *timestamp)
 {
-	int i;
-	int value = 0;
+	if (timestamp->Year < 1)
+		timestamp->Year = 1;
+	else if (timestamp->Year > 2099)
+		timestamp->Year = 2099;
+	if (timestamp->Month < 1)
+		timestamp->Month = 1;
+	else if (timestamp->Month > 12)
+		timestamp->Month = 12;
+	if (timestamp->Day < 1)
+		timestamp->Day = 1;
+	else if (timestamp->Day > getCustomDateDaysInMonth(timestamp->Year, timestamp->Month))
+		timestamp->Day = getCustomDateDaysInMonth(timestamp->Year, timestamp->Month);
+	if (timestamp->Hour > 23)
+		timestamp->Hour = 23;
+	if (timestamp->Min > 59)
+		timestamp->Min = 59;
+	if (timestamp->Sec > 59)
+		timestamp->Sec = 59;
 
-	for (i = 0; i < digits; i++) {
-		if (text[start + i] < '0' || text[start + i] > '9')
-			return -1;
-		value = value * 10 + text[start + i] - '0';
+	/* Set *Tuna Date owns this one timestamp. */
+	if (timestamp->Year == 2099 && timestamp->Month == 12 && timestamp->Day == 31 &&
+	    timestamp->Hour == 23 && timestamp->Min == 59 && timestamp->Sec == 59)
+		timestamp->Sec = 58;
+}
+
+static int getCustomDateFieldForDisplayPosition(int position, int date_format)
+{
+	if (position < 3)
+		return position;
+
+	switch (date_format) {
+		case 1:
+			return (position == 3) ? CUSTOM_DATE_MONTH : (position == 4) ? CUSTOM_DATE_DAY : CUSTOM_DATE_YEAR;
+		case 2:
+			return (position == 3) ? CUSTOM_DATE_DAY : (position == 4) ? CUSTOM_DATE_MONTH : CUSTOM_DATE_YEAR;
+		default:
+			return (position == 3) ? CUSTOM_DATE_YEAR : (position == 4) ? CUSTOM_DATE_MONTH : CUSTOM_DATE_DAY;
+	}
+}
+
+static int getCustomDateFieldOffset(int field, int date_format)
+{
+	switch (field) {
+		case CUSTOM_DATE_HOUR:
+			return 0;
+		case CUSTOM_DATE_MINUTE:
+			return 3;
+		case CUSTOM_DATE_SECOND:
+			return 6;
+		case CUSTOM_DATE_YEAR:
+			return (date_format == 0) ? 0 : 6;
+		case CUSTOM_DATE_MONTH:
+			return (date_format == 0) ? 5 : (date_format == 1) ? 0 : 3;
+		default:
+			return (date_format == 0) ? 8 : (date_format == 1) ? 3 : 0;
+	}
+}
+
+static void adjustCustomDateField(sceMcStDateTime *timestamp, int field, int delta)
+{
+	int maximum_day;
+
+	switch (field) {
+		case CUSTOM_DATE_HOUR:
+			timestamp->Hour = (timestamp->Hour + ((delta > 0) ? 1 : 23)) % 24;
+			break;
+		case CUSTOM_DATE_MINUTE:
+			timestamp->Min = (timestamp->Min + ((delta > 0) ? 1 : 59)) % 60;
+			break;
+		case CUSTOM_DATE_SECOND:
+			timestamp->Sec = (timestamp->Sec + ((delta > 0) ? 1 : 59)) % 60;
+			break;
+		case CUSTOM_DATE_YEAR:
+			if (delta > 0)
+				timestamp->Year = (timestamp->Year == 2099) ? 1 : timestamp->Year + 1;
+			else
+				timestamp->Year = (timestamp->Year == 1) ? 2099 : timestamp->Year - 1;
+			break;
+		case CUSTOM_DATE_MONTH:
+			if (delta > 0)
+				timestamp->Month = (timestamp->Month == 12) ? 1 : timestamp->Month + 1;
+			else
+				timestamp->Month = (timestamp->Month == 1) ? 12 : timestamp->Month - 1;
+			break;
+		default:
+			maximum_day = getCustomDateDaysInMonth(timestamp->Year, timestamp->Month);
+			if (delta > 0)
+				timestamp->Day = (timestamp->Day == maximum_day) ? 1 : timestamp->Day + 1;
+			else
+				timestamp->Day = (timestamp->Day == 1) ? maximum_day : timestamp->Day - 1;
+			break;
 	}
 
-	return value;
+	normalizeCustomMemoryCardTimestamp(timestamp);
 }
 
-static int parseCustomMemoryCardTimestamp(const char *text, sceMcStDateTime *timestamp)
+static int editCustomMemoryCardTimestamp(sceMcStDateTime *timestamp)
 {
-	int year, month, day, hour, minute, second;
+	char time_text[16];
+	char date_text[16];
+	char display_text[40];
+	char tooltip[MAX_PATH];
+	int use_12h;
+	int date_format;
+	int display_position = 0;
+	int event = 1;
+	int post_event = 0;
+	int field;
+	int x, y;
 
-	if (strlen(text) != CUSTOM_DATE_TEXT_LEN || text[4] != '-' || text[7] != '-' ||
-	    text[10] != ' ' || text[13] != ':' || text[16] != ':')
-		return -1;
+	while (1) {
+		waitPadReady(0, 0);
+		if (readpad()) {
+			if (new_pad & PAD_LEFT) {
+				display_position = (display_position == 0) ? CUSTOM_DATE_FIELD_COUNT - 1 : display_position - 1;
+				event |= 2;
+			} else if (new_pad & PAD_RIGHT) {
+				display_position = (display_position + 1) % CUSTOM_DATE_FIELD_COUNT;
+				event |= 2;
+			} else if (new_pad & PAD_CROSS) {
+				menuTitleGetClockFormat(NULL, &date_format);
+				adjustCustomDateField(timestamp, getCustomDateFieldForDisplayPosition(display_position, date_format), 1);
+				event |= 2;
+			} else if (new_pad & PAD_CIRCLE) {
+				menuTitleGetClockFormat(NULL, &date_format);
+				adjustCustomDateField(timestamp, getCustomDateFieldForDisplayPosition(display_position, date_format), -1);
+				event |= 2;
+			} else if (new_pad & PAD_START) {
+				return 1;
+			} else if (new_pad & PAD_TRIANGLE) {
+				return 0;
+			}
+		}
 
-	year = parseCustomDateValue(text, 0, 4);
-	month = parseCustomDateValue(text, 5, 2);
-	day = parseCustomDateValue(text, 8, 2);
-	hour = parseCustomDateValue(text, 11, 2);
-	minute = parseCustomDateValue(text, 14, 2);
-	second = parseCustomDateValue(text, 17, 2);
-	if (!isCustomMemoryCardTimestampValid(year, month, day, hour, minute, second))
-		return -1;
+		if (event || post_event) {
+			menuTitleGetClockFormat(&use_12h, &date_format);
+			menuTitleFormatClockTime(time_text, sizeof(time_text), timestamp->Hour, timestamp->Min, timestamp->Sec, use_12h);
+			menuTitleFormatClockDate(date_text, sizeof(date_text), timestamp->Year, timestamp->Month, timestamp->Day, date_format);
+			snprintf(display_text, sizeof(display_text), "%s %s", time_text, date_text);
+			snprintf(tooltip, sizeof(tooltip), "\xFF<\xFF::%s \xFF1:%s \xFF0:%s START:%s \xFF3:%s",
+		         LNG(Select), LNG(Add), LNG(Subtract), LNG(Set), LNG(Return));
 
-	timestamp->Resv2 = 0;
-	timestamp->Year = year;
-	timestamp->Month = month;
-	timestamp->Day = day;
-	timestamp->Hour = hour;
-	timestamp->Min = minute;
-	timestamp->Sec = second;
-	return 0;
+			clrScr(setting->color[COLOR_BACKGR]);
+			setScrTmp(LNG(Set_Custom_Date), tooltip);
+			x = (SCREEN_WIDTH - FONT_WIDTH * strlen(display_text)) / 2;
+			y = Menu_start_y + FONT_HEIGHT;
+			printXY(display_text, x, y, setting->color[COLOR_TEXT], TRUE, 0);
+			field = getCustomDateFieldForDisplayPosition(display_position, date_format);
+			if (field < CUSTOM_DATE_YEAR)
+				x += getCustomDateFieldOffset(field, date_format) * FONT_WIDTH;
+			else
+				x += (strlen(time_text) + 1 + getCustomDateFieldOffset(field, date_format)) * FONT_WIDTH;
+			drawChar(UP_ARROW, x, y + FONT_HEIGHT, setting->color[COLOR_SELECT]);
+		}
+		drawScr();
+		post_event = event;
+		event = 0;
+	}
 }
 
 static int setMemoryCardFolderTimestamp(const char *path, const FILEINFO *file, const sceMcStDateTime *timestamp, char *message)
@@ -405,7 +534,6 @@ int time_manip_custom(const char *path, const FILEINFO *file, char *message)
 {
 	const PS2TIME *current_timestamp;
 	sceMcStDateTime timestamp;
-	char date_text[CUSTOM_DATE_TEXT_LEN + 1];
 	int current_year;
 	int result;
 
@@ -414,22 +542,28 @@ int time_manip_custom(const char *path, const FILEINFO *file, char *message)
 
 	current_timestamp = (const PS2TIME *)&file->stats._Modify;
 	current_year = current_timestamp->year;
-	if (!isCustomMemoryCardTimestampValid(current_year, current_timestamp->month, current_timestamp->day,
-	                                       current_timestamp->hour, current_timestamp->min, current_timestamp->sec)) {
-		snprintf(date_text, sizeof(date_text), "2000-01-01 00:00:00");
+	if (!isCustomMemoryCardTimestampInRange(current_year, current_timestamp->month, current_timestamp->day,
+	                                        current_timestamp->hour, current_timestamp->min, current_timestamp->sec)) {
+		timestamp.Resv2 = 0;
+		timestamp.Year = 2000;
+		timestamp.Month = 1;
+		timestamp.Day = 1;
+		timestamp.Hour = 0;
+		timestamp.Min = 0;
+		timestamp.Sec = 0;
 	} else {
-		snprintf(date_text, sizeof(date_text), "%04d-%02d-%02d %02d:%02d:%02d", current_year,
-		         current_timestamp->month, current_timestamp->day, current_timestamp->hour,
-		         current_timestamp->min, current_timestamp->sec);
+		timestamp.Resv2 = 0;
+		timestamp.Year = current_year;
+		timestamp.Month = current_timestamp->month;
+		timestamp.Day = current_timestamp->day;
+		timestamp.Hour = current_timestamp->hour;
+		timestamp.Min = current_timestamp->min;
+		timestamp.Sec = current_timestamp->sec;
 	}
+	normalizeCustomMemoryCardTimestamp(&timestamp);
 
-	drawMsg("Enter date: YYYY-MM-DD HH:MM:SS");
-	if (keyboard(date_text, CUSTOM_DATE_TEXT_LEN) < 0)
+	if (!editCustomMemoryCardTimestamp(&timestamp))
 		return 0;
-	if (parseCustomMemoryCardTimestamp(date_text, &timestamp) < 0) {
-		snprintf(message, MAX_PATH, "Invalid date. Maximum is 2099-12-31 23:59:58.");
-		return -1;
-	}
 
 	result = setMemoryCardFolderTimestamp(path, file, &timestamp, message);
 	return result == 0 ? 1 : -1;
