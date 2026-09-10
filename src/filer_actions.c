@@ -696,8 +696,8 @@ static int editCustomMemoryCardTimestamp(const char *path, const FILEINFO *file,
 
 		if (event || post_event) {
 			menuTitleGetClockFormat(&use_12h, &date_format);
-			snprintf(tooltip, sizeof(tooltip), "\xFF" "<\xFF" ":" ":%s \xFF" "1:%s \xFF" "0:%s L1:+1s R1:-1s START:%s \xFF" "3:%s",
-		         LNG(Select), LNG(Add), LNG(Subtract), LNG(Set), LNG(Return));
+			snprintf(tooltip, sizeof(tooltip), "\xFF" "<\xFF" ":" ":%s \xFF" "1:%s \xFF" "0:%s L1:%s R1:%s START:%s \xFF" "3:%s",
+			         LNG(Select), LNG(Add), LNG(Subtract), LNG(Up), LNG(Down), LNG(Set), LNG(Return));
 			editing_index = updateCustomDateEditorFolders(folders, folder_count, edited_name, timestamp);
 			details_column = use_12h ? 41 : 44;
 			list_end_y = Menu_end_y;

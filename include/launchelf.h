@@ -429,6 +429,7 @@ extern int Menu_tooltip_y;
 extern u8 FontBuffer[256 * 16];
 
 void setScrTmp(const char *msg0, const char *msg1);
+void setMenuHeaderRightStatus(const char *status);
 void drawSprite(u64 color, int x1, int y1, int x2, int y2);
 void drawPopSprite(u64 color, int x1, int y1, int x2, int y2);
 void drawOpSprite(u64 color, int x1, int y1, int x2, int y2);

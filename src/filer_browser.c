@@ -1054,7 +1054,7 @@ int getFilePath(char *out, int cnfmode)
 	u64 color;
 	FILEINFO files[MAX_ENTRY];
 	int top = 0, rows;
-	int x, y, y0, y1, list_end_y, details_right_x;
+	int x, y, y0, y1, list_end_y;
 	int i, j, ret, rv = -1;  //NB: rv is for return value of this function
 	int usb_unit;
 	int event, post_event = 0;
@@ -1732,8 +1732,6 @@ int getFilePath(char *out, int cnfmode)
 				menuTitleGetClockFormat(&use_12h, &date_format);
 			/* Keep the time/date edge immediately before the scrollbar in both clock formats. */
 			details_column = use_12h ? 41 : 44;
-			formatBrowserMissingTimestamp(tmp, sizeof(tmp), use_12h, date_format);
-			details_right_x = x + 4 + (details_column + 8 + strlen(tmp)) * FONT_WIDTH;
 
 			for (i = 0; i < rows; i++)  //Repeat loop for each browser text row
 			{
@@ -1948,14 +1946,7 @@ int getFilePath(char *out, int cnfmode)
 					sprintf(tmp, "[%.1fKB %s]", (double)freeSpace / 1024, LNG(free));
 				else
 					sprintf(tmp, "[%dB %s]", (int)freeSpace, LNG(free));
-				ret = strlen(tmp);
-				drawSprite(setting->color[COLOR_BACKGR],
-				           details_right_x - (ret + 1) * FONT_WIDTH, (Menu_message_y - 1),
-				           details_right_x, (Menu_message_y + FONT_HEIGHT));
-				printXY(tmp,
-				        details_right_x - ret * FONT_WIDTH,
-				        (Menu_message_y),
-				        setting->color[COLOR_SELECT], TRUE, 0);
+				setMenuHeaderRightStatus(tmp);
 			}
 		}  //ends if(event||post_event)
 		drawScr();
