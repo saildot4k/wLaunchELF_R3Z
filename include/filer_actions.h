@@ -5,6 +5,7 @@
 
 u64 getFileSize(const char *path, const FILEINFO *file);
 void time_manip(const char *path, const FILEINFO *file, char *_msg0);
+int filerCanSetCustomTimestamp(const char *path, const FILEINFO *file);
 int time_manip_custom(const char *path, const FILEINFO *file, char *_msg0);
 void make_title_cfg(const char *path, const FILEINFO *file, char *_msg0);
 int filerIsExploitProtectedPath(const char *path, const FILEINFO *file);

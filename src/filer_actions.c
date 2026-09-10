@@ -297,6 +297,27 @@ enum {
 	CUSTOM_DATE_FIELD_COUNT
 };
 
+static int isMemoryCardRootPath(const char *path)
+{
+	return (path != NULL && (!strcmp(path, "mc0:/") || !strcmp(path, "mc1:/")));
+}
+
+static int isHddCommonPath(const char *path)
+{
+	static const char hdd_common_path[] = "hdd0:__common:pfs:/";
+
+	return (path != NULL && !strncmp(path, hdd_common_path, sizeof(hdd_common_path) - 1));
+}
+
+int filerCanSetCustomTimestamp(const char *path, const FILEINFO *file)
+{
+	if (file == NULL || !(file->stats.AttrFile & sceMcFileAttrSubdir) ||
+	    !strcmp(file->name, ".") || !strcmp(file->name, ".."))
+		return 0;
+
+	return isMemoryCardRootPath(path) || isHddCommonPath(path);
+}
+
 static int isCustomDateLeapYear(int year)
 {
 	return ((year % 4 == 0) && ((year % 100 != 0) || (year % 400 == 0)));
@@ -311,7 +332,7 @@ static int getCustomDateDaysInMonth(int year, int month)
 	return days_per_month[month - 1];
 }
 
-static int isCustomMemoryCardTimestampInRange(int year, int month, int day, int hour, int minute, int second)
+static int isCustomFolderTimestampInRange(int year, int month, int day, int hour, int minute, int second)
 {
 	if (year < 1 || year > 2099 || month < 1 || month > 12 || day < 1 || day > getCustomDateDaysInMonth(year, month) ||
 	    hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59)
@@ -320,7 +341,7 @@ static int isCustomMemoryCardTimestampInRange(int year, int month, int day, int 
 	return 1;
 }
 
-static void normalizeCustomMemoryCardTimestamp(sceMcStDateTime *timestamp)
+static void normalizeCustomFolderTimestamp(sceMcStDateTime *timestamp, int reserve_tuna_date)
 {
 	if (timestamp->Year < 1)
 		timestamp->Year = 1;
@@ -341,19 +362,20 @@ static void normalizeCustomMemoryCardTimestamp(sceMcStDateTime *timestamp)
 	if (timestamp->Sec > 59)
 		timestamp->Sec = 59;
 
-	/* Set *Tuna Date owns this one timestamp. */
-	if (timestamp->Year == 2099 && timestamp->Month == 12 && timestamp->Day == 31 &&
+	/* Set *Tuna Date reserves this timestamp on memory cards only. */
+	if (reserve_tuna_date && timestamp->Year == 2099 && timestamp->Month == 12 && timestamp->Day == 31 &&
 	    timestamp->Hour == 23 && timestamp->Min == 59 && timestamp->Sec == 59)
 		timestamp->Sec = 58;
 }
 
-static void stepCustomMemoryCardTimestamp(sceMcStDateTime *timestamp, int delta)
+static void stepCustomFolderTimestamp(sceMcStDateTime *timestamp, int delta, int reserve_tuna_date)
 {
-	normalizeCustomMemoryCardTimestamp(timestamp);
+	normalizeCustomFolderTimestamp(timestamp, reserve_tuna_date);
 
 	if (delta > 0) {
 		if (timestamp->Year == 2099 && timestamp->Month == 12 && timestamp->Day == 31 &&
-		    timestamp->Hour == 23 && timestamp->Min == 59 && timestamp->Sec >= 58)
+		    timestamp->Hour == 23 && timestamp->Min == 59 &&
+		    ((reserve_tuna_date && timestamp->Sec >= 58) || (!reserve_tuna_date && timestamp->Sec >= 59)))
 			return;
 
 		timestamp->Sec++;
@@ -410,7 +432,7 @@ static void stepCustomMemoryCardTimestamp(sceMcStDateTime *timestamp, int delta)
 		timestamp->Day = getCustomDateDaysInMonth(timestamp->Year, timestamp->Month);
 	}
 
-	normalizeCustomMemoryCardTimestamp(timestamp);
+	normalizeCustomFolderTimestamp(timestamp, reserve_tuna_date);
 }
 
 static int getCustomDateFieldForDisplayPosition(int position, int date_format)
@@ -446,7 +468,7 @@ static int getCustomDateFieldOffset(int field, int date_format)
 	}
 }
 
-static void adjustCustomDateField(sceMcStDateTime *timestamp, int field, int delta)
+static void adjustCustomDateField(sceMcStDateTime *timestamp, int field, int delta, int reserve_tuna_date)
 {
 	int maximum_day;
 
@@ -481,7 +503,7 @@ static void adjustCustomDateField(sceMcStDateTime *timestamp, int field, int del
 			break;
 	}
 
-	normalizeCustomMemoryCardTimestamp(timestamp);
+	normalizeCustomFolderTimestamp(timestamp, reserve_tuna_date);
 }
 
 static int compareCustomDateEditorFolders(const FILEINFO *left, const FILEINFO *right)
@@ -561,7 +583,7 @@ static int updateCustomDateEditorFolders(FILEINFO *folders, int folder_count, co
 	return -1;
 }
 
-static int moveCustomDateEditorNextToFolder(FILEINFO *folders, int folder_count, const char *edited_name, sceMcStDateTime *timestamp, int newer)
+static int moveCustomDateEditorNextToFolder(FILEINFO *folders, int folder_count, const char *edited_name, sceMcStDateTime *timestamp, int newer, int reserve_tuna_date)
 {
 	int editing_index;
 	int reference_index;
@@ -575,7 +597,7 @@ static int moveCustomDateEditorNextToFolder(FILEINFO *folders, int folder_count,
 		return 0;
 
 	*timestamp = folders[reference_index].stats._Modify;
-	stepCustomMemoryCardTimestamp(timestamp, newer ? 1 : -1);
+	stepCustomFolderTimestamp(timestamp, newer ? 1 : -1, reserve_tuna_date);
 	return 1;
 }
 
@@ -637,7 +659,7 @@ static void drawCustomDateEditorFolderRow(const FILEINFO *folder, int x, int y, 
 	}
 }
 
-static int editCustomMemoryCardTimestamp(const char *path, const FILEINFO *file, sceMcStDateTime *timestamp)
+static int editCustomFolderTimestamp(const char *path, const FILEINFO *file, sceMcStDateTime *timestamp, int reserve_tuna_date)
 {
 	static FILEINFO folders[MAX_ENTRY];
 	char edited_name[MAX_NAME];
@@ -675,17 +697,17 @@ static int editCustomMemoryCardTimestamp(const char *path, const FILEINFO *file,
 				event |= 2;
 			} else if (new_pad & PAD_CROSS) {
 				menuTitleGetClockFormat(NULL, &date_format);
-				adjustCustomDateField(timestamp, getCustomDateFieldForDisplayPosition(display_position, date_format), 1);
+				adjustCustomDateField(timestamp, getCustomDateFieldForDisplayPosition(display_position, date_format), 1, reserve_tuna_date);
 				event |= 2;
 			} else if (new_pad & PAD_CIRCLE) {
 				menuTitleGetClockFormat(NULL, &date_format);
-				adjustCustomDateField(timestamp, getCustomDateFieldForDisplayPosition(display_position, date_format), -1);
+				adjustCustomDateField(timestamp, getCustomDateFieldForDisplayPosition(display_position, date_format), -1, reserve_tuna_date);
 				event |= 2;
 			} else if (new_pad & PAD_L1) {
-				if (moveCustomDateEditorNextToFolder(folders, folder_count, edited_name, timestamp, TRUE))
+				if (moveCustomDateEditorNextToFolder(folders, folder_count, edited_name, timestamp, TRUE, reserve_tuna_date))
 					event |= 2;
 			} else if (new_pad & PAD_R1) {
-				if (moveCustomDateEditorNextToFolder(folders, folder_count, edited_name, timestamp, FALSE))
+				if (moveCustomDateEditorNextToFolder(folders, folder_count, edited_name, timestamp, FALSE, reserve_tuna_date))
 					event |= 2;
 			} else if (new_pad & PAD_START) {
 				return 1;
@@ -780,6 +802,41 @@ static int setMemoryCardFolderTimestamp(const char *path, const FILEINFO *file, 
 	return result;
 }
 
+static int setHddCommonFolderTimestamp(const char *path, const FILEINFO *file, const sceMcStDateTime *timestamp, char *message)
+{
+	iox_stat_t stat;
+	char party[MAX_NAME], hdddir[MAX_PATH];
+	int result;
+
+	if (!isHddCommonPath(path) || file == NULL || timestamp == NULL)
+		return -1;
+
+	if (!ensurePathDeviceStackReady(path) || getHddParty(path, NULL, party, hdddir) < 0) {
+		snprintf(message, MAX_PATH, "error, unable to access folder [%s].", file->name);
+		return -1;
+	}
+	result = mountParty(party);
+	if (result < 0) {
+		snprintf(message, MAX_PATH, "error [%d], folder [%s].", result, file->name);
+		return result;
+	}
+	hdddir[3] = result + '0';
+	strcat(hdddir, file->name);
+
+	memset(&stat, 0, sizeof(stat));
+	memcpy(stat.ctime, timestamp, sizeof(stat.ctime));
+	memcpy(stat.atime, timestamp, sizeof(stat.atime));
+	memcpy(stat.mtime, timestamp, sizeof(stat.mtime));
+	result = fileXioChStat(hdddir, &stat, FIO_CST_CT | FIO_CST_AT | FIO_CST_MT);
+
+	if (result == 0)
+		snprintf(message, MAX_PATH, "success, folder [%s] timestamp updated.", file->name);
+	else
+		snprintf(message, MAX_PATH, "error [%d], folder [%s].", result, file->name);
+
+	return result;
+}
+
 void time_manip(const char *path, const FILEINFO *file, char *message)
 {
 	sceMcStDateTime timestamp;
@@ -800,14 +857,16 @@ int time_manip_custom(const char *path, const FILEINFO *file, char *message)
 	sceMcStDateTime timestamp;
 	int current_year;
 	int result;
+	int reserve_tuna_date;
 
-	if (path == NULL || file == NULL)
+	if (!filerCanSetCustomTimestamp(path, file))
 		return -1;
+	reserve_tuna_date = isMemoryCardRootPath(path);
 
 	current_timestamp = (const PS2TIME *)&file->stats._Modify;
 	current_year = current_timestamp->year;
-	if (!isCustomMemoryCardTimestampInRange(current_year, current_timestamp->month, current_timestamp->day,
-	                                        current_timestamp->hour, current_timestamp->min, current_timestamp->sec)) {
+	if (!isCustomFolderTimestampInRange(current_year, current_timestamp->month, current_timestamp->day,
+	                                    current_timestamp->hour, current_timestamp->min, current_timestamp->sec)) {
 		timestamp.Resv2 = 0;
 		timestamp.Year = 2000;
 		timestamp.Month = 1;
@@ -824,12 +883,15 @@ int time_manip_custom(const char *path, const FILEINFO *file, char *message)
 		timestamp.Min = current_timestamp->min;
 		timestamp.Sec = current_timestamp->sec;
 	}
-	normalizeCustomMemoryCardTimestamp(&timestamp);
+	normalizeCustomFolderTimestamp(&timestamp, reserve_tuna_date);
 
-	if (!editCustomMemoryCardTimestamp(path, file, &timestamp))
+	if (!editCustomFolderTimestamp(path, file, &timestamp, reserve_tuna_date))
 		return 0;
 
-	result = setMemoryCardFolderTimestamp(path, file, &timestamp, message);
+	if (reserve_tuna_date)
+		result = setMemoryCardFolderTimestamp(path, file, &timestamp, message);
+	else
+		result = setHddCommonFolderTimestamp(path, file, &timestamp, message);
 	return result == 0 ? 1 : -1;
 }
 

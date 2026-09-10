@@ -438,17 +438,14 @@ static int menu(const char *path, FILEINFO *file)
 		enable[GETSIZE] = FALSE;
 	}
 //#ifdef TMANIP
-	if (                                                        //if
-	    (file->stats.AttrFile & sceMcFileAttrSubdir) &&         //pointing to a folder
-	    (strcmp(file->name, "..")) &&                           //it isnt the ".." option
-	    ((!strcmp(path, "mc0:/")) || (!strcmp(path, "mc1:/")))  //we're on Memory card roots
-	) {
+	if ((file->stats.AttrFile & sceMcFileAttrSubdir) &&
+	    strcmp(file->name, "..") &&
+	    ((!strcmp(path, "mc0:/")) || (!strcmp(path, "mc1:/")))) {
 		enable[TIMEMANIP] = TRUE;
-		enable[TIMEMANIP_CUSTOM] = TRUE;
 	} else {
 		enable[TIMEMANIP] = FALSE;
-		enable[TIMEMANIP_CUSTOM] = FALSE;
-	} 
+	}
+	enable[TIMEMANIP_CUSTOM] = filerCanSetCustomTimestamp(path, file);
 //#endif //TMANIP
 	if (genCmpFileExt(file->name, "ELF") && isTitleCfgPathEligible(path, menu_disabled))
 		enable[TITLE_CFG] = TRUE;
