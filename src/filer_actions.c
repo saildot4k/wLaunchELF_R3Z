@@ -304,9 +304,16 @@ static int isMemoryCardRootPath(const char *path)
 
 static int isHddCommonPath(const char *path)
 {
-	static const char hdd_common_path[] = "hdd0:__common:pfs:/";
+	static const char common_partition[] = "__common";
+	const char *partition;
+	size_t partition_len = sizeof(common_partition) - 1;
 
-	return (path != NULL && !strncmp(path, hdd_common_path, sizeof(hdd_common_path) - 1));
+	if (path == NULL || strncmp(path, "hdd0:/", 6))
+		return 0;
+
+	partition = path + 6;
+	return (!strncmp(partition, common_partition, partition_len) &&
+	        (partition[partition_len] == '/' || partition[partition_len] == '\0'));
 }
 
 int filerCanSetCustomTimestamp(const char *path, const FILEINFO *file)
