@@ -314,11 +314,16 @@ static int isTitleCfgPathEligible(const char *path, int menu_disabled)
 {
 	return ((!strncmp(path, "mass", 4)) ||
 	        (!strncmp(path, "usb", 3)) ||
+	        (!strncmp(path, "mc0:", 4)) ||
+	        (!strncmp(path, "mc1:", 4)) ||
 #ifdef MMCE
 	        (!strncmp(path, "mmce", 4)) ||
 #endif
 #ifdef MX4SIO
 	        (!strncmp(path, "mx4sio", 6)) ||
+#endif
+#ifdef UDPFS
+	        (!strncmp(path, "udpfs", 5)) ||
 #endif
 	        (!strncmp(path, "ata", 3)) ||
 	        (isHddBrowserPath(path) && !menu_disabled));
