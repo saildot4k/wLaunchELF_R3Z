@@ -570,6 +570,9 @@ void bringUpBootDeviceStack(enum BOOT_DEVICE boot_device)
 			if (isBootUsbMassPath(LaunchElfDir)) {
 				DPRINTF("Loading USB modules for boot\n");
 				loadUsbModules();
+				/* The IOP reset disconnects the boot device.  Wait for it to
+				 * enumerate before loading files beside the launched ELF. */
+				prepareUsbRootBrowse();
 			}
 			break;
 #ifdef MMCE
