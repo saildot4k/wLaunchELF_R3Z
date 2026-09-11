@@ -1032,10 +1032,21 @@ static void formatBrowserTimestamp(char *dst, size_t dst_size, const PS2TIME *ti
 	char date_text[16];
 	char time_text[16];
 	int year;
+	int month;
+	int day;
+	int hour;
+	int minute;
+	int second;
 
 	year = (timestamp->year < 2256) ? timestamp->year : (timestamp->year - 256);
-	menuTitleFormatClockDate(date_text, sizeof(date_text), year, timestamp->month, timestamp->day, date_format);
-	menuTitleFormatClockTime(time_text, sizeof(time_text), timestamp->hour, timestamp->min, timestamp->sec, use_12h);
+	month = timestamp->month;
+	day = timestamp->day;
+	hour = timestamp->hour;
+	minute = timestamp->min;
+	second = timestamp->sec;
+	menuTitleConvertTimestampToLocalTime(&year, &month, &day, &hour, &minute, &second);
+	menuTitleFormatClockDate(date_text, sizeof(date_text), year, month, day, date_format);
+	menuTitleFormatClockTime(time_text, sizeof(time_text), hour, minute, second, use_12h);
 	snprintf(dst, dst_size, "%s %s", time_text, date_text);
 }
 
@@ -2015,6 +2026,11 @@ static void submenu_func_GetSize(char *mess, char *path, FILEINFO *files)
 
 	//----- Comment out this section to skip attributes entirely -----
 	if ((nmarks < 2) && (sel >= 0)) {
+		PS2TIME timestamp;
+		char timestamp_text[32];
+		int use_12h;
+		int date_format;
+
 		sprintf(filepath, "%s%s", path, files[sel].name);
 		//----- Start of section for debug display of attributes -----
 		/*
@@ -2041,15 +2057,10 @@ static void submenu_func_GetSize(char *mess, char *path, FILEINFO *files)
 			time->hour,time->min,time->sec,time->unknown);
 */
 		//----- End of section for debug display of attributes -----
-		sprintf(mess + text_pos, " m=%04X %04d.%02d.%02d %02d:%02d:%02d%n",
-		        files[sel].stats.AttrFile,
-		        files[sel].stats._Modify.Year,
-		        files[sel].stats._Modify.Month,
-		        files[sel].stats._Modify.Day,
-		        files[sel].stats._Modify.Hour,
-		        files[sel].stats._Modify.Min,
-		        files[sel].stats._Modify.Sec,
-		        &text_inc);
+		timestamp = *(PS2TIME *)&files[sel].stats._Modify;
+		menuTitleGetClockFormat(&use_12h, &date_format);
+		formatBrowserTimestamp(timestamp_text, sizeof(timestamp_text), &timestamp, use_12h, date_format);
+		sprintf(mess + text_pos, " m=%04X %s%n", files[sel].stats.AttrFile, timestamp_text, &text_inc);
 		text_pos += text_inc;
 		if (!strncmp(path, "mc", 2)) {
 			mcGetInfo(path[2] - '0', 0, &mctype_PSx, NULL, NULL);

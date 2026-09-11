@@ -348,6 +348,66 @@ static int isCustomFolderTimestampInRange(int year, int month, int day, int hour
 	return 1;
 }
 
+static int convertCustomTimestampToLocalTime(sceMcStDateTime *timestamp)
+{
+	int year;
+	int month;
+	int day;
+	int hour;
+	int minute;
+	int second;
+
+	if (timestamp == NULL)
+		return 0;
+
+	year = timestamp->Year;
+	month = timestamp->Month;
+	day = timestamp->Day;
+	hour = timestamp->Hour;
+	minute = timestamp->Min;
+	second = timestamp->Sec;
+	if (!menuTitleConvertTimestampToLocalTime(&year, &month, &day, &hour, &minute, &second))
+		return 0;
+
+	timestamp->Year = year;
+	timestamp->Month = month;
+	timestamp->Day = day;
+	timestamp->Hour = hour;
+	timestamp->Min = minute;
+	timestamp->Sec = second;
+	return 1;
+}
+
+static int convertCustomTimestampFromLocalTime(sceMcStDateTime *timestamp)
+{
+	int year;
+	int month;
+	int day;
+	int hour;
+	int minute;
+	int second;
+
+	if (timestamp == NULL)
+		return 0;
+
+	year = timestamp->Year;
+	month = timestamp->Month;
+	day = timestamp->Day;
+	hour = timestamp->Hour;
+	minute = timestamp->Min;
+	second = timestamp->Sec;
+	if (!menuTitleConvertTimestampFromLocalTime(&year, &month, &day, &hour, &minute, &second))
+		return 0;
+
+	timestamp->Year = year;
+	timestamp->Month = month;
+	timestamp->Day = day;
+	timestamp->Hour = hour;
+	timestamp->Min = minute;
+	timestamp->Sec = second;
+	return 1;
+}
+
 static void normalizeCustomFolderTimestamp(sceMcStDateTime *timestamp, int reserve_tuna_date)
 {
 	if (timestamp->Year < 1)
@@ -373,6 +433,26 @@ static void normalizeCustomFolderTimestamp(sceMcStDateTime *timestamp, int reser
 	if (reserve_tuna_date && timestamp->Year == 2099 && timestamp->Month == 12 && timestamp->Day == 31 &&
 	    timestamp->Hour == 23 && timestamp->Min == 59 && timestamp->Sec == 59)
 		timestamp->Sec = 58;
+}
+
+static void normalizeCustomLocalTimestamp(sceMcStDateTime *timestamp)
+{
+	if (timestamp->Year > 2100)
+		timestamp->Year = 2100;
+	if (timestamp->Month < 1)
+		timestamp->Month = 1;
+	else if (timestamp->Month > 12)
+		timestamp->Month = 12;
+	if (timestamp->Day < 1)
+		timestamp->Day = 1;
+	else if (timestamp->Day > getCustomDateDaysInMonth(timestamp->Year, timestamp->Month))
+		timestamp->Day = getCustomDateDaysInMonth(timestamp->Year, timestamp->Month);
+	if (timestamp->Hour > 23)
+		timestamp->Hour = 23;
+	if (timestamp->Min > 59)
+		timestamp->Min = 59;
+	if (timestamp->Sec > 59)
+		timestamp->Sec = 59;
 }
 
 static void stepCustomFolderTimestamp(sceMcStDateTime *timestamp, int delta, int reserve_tuna_date)
@@ -477,40 +557,52 @@ static int getCustomDateFieldOffset(int field, int date_format)
 
 static void adjustCustomDateField(sceMcStDateTime *timestamp, int field, int delta, int reserve_tuna_date)
 {
+	sceMcStDateTime local_timestamp;
 	int maximum_day;
+
+	local_timestamp = *timestamp;
+	if (!convertCustomTimestampToLocalTime(&local_timestamp))
+		return;
 
 	switch (field) {
 		case CUSTOM_DATE_HOUR:
-			timestamp->Hour = (timestamp->Hour + ((delta > 0) ? 1 : 23)) % 24;
+			local_timestamp.Hour = (local_timestamp.Hour + ((delta > 0) ? 1 : 23)) % 24;
 			break;
 		case CUSTOM_DATE_MINUTE:
-			timestamp->Min = (timestamp->Min + ((delta > 0) ? 1 : 59)) % 60;
+			local_timestamp.Min = (local_timestamp.Min + ((delta > 0) ? 1 : 59)) % 60;
 			break;
 		case CUSTOM_DATE_SECOND:
-			timestamp->Sec = (timestamp->Sec + ((delta > 0) ? 1 : 59)) % 60;
+			local_timestamp.Sec = (local_timestamp.Sec + ((delta > 0) ? 1 : 59)) % 60;
 			break;
 		case CUSTOM_DATE_YEAR:
 			if (delta > 0)
-				timestamp->Year = (timestamp->Year == 2099) ? 1 : timestamp->Year + 1;
+				local_timestamp.Year = (local_timestamp.Year == 2100) ? 0 : local_timestamp.Year + 1;
 			else
-				timestamp->Year = (timestamp->Year == 1) ? 2099 : timestamp->Year - 1;
+				local_timestamp.Year = (local_timestamp.Year == 0) ? 2100 : local_timestamp.Year - 1;
 			break;
 		case CUSTOM_DATE_MONTH:
 			if (delta > 0)
-				timestamp->Month = (timestamp->Month == 12) ? 1 : timestamp->Month + 1;
+				local_timestamp.Month = (local_timestamp.Month == 12) ? 1 : local_timestamp.Month + 1;
 			else
-				timestamp->Month = (timestamp->Month == 1) ? 12 : timestamp->Month - 1;
+				local_timestamp.Month = (local_timestamp.Month == 1) ? 12 : local_timestamp.Month - 1;
 			break;
 		default:
-			maximum_day = getCustomDateDaysInMonth(timestamp->Year, timestamp->Month);
+			maximum_day = getCustomDateDaysInMonth(local_timestamp.Year, local_timestamp.Month);
 			if (delta > 0)
-				timestamp->Day = (timestamp->Day == maximum_day) ? 1 : timestamp->Day + 1;
+				local_timestamp.Day = (local_timestamp.Day == maximum_day) ? 1 : local_timestamp.Day + 1;
 			else
-				timestamp->Day = (timestamp->Day == 1) ? maximum_day : timestamp->Day - 1;
+				local_timestamp.Day = (local_timestamp.Day == 1) ? maximum_day : local_timestamp.Day - 1;
 			break;
 	}
 
-	normalizeCustomFolderTimestamp(timestamp, reserve_tuna_date);
+	normalizeCustomLocalTimestamp(&local_timestamp);
+	if (!convertCustomTimestampFromLocalTime(&local_timestamp))
+		return;
+	if (!isCustomFolderTimestampInRange(local_timestamp.Year, local_timestamp.Month, local_timestamp.Day,
+	                                    local_timestamp.Hour, local_timestamp.Min, local_timestamp.Sec))
+		return;
+	normalizeCustomFolderTimestamp(&local_timestamp, reserve_tuna_date);
+	*timestamp = local_timestamp;
 }
 
 static int compareCustomDateEditorFolders(const FILEINFO *left, const FILEINFO *right)
@@ -632,9 +724,12 @@ static void formatCustomDateEditorTimestamp(char *dst, size_t dst_size, const sc
 {
 	char date_text[16];
 	char time_text[16];
+	sceMcStDateTime local_timestamp;
 
-	menuTitleFormatClockTime(time_text, sizeof(time_text), timestamp->Hour, timestamp->Min, timestamp->Sec, use_12h);
-	menuTitleFormatClockDate(date_text, sizeof(date_text), timestamp->Year, timestamp->Month, timestamp->Day, date_format);
+	local_timestamp = *timestamp;
+	convertCustomTimestampToLocalTime(&local_timestamp);
+	menuTitleFormatClockTime(time_text, sizeof(time_text), local_timestamp.Hour, local_timestamp.Min, local_timestamp.Sec, use_12h);
+	menuTitleFormatClockDate(date_text, sizeof(date_text), local_timestamp.Year, local_timestamp.Month, local_timestamp.Day, date_format);
 	snprintf(dst, dst_size, "%s %s", time_text, date_text);
 }
 
@@ -745,8 +840,11 @@ static int editCustomFolderTimestamp(const char *path, const FILEINFO *file, sce
 				drawCustomDateEditorFolderRow(&folders[i], x, y, details_column, use_12h, date_format, i == editing_index);
 				if (i == editing_index) {
 					char time_text[16];
+					sceMcStDateTime local_timestamp;
 
-					menuTitleFormatClockTime(time_text, sizeof(time_text), timestamp->Hour, timestamp->Min, timestamp->Sec, use_12h);
+					local_timestamp = *timestamp;
+					convertCustomTimestampToLocalTime(&local_timestamp);
+					menuTitleFormatClockTime(time_text, sizeof(time_text), local_timestamp.Hour, local_timestamp.Min, local_timestamp.Sec, use_12h);
 					field = getCustomDateFieldForDisplayPosition(display_position, date_format);
 					timestamp_x = x + 4 + details_column * FONT_WIDTH + strlen("    - B ") * FONT_WIDTH;
 					if (field < CUSTOM_DATE_YEAR)
