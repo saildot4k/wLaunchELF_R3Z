@@ -316,6 +316,14 @@ static int isHddCommonPath(const char *path)
 	        (partition[partition_len] == '/' || partition[partition_len] == '\0'));
 }
 
+int filerConfirmTimestampModify(const char *path, const FILEINFO *file)
+{
+	if (isMemoryCardRootPath(path) && file != NULL && filerIsMcRootExploitFolderName(file->name))
+		return filerConfirmExploitModify(path, file);
+
+	return 1;
+}
+
 int filerCanSetCustomTimestamp(const char *path, const FILEINFO *file)
 {
 	if (file == NULL || !(file->stats.AttrFile & sceMcFileAttrSubdir) ||
@@ -626,20 +634,31 @@ static int compareCustomDateEditorFolders(const FILEINFO *left, const FILEINFO *
 	return stricmp(left->name, right->name);
 }
 
-static void sortCustomDateEditorFolders(FILEINFO *folders, int count)
+static int customDateEditorTimestampEqual(const sceMcStDateTime *left, const sceMcStDateTime *right)
+{
+	return (left->Year == right->Year && left->Month == right->Month && left->Day == right->Day &&
+	        left->Hour == right->Hour && left->Min == right->Min && left->Sec == right->Sec);
+}
+
+static void sortCustomDateEditorFolders(FILEINFO *folders, sceMcStDateTime *original_timestamps, int count)
 {
 	FILEINFO folder;
+	sceMcStDateTime original_timestamp;
 	int i, j;
 
 	for (i = 1; i < count; i++) {
 		folder = folders[i];
-		for (j = i; j > 0 && compareCustomDateEditorFolders(&folder, &folders[j - 1]) < 0; j--)
+		original_timestamp = original_timestamps[i];
+		for (j = i; j > 0 && compareCustomDateEditorFolders(&folder, &folders[j - 1]) < 0; j--) {
 			folders[j] = folders[j - 1];
+			original_timestamps[j] = original_timestamps[j - 1];
+		}
 		folders[j] = folder;
+		original_timestamps[j] = original_timestamp;
 	}
 }
 
-static int loadCustomDateEditorFolders(const char *path, FILEINFO *folders)
+static int loadCustomDateEditorFolders(const char *path, FILEINFO *folders, sceMcStDateTime *original_timestamps)
 {
 	int count;
 	int i;
@@ -652,15 +671,18 @@ static int loadCustomDateEditorFolders(const char *path, FILEINFO *folders)
 	for (i = folder_count = 0; i < count; i++) {
 		if (!(folders[i].stats.AttrFile & sceMcFileAttrSubdir))
 			continue;
+		if (!strcmp(folders[i].name, ".") || !strcmp(folders[i].name, ".."))
+			continue;
 		if (folder_count != i)
 			folders[folder_count] = folders[i];
+		original_timestamps[folder_count] = folders[folder_count].stats._Modify;
 		folder_count++;
 	}
 
 	return folder_count;
 }
 
-static int updateCustomDateEditorFolders(FILEINFO *folders, int folder_count, const char *edited_name, const sceMcStDateTime *timestamp)
+static int updateCustomDateEditorFolders(FILEINFO *folders, sceMcStDateTime *original_timestamps, int folder_count, const char *edited_name, const sceMcStDateTime *timestamp)
 {
 	int i;
 
@@ -673,7 +695,7 @@ static int updateCustomDateEditorFolders(FILEINFO *folders, int folder_count, co
 	if (i == folder_count)
 		return -1;
 
-	sortCustomDateEditorFolders(folders, folder_count);
+	sortCustomDateEditorFolders(folders, original_timestamps, folder_count);
 	for (i = 0; i < folder_count; i++) {
 		if (!stricmp(folders[i].name, edited_name))
 			return i;
@@ -682,12 +704,13 @@ static int updateCustomDateEditorFolders(FILEINFO *folders, int folder_count, co
 	return -1;
 }
 
-static int moveCustomDateEditorNextToFolder(FILEINFO *folders, int folder_count, const char *edited_name, sceMcStDateTime *timestamp, int newer, int reserve_tuna_date)
+static int moveCustomDateEditorNextToFolder(FILEINFO *folders, sceMcStDateTime *original_timestamps, int folder_count, const char *edited_name,
+	                                            sceMcStDateTime *timestamp, int newer, int reserve_tuna_date)
 {
 	int editing_index;
 	int reference_index;
 
-	editing_index = updateCustomDateEditorFolders(folders, folder_count, edited_name, timestamp);
+	editing_index = updateCustomDateEditorFolders(folders, original_timestamps, folder_count, edited_name, timestamp);
 	if (editing_index < 0)
 		return 0;
 
@@ -697,6 +720,25 @@ static int moveCustomDateEditorNextToFolder(FILEINFO *folders, int folder_count,
 
 	*timestamp = folders[reference_index].stats._Modify;
 	stepCustomFolderTimestamp(timestamp, newer ? 1 : -1, reserve_tuna_date);
+	return 1;
+}
+
+static int selectCustomDateEditorFolder(FILEINFO *folders, sceMcStDateTime *original_timestamps, int folder_count, char *selected_name,
+	                                      size_t selected_name_size, sceMcStDateTime *timestamp, int direction)
+{
+	int editing_index;
+	int next_index;
+
+	editing_index = updateCustomDateEditorFolders(folders, original_timestamps, folder_count, selected_name, timestamp);
+	if (editing_index < 0)
+		return 0;
+
+	next_index = editing_index + direction;
+	if (next_index < 0 || next_index >= folder_count)
+		return 0;
+
+	snprintf(selected_name, selected_name_size, "%s", folders[next_index].name);
+	*timestamp = folders[next_index].stats._Modify;
 	return 1;
 }
 
@@ -761,10 +803,10 @@ static void drawCustomDateEditorFolderRow(const FILEINFO *folder, int x, int y, 
 	}
 }
 
-static int editCustomFolderTimestamp(const char *path, const FILEINFO *file, sceMcStDateTime *timestamp, int reserve_tuna_date)
+static int editCustomFolderTimestamp(const FILEINFO *file, FILEINFO *folders, sceMcStDateTime *original_timestamps, int folder_count,
+	                                   sceMcStDateTime *timestamp, int reserve_tuna_date)
 {
-	static FILEINFO folders[MAX_ENTRY];
-	char edited_name[MAX_NAME];
+	char selected_name[MAX_NAME];
 	char tooltip[MAX_PATH];
 	int use_12h;
 	int date_format;
@@ -774,7 +816,6 @@ static int editCustomFolderTimestamp(const char *path, const FILEINFO *file, sce
 	int details_column;
 	int editing_index;
 	int field;
-	int folder_count;
 	int folder_rows;
 	int i;
 	int list_top;
@@ -782,11 +823,12 @@ static int editCustomFolderTimestamp(const char *path, const FILEINFO *file, sce
 	int timestamp_x;
 	int x, y, y0, y1;
 
-	if (path == NULL || file == NULL || timestamp == NULL)
+	if (file == NULL || folders == NULL || original_timestamps == NULL || folder_count <= 0 || timestamp == NULL)
 		return 0;
 
-	snprintf(edited_name, sizeof(edited_name), "%s", file->name);
-	folder_count = loadCustomDateEditorFolders(path, folders);
+	snprintf(selected_name, sizeof(selected_name), "%s", file->name);
+	if (updateCustomDateEditorFolders(folders, original_timestamps, folder_count, selected_name, timestamp) < 0)
+		return 0;
 
 	while (1) {
 		waitPadReady(0, 0);
@@ -805,13 +847,20 @@ static int editCustomFolderTimestamp(const char *path, const FILEINFO *file, sce
 				menuTitleGetClockFormat(NULL, &date_format);
 				adjustCustomDateField(timestamp, getCustomDateFieldForDisplayPosition(display_position, date_format), -1, reserve_tuna_date);
 				event |= 2;
+			} else if (new_pad & PAD_UP) {
+				if (selectCustomDateEditorFolder(folders, original_timestamps, folder_count, selected_name, sizeof(selected_name), timestamp, -1))
+					event |= 2;
+			} else if (new_pad & PAD_DOWN) {
+				if (selectCustomDateEditorFolder(folders, original_timestamps, folder_count, selected_name, sizeof(selected_name), timestamp, 1))
+					event |= 2;
 			} else if (new_pad & PAD_L1) {
-				if (moveCustomDateEditorNextToFolder(folders, folder_count, edited_name, timestamp, TRUE, reserve_tuna_date))
+				if (moveCustomDateEditorNextToFolder(folders, original_timestamps, folder_count, selected_name, timestamp, TRUE, reserve_tuna_date))
 					event |= 2;
 			} else if (new_pad & PAD_R1) {
-				if (moveCustomDateEditorNextToFolder(folders, folder_count, edited_name, timestamp, FALSE, reserve_tuna_date))
+				if (moveCustomDateEditorNextToFolder(folders, original_timestamps, folder_count, selected_name, timestamp, FALSE, reserve_tuna_date))
 					event |= 2;
 			} else if (new_pad & PAD_START) {
+				updateCustomDateEditorFolders(folders, original_timestamps, folder_count, selected_name, timestamp);
 				return 1;
 			} else if (new_pad & PAD_TRIANGLE) {
 				return 0;
@@ -822,7 +871,7 @@ static int editCustomFolderTimestamp(const char *path, const FILEINFO *file, sce
 			menuTitleGetClockFormat(&use_12h, &date_format);
 			snprintf(tooltip, sizeof(tooltip), "\xFF" "<\xFF" ":" ":%s \xFF" "1:%s \xFF" "0:%s L1:%s R1:%s START:%s \xFF" "3:%s",
 			         LNG(Select), LNG(Add), LNG(Subtract), LNG(Up), LNG(Down), LNG(Set), LNG(Return));
-			editing_index = updateCustomDateEditorFolders(folders, folder_count, edited_name, timestamp);
+			editing_index = updateCustomDateEditorFolders(folders, original_timestamps, folder_count, selected_name, timestamp);
 			details_column = use_12h ? 41 : 44;
 			list_end_y = Menu_end_y;
 			folder_rows = (list_end_y - Menu_start_y) / FONT_HEIGHT - 2;
@@ -958,9 +1007,15 @@ void time_manip(const char *path, const FILEINFO *file, char *message)
 
 int time_manip_custom(const char *path, const FILEINFO *file, char *message)
 {
+	static FILEINFO folders[MAX_ENTRY];
+	static sceMcStDateTime original_timestamps[MAX_ENTRY];
 	const PS2TIME *current_timestamp;
 	sceMcStDateTime timestamp;
 	int current_year;
+	int folder_count;
+	int updated;
+	int failed;
+	int i;
 	int result;
 	int reserve_tuna_date;
 
@@ -990,14 +1045,49 @@ int time_manip_custom(const char *path, const FILEINFO *file, char *message)
 	}
 	normalizeCustomFolderTimestamp(&timestamp, reserve_tuna_date);
 
-	if (!editCustomFolderTimestamp(path, file, &timestamp, reserve_tuna_date))
+	folder_count = loadCustomDateEditorFolders(path, folders, original_timestamps);
+	if (folder_count <= 0) {
+		snprintf(message, MAX_PATH, "Unable to load folders.");
+		return -1;
+	}
+
+	if (!editCustomFolderTimestamp(file, folders, original_timestamps, folder_count, &timestamp, reserve_tuna_date))
 		return 0;
 
-	if (reserve_tuna_date)
-		result = setMemoryCardFolderTimestamp(path, file, &timestamp, message);
-	else
-		result = setHddCommonFolderTimestamp(path, file, &timestamp, message);
-	return result == 0 ? 1 : -1;
+	for (i = 0; i < folder_count; i++) {
+		if (customDateEditorTimestampEqual(&folders[i].stats._Modify, &original_timestamps[i]) || !stricmp(folders[i].name, file->name))
+			continue;
+		if (!filerConfirmTimestampModify(path, &folders[i]))
+			return 0;
+	}
+
+	updated = 0;
+	failed = 0;
+	for (i = 0; i < folder_count; i++) {
+		if (customDateEditorTimestampEqual(&folders[i].stats._Modify, &original_timestamps[i]))
+			continue;
+
+		if (reserve_tuna_date)
+			result = setMemoryCardFolderTimestamp(path, &folders[i], &folders[i].stats._Modify, message);
+		else
+			result = setHddCommonFolderTimestamp(path, &folders[i], &folders[i].stats._Modify, message);
+		if (result == 0)
+			updated++;
+		else
+			failed++;
+	}
+
+	if (failed > 0) {
+		snprintf(message, MAX_PATH, "%d folder timestamp(s) updated, %d failed.", updated, failed);
+		return updated > 0 ? 1 : -1;
+	}
+	if (updated == 0) {
+		snprintf(message, MAX_PATH, "No folder timestamps changed.");
+		return 0;
+	}
+
+	snprintf(message, MAX_PATH, "%d folder timestamp(s) updated.", updated);
+	return 1;
 }
 
 void make_title_cfg(const char *path, const FILEINFO *file, char *_msg0)

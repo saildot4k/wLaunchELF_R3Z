@@ -1544,7 +1544,7 @@ int getFilePath(char *out, int cnfmode)
 #else
 						sprintf(msg1, "\n\n %s  [%s]  ?\n", LNG(change_timestamp_of), files[browser_sel].name);
 #endif //TMANIP_MORON
-						if (filerConfirmExploitModify(path, &files[browser_sel]) > 0 && ynDialog(msg1) > 0) {
+						if (filerConfirmTimestampModify(path, &files[browser_sel]) > 0 && ynDialog(msg1) > 0) {
 							time_manip(path, &files[browser_sel], msg0);
 							browser_pushed = FALSE;
 							browser_repos = TRUE;  // TEST
@@ -1552,7 +1552,7 @@ int getFilePath(char *out, int cnfmode)
 						}
 					}
 					else if (ret == TIMEMANIP_CUSTOM) {
-						if (filerConfirmExploitModify(path, &files[browser_sel]) > 0) {
+						if (filerConfirmTimestampModify(path, &files[browser_sel]) > 0) {
 							ret = time_manip_custom(path, &files[browser_sel], msg0);
 							if (ret != 0)
 								browser_pushed = FALSE;
