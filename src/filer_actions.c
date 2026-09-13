@@ -297,6 +297,22 @@ enum {
 	CUSTOM_DATE_FIELD_COUNT
 };
 
+enum {
+	TIMESTAMP_ORGANIZE_MANUAL,
+	TIMESTAMP_ORGANIZE_AZ,
+	TIMESTAMP_ORGANIZE_ZA,
+	TIMESTAMP_ORGANIZE_SAS,
+	TIMESTAMP_ORGANIZE_COUNT
+};
+
+#define SAS_TIMESTAMP_CATEGORY_SECONDS 86400
+#define SAS_TIMESTAMP_RANK_WIDTH 48
+#define SAS_TIMESTAMP_BASE 40
+#define TIMESTAMP_ORGANIZE_SECONDS_BETWEEN_FOLDERS 60
+
+static FILEINFO timestamp_folders[MAX_ENTRY];
+static sceMcStDateTime timestamp_original[MAX_ENTRY];
+
 static int isMemoryCardRootPath(const char *path)
 {
 	return (path != NULL && (!strcmp(path, "mc0:/") || !strcmp(path, "mc1:/")));
@@ -324,13 +340,18 @@ int filerConfirmTimestampModify(const char *path, const FILEINFO *file)
 	return 1;
 }
 
+int filerCanOrganizeFolderTimestamps(const char *path)
+{
+	return isMemoryCardRootPath(path) || isHddCommonPath(path);
+}
+
 int filerCanSetCustomTimestamp(const char *path, const FILEINFO *file)
 {
 	if (file == NULL || !(file->stats.AttrFile & sceMcFileAttrSubdir) ||
 	    !strcmp(file->name, ".") || !strcmp(file->name, ".."))
 		return 0;
 
-	return isMemoryCardRootPath(path) || isHddCommonPath(path);
+	return filerCanOrganizeFolderTimestamps(path);
 }
 
 static int isCustomDateLeapYear(int year)
@@ -1007,23 +1028,41 @@ void time_manip(const char *path, const FILEINFO *file, char *message)
 
 int time_manip_custom(const char *path, const FILEINFO *file, char *message)
 {
-	static FILEINFO folders[MAX_ENTRY];
-	static sceMcStDateTime original_timestamps[MAX_ENTRY];
+	FILEINFO selected_file;
 	const PS2TIME *current_timestamp;
 	sceMcStDateTime timestamp;
 	int current_year;
 	int folder_count;
+	int selected_index;
 	int updated;
 	int failed;
 	int i;
 	int result;
 	int reserve_tuna_date;
 
-	if (!filerCanSetCustomTimestamp(path, file))
+	if (!filerCanOrganizeFolderTimestamps(path))
 		return -1;
 	reserve_tuna_date = isMemoryCardRootPath(path);
+	folder_count = loadCustomDateEditorFolders(path, timestamp_folders, timestamp_original);
+	if (folder_count <= 0) {
+		snprintf(message, MAX_PATH, "Unable to load folders.");
+		return -1;
+	}
 
-	current_timestamp = (const PS2TIME *)&file->stats._Modify;
+	selected_index = -1;
+	if (file != NULL && (file->stats.AttrFile & sceMcFileAttrSubdir) && strcmp(file->name, ".") && strcmp(file->name, "..")) {
+		for (i = 0; i < folder_count; i++) {
+			if (!stricmp(timestamp_folders[i].name, file->name)) {
+				selected_index = i;
+				break;
+			}
+		}
+	}
+	if (selected_index < 0)
+		selected_index = 0;
+	selected_file = timestamp_folders[selected_index];
+
+	current_timestamp = (const PS2TIME *)&selected_file.stats._Modify;
 	current_year = current_timestamp->year;
 	if (!isCustomFolderTimestampInRange(current_year, current_timestamp->month, current_timestamp->day,
 	                                    current_timestamp->hour, current_timestamp->min, current_timestamp->sec)) {
@@ -1045,32 +1084,26 @@ int time_manip_custom(const char *path, const FILEINFO *file, char *message)
 	}
 	normalizeCustomFolderTimestamp(&timestamp, reserve_tuna_date);
 
-	folder_count = loadCustomDateEditorFolders(path, folders, original_timestamps);
-	if (folder_count <= 0) {
-		snprintf(message, MAX_PATH, "Unable to load folders.");
-		return -1;
-	}
-
-	if (!editCustomFolderTimestamp(file, folders, original_timestamps, folder_count, &timestamp, reserve_tuna_date))
+	if (!editCustomFolderTimestamp(&selected_file, timestamp_folders, timestamp_original, folder_count, &timestamp, reserve_tuna_date))
 		return 0;
 
 	for (i = 0; i < folder_count; i++) {
-		if (customDateEditorTimestampEqual(&folders[i].stats._Modify, &original_timestamps[i]) || !stricmp(folders[i].name, file->name))
+		if (customDateEditorTimestampEqual(&timestamp_folders[i].stats._Modify, &timestamp_original[i]))
 			continue;
-		if (!filerConfirmTimestampModify(path, &folders[i]))
+		if (!filerConfirmTimestampModify(path, &timestamp_folders[i]))
 			return 0;
 	}
 
 	updated = 0;
 	failed = 0;
 	for (i = 0; i < folder_count; i++) {
-		if (customDateEditorTimestampEqual(&folders[i].stats._Modify, &original_timestamps[i]))
+		if (customDateEditorTimestampEqual(&timestamp_folders[i].stats._Modify, &timestamp_original[i]))
 			continue;
 
 		if (reserve_tuna_date)
-			result = setMemoryCardFolderTimestamp(path, &folders[i], &folders[i].stats._Modify, message);
+			result = setMemoryCardFolderTimestamp(path, &timestamp_folders[i], &timestamp_folders[i].stats._Modify, message);
 		else
-			result = setHddCommonFolderTimestamp(path, &folders[i], &folders[i].stats._Modify, message);
+			result = setHddCommonFolderTimestamp(path, &timestamp_folders[i], &timestamp_folders[i].stats._Modify, message);
 		if (result == 0)
 			updated++;
 		else
@@ -1088,6 +1121,410 @@ int time_manip_custom(const char *path, const FILEINFO *file, char *message)
 
 	snprintf(message, MAX_PATH, "%d folder timestamp(s) updated.", updated);
 	return 1;
+}
+
+static int selectTimestampOrganizationMode(void)
+{
+	const char *items[TIMESTAMP_ORGANIZE_COUNT] = {
+		LNG(Manual_Edit),
+		"A-Z",
+		"Z-A",
+		LNG(SAS_Timestamps),
+	};
+	char tooltip[80];
+	int selection = TIMESTAMP_ORGANIZE_MANUAL;
+	int event = 1;
+	int i;
+	int x;
+	int y;
+
+	if (swapKeys)
+		snprintf(tooltip, sizeof(tooltip), "\xFF" "1:%s \xFF" "0:%s \xFF" "3:%s", LNG(OK), LNG(Return), LNG(Return));
+	else
+		snprintf(tooltip, sizeof(tooltip), "\xFF" "0:%s \xFF" "1:%s \xFF" "3:%s", LNG(OK), LNG(Return), LNG(Return));
+
+	while (1) {
+		waitPadReady(0, 0);
+		if (readpad()) {
+			if (new_pad & PAD_UP) {
+				selection--;
+				if (selection < 0)
+					selection = TIMESTAMP_ORGANIZE_COUNT - 1;
+				event = 1;
+			} else if (new_pad & PAD_DOWN) {
+				selection++;
+				if (selection >= TIMESTAMP_ORGANIZE_COUNT)
+					selection = 0;
+				event = 1;
+			} else if ((new_pad & PAD_TRIANGLE) || (!swapKeys && (new_pad & PAD_CROSS)) || (swapKeys && (new_pad & PAD_CIRCLE))) {
+				return -1;
+			} else if ((swapKeys && (new_pad & PAD_CROSS)) || (!swapKeys && (new_pad & PAD_CIRCLE))) {
+				return selection;
+			}
+		}
+
+		if (event) {
+			clrScr(setting->color[COLOR_BACKGR]);
+			setScrTmp(LNG(Set_Custom_Date), tooltip);
+			x = Menu_start_x;
+			y = Menu_start_y;
+			for (i = 0; i < TIMESTAMP_ORGANIZE_COUNT; i++) {
+				printXY(items[i], x + FONT_WIDTH * 2, y + i * FONT_HEIGHT, setting->color[COLOR_TEXT], TRUE, 0);
+			}
+			drawChar(LEFT_CUR, x, y + selection * FONT_HEIGHT, setting->color[COLOR_SELECT]);
+		}
+		drawScr();
+		event = 0;
+	}
+}
+
+static int filerIsAutomaticTimestampExcludedFolder(const char *name)
+{
+	int i;
+
+	if (name == NULL || strlen(name) < 12)
+		return 0;
+	if (name[0] != 'B' && name[0] != 'b')
+		return 0;
+	if (name[1] != 'A' && name[1] != 'a' && name[1] != 'E' && name[1] != 'e' &&
+	    name[1] != 'I' && name[1] != 'i' && name[1] != 'C' && name[1] != 'c')
+		return 0;
+	for (i = 2; i < 6; i++) {
+		if (!((name[i] >= 'A' && name[i] <= 'Z') || (name[i] >= 'a' && name[i] <= 'z')))
+			return 0;
+	}
+	if (name[6] != '-')
+		return 0;
+	for (i = 7; i < 12; i++) {
+		if (name[i] < '0' || name[i] > '9')
+			return 0;
+	}
+
+	return 1;
+}
+
+static int compareTimestampFolderNames(const FILEINFO *left, const FILEINFO *right)
+{
+	return stricmp(left->name, right->name);
+}
+
+static void sortTimestampFolderIndexes(int *indexes, int count, int descending)
+{
+	int index;
+	int i;
+	int j;
+
+	for (i = 1; i < count; i++) {
+		index = indexes[i];
+		for (j = i; j > 0; j--) {
+			int compare = compareTimestampFolderNames(&timestamp_folders[index], &timestamp_folders[indexes[j - 1]]);
+
+			if ((!descending && compare >= 0) || (descending && compare <= 0))
+				break;
+			indexes[j] = indexes[j - 1];
+		}
+		indexes[j] = index;
+	}
+}
+
+static void setSequentialTimestamp(sceMcStDateTime *timestamp, int position, int reserve_tuna_date)
+{
+	int i;
+
+	timestamp->Resv2 = 0;
+	timestamp->Year = 2099;
+	timestamp->Month = 12;
+	timestamp->Day = 31;
+	timestamp->Hour = 23;
+	timestamp->Min = 59;
+	timestamp->Sec = 58;
+	for (i = 0; i < position * TIMESTAMP_ORGANIZE_SECONDS_BETWEEN_FOLDERS; i++)
+		stepCustomFolderTimestamp(timestamp, -1, reserve_tuna_date);
+}
+
+static char sasTimestampToUpper(char character)
+{
+	if (character >= 'a' && character <= 'z')
+		return character - ('a' - 'A');
+	return character;
+}
+
+static void buildSasEffectiveFolderName(const char *name, char *effective, size_t effective_size)
+{
+	char normalized[MAX_NAME + 1];
+	size_t begin;
+	size_t end;
+	size_t i;
+
+	if (effective_size == 0)
+		return;
+	effective[0] = '\0';
+	if (name == NULL)
+		return;
+
+	begin = 0;
+	end = strlen(name);
+	while (begin < end && name[begin] == ' ')
+		begin++;
+	while (end > begin && name[end - 1] == ' ')
+		end--;
+	if (end - begin >= sizeof(normalized))
+		end = begin + sizeof(normalized) - 1;
+	for (i = 0; begin + i < end; i++)
+		normalized[i] = sasTimestampToUpper(name[begin + i]);
+	normalized[i] = '\0';
+
+	if (!strcmp(normalized, "OSDXMB") || !strcmp(normalized, "XEBPLUS"))
+		snprintf(effective, effective_size, "APP_%s", normalized);
+	else if (!strcmp(normalized, "RESTART") || !strcmp(normalized, "POWEROFF"))
+		snprintf(effective, effective_size, "RAA_%s", normalized);
+	else if (!strcmp(normalized, "NEUTRINO"))
+		snprintf(effective, effective_size, "RTE_%s", normalized);
+	else if (!strcmp(normalized, "BOOT"))
+		snprintf(effective, effective_size, "SYS_BOOT");
+	else if (!strcmp(normalized, "EXPLOITS"))
+		snprintf(effective, effective_size, "ZZY_EXPLOITS");
+	else if (!strcmp(normalized, "BM") || !strcmp(normalized, "MATRIXTEAM") || !strcmp(normalized, "OPL") || !strcmp(normalized, "POPSTARTER"))
+		snprintf(effective, effective_size, "ZZZ_%s", normalized);
+	else
+		snprintf(effective, effective_size, "%s", normalized);
+}
+
+static int getSasTimestampCategory(const char *effective)
+{
+	if (!strncmp(effective, "APP_", 4))
+		return 0;
+	if (!strcmp(effective, "APPS"))
+		return 1;
+	if (!strncmp(effective, "PS1_", 4))
+		return 2;
+	if (!strncmp(effective, "EMU_", 4))
+		return 3;
+	if (!strncmp(effective, "GME_", 4))
+		return 4;
+	if (!strncmp(effective, "DST_", 4))
+		return 5;
+	if (!strncmp(effective, "DBG_", 4))
+		return 6;
+	if (!strncmp(effective, "RAA_", 4))
+		return 7;
+	if (!strncmp(effective, "RTE_", 4))
+		return 8;
+	if (!strncmp(effective, "SYS_", 4) || !strcmp(effective, "SYS"))
+		return 10;
+	if (!strncmp(effective, "ZZY_", 4))
+		return 11;
+	if (!strncmp(effective, "ZZZ_", 4))
+		return 12;
+	return 9;
+}
+
+static void buildSasTimestampPayload(const char *effective, int category, char *payload, size_t payload_size)
+{
+	const char *source = effective;
+	size_t i;
+	size_t j;
+
+	if (category == 1)
+		source = "APPS";
+	else if (category != 9) {
+		if (!strncmp(effective, "APP_", 4) || !strncmp(effective, "PS1_", 4) || !strncmp(effective, "EMU_", 4) ||
+		    !strncmp(effective, "GME_", 4) || !strncmp(effective, "DST_", 4) || !strncmp(effective, "DBG_", 4) ||
+		    !strncmp(effective, "RAA_", 4) || !strncmp(effective, "RTE_", 4) || !strncmp(effective, "SYS_", 4) ||
+		    !strncmp(effective, "ZZY_", 4) || !strncmp(effective, "ZZZ_", 4))
+			source = effective + 4;
+	}
+
+	for (i = j = 0; source[i] != '\0' && j + 1 < payload_size; i++) {
+		if (source[i] != '-')
+			payload[j++] = source[i];
+	}
+	payload[j] = '\0';
+}
+
+static int getSasTimestampCharacterCode(char character)
+{
+	if (character == ' ')
+		return 0;
+	if (character >= '0' && character <= '9')
+		return character - '0' + 1;
+	if (character >= 'A' && character <= 'Z')
+		return character - 'A' + 11;
+	if (character == '_')
+		return 37;
+	if (character == '-')
+		return 38;
+	return 39;
+}
+
+static int getSasTimestampSlot(const char *payload)
+{
+	int digits[SAS_TIMESTAMP_RANK_WIDTH];
+	int carry;
+	int i;
+	size_t length;
+
+	length = strlen(payload);
+
+	for (i = 0; i < SAS_TIMESTAMP_RANK_WIDTH; i++) {
+		if ((size_t)i < length)
+			digits[i] = getSasTimestampCharacterCode(payload[i]) + 1;
+		else
+			digits[i] = 0;
+	}
+
+	carry = 0;
+	for (i = SAS_TIMESTAMP_RANK_WIDTH - 1; i >= 0; i--) {
+		int product = digits[i] * SAS_TIMESTAMP_CATEGORY_SECONDS + carry;
+
+		carry = product / SAS_TIMESTAMP_BASE;
+	}
+	if (carry >= SAS_TIMESTAMP_CATEGORY_SECONDS)
+		return SAS_TIMESTAMP_CATEGORY_SECONDS - 1;
+	return carry;
+}
+
+static void decrementSasTimestampDate(sceMcStDateTime *timestamp)
+{
+	if (timestamp->Day > 1) {
+		timestamp->Day--;
+		return;
+	}
+	if (timestamp->Month > 1)
+		timestamp->Month--;
+	else {
+		timestamp->Month = 12;
+		timestamp->Year--;
+	}
+	timestamp->Day = getCustomDateDaysInMonth(timestamp->Year, timestamp->Month);
+}
+
+static void setSasTimestamp(sceMcStDateTime *timestamp, int category, int slot)
+{
+	int remaining_seconds;
+	int days;
+	int time_of_day;
+
+	timestamp->Resv2 = 0;
+	timestamp->Year = 2099;
+	timestamp->Month = 1;
+	timestamp->Day = 1;
+	timestamp->Hour = 7;
+	timestamp->Min = 59;
+	timestamp->Sec = 59;
+
+	remaining_seconds = category * SAS_TIMESTAMP_CATEGORY_SECONDS + slot;
+	days = remaining_seconds / SAS_TIMESTAMP_CATEGORY_SECONDS;
+	remaining_seconds %= SAS_TIMESTAMP_CATEGORY_SECONDS;
+	time_of_day = timestamp->Hour * 3600 + timestamp->Min * 60 + timestamp->Sec - remaining_seconds;
+	if (time_of_day < 0) {
+		time_of_day += SAS_TIMESTAMP_CATEGORY_SECONDS;
+		days++;
+	}
+	while (days-- > 0)
+		decrementSasTimestampDate(timestamp);
+	timestamp->Hour = time_of_day / 3600;
+	timestamp->Min = (time_of_day % 3600) / 60;
+	timestamp->Sec = time_of_day % 60;
+}
+
+static int time_manip_automatic(const char *path, int mode, char *message)
+{
+	static int indexes[MAX_ENTRY];
+	sceMcStDateTime timestamp;
+	char effective[MAX_NAME + 8];
+	char payload[MAX_NAME + 8];
+	int folder_count;
+	int index_count;
+	int reserve_tuna_date;
+	int updated;
+	int failed;
+	int i;
+	int result;
+	int category;
+
+	if (!filerCanOrganizeFolderTimestamps(path))
+		return -1;
+
+	folder_count = loadCustomDateEditorFolders(path, timestamp_folders, timestamp_original);
+	if (folder_count <= 0) {
+		snprintf(message, MAX_PATH, "Unable to load folders.");
+		return -1;
+	}
+
+	index_count = 0;
+	for (i = 0; i < folder_count; i++) {
+		if (!filerIsAutomaticTimestampExcludedFolder(timestamp_folders[i].name))
+			indexes[index_count++] = i;
+	}
+	if (index_count == 0) {
+		snprintf(message, MAX_PATH, "No folders eligible for automatic organization.");
+		return 0;
+	}
+
+	reserve_tuna_date = isMemoryCardRootPath(path);
+	if (mode == TIMESTAMP_ORGANIZE_AZ || mode == TIMESTAMP_ORGANIZE_ZA) {
+		sortTimestampFolderIndexes(indexes, index_count, mode == TIMESTAMP_ORGANIZE_ZA);
+		for (i = 0; i < index_count; i++)
+			setSequentialTimestamp(&timestamp_folders[indexes[i]].stats._Modify, i, reserve_tuna_date);
+	} else {
+		for (i = 0; i < index_count; i++) {
+			buildSasEffectiveFolderName(timestamp_folders[indexes[i]].name, effective, sizeof(effective));
+			category = getSasTimestampCategory(effective);
+			buildSasTimestampPayload(effective, category, payload, sizeof(payload));
+			setSasTimestamp(&timestamp_folders[indexes[i]].stats._Modify, category, getSasTimestampSlot(payload));
+		}
+	}
+
+	for (i = 0; i < folder_count; i++) {
+		if (customDateEditorTimestampEqual(&timestamp_folders[i].stats._Modify, &timestamp_original[i]))
+			continue;
+		if (!filerConfirmTimestampModify(path, &timestamp_folders[i]))
+			return 0;
+	}
+
+	updated = 0;
+	failed = 0;
+	for (i = 0; i < folder_count; i++) {
+		if (customDateEditorTimestampEqual(&timestamp_folders[i].stats._Modify, &timestamp_original[i]))
+			continue;
+		if (reserve_tuna_date)
+			result = setMemoryCardFolderTimestamp(path, &timestamp_folders[i], &timestamp_folders[i].stats._Modify, message);
+		else
+			result = setHddCommonFolderTimestamp(path, &timestamp_folders[i], &timestamp_folders[i].stats._Modify, message);
+		if (result == 0)
+			updated++;
+		else
+			failed++;
+	}
+
+	if (failed > 0) {
+		snprintf(message, MAX_PATH, "%d folder timestamp(s) updated, %d failed.", updated, failed);
+		return updated > 0 ? 1 : -1;
+	}
+	if (updated == 0) {
+		snprintf(message, MAX_PATH, "No folder timestamps changed.");
+		return 0;
+	}
+
+	snprintf(message, MAX_PATH, "%d folder timestamp(s) updated.", updated);
+	return 1;
+}
+
+int time_manip_organize(const char *path, const FILEINFO *file, char *message)
+{
+	int mode;
+
+	if (!filerCanOrganizeFolderTimestamps(path))
+		return -1;
+
+	mode = selectTimestampOrganizationMode();
+	if (mode < 0)
+		return 0;
+	if (mode == TIMESTAMP_ORGANIZE_MANUAL)
+		return time_manip_custom(path, file, message);
+
+	return time_manip_automatic(path, mode, message);
 }
 
 void make_title_cfg(const char *path, const FILEINFO *file, char *_msg0)

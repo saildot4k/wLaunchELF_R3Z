@@ -448,3 +448,5 @@ lang(446, Exploit_Cancel_return_installer, "Cancel and return to MC Exploit Inst
 lang(447, Exploit_Not_enough_space_without_cleanup_with_reserve, "Not enough free space to install.\nRequired: %d KB\nAvailable: %d KB\nIncludes %d KB BOOT.ELF reserve.")
 lang(448, Exploit_Not_enough_space_without_cleanup, "Not enough free space to install.\nRequired: %d KB\nAvailable: %d KB")
 lang(449, Down, "Giu")
+lang(450, Manual_Edit, "Modifica manuale")
+lang(451, SAS_Timestamps, "Timestamp SAS")
