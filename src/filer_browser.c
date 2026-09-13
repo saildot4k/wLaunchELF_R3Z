@@ -1539,17 +1539,10 @@ int getFilePath(char *out, int cnfmode)
 					}  //ends GETSIZE
 //#ifdef TMANIP
 					else if (ret == TIMEMANIP) {
-#ifdef TMANIP_MORON
-						sprintf(msg1, "\n\n %s  [%s]  ?\n", LNG(change_timestamp_of), HACK_FOLDER);
-#else
-						sprintf(msg1, "\n\n %s  [%s]  ?\n", LNG(change_timestamp_of), files[browser_sel].name);
-#endif //TMANIP_MORON
-						if (filerConfirmTimestampModify(path, &files[browser_sel]) > 0 && ynDialog(msg1) > 0) {
-							time_manip(path, &files[browser_sel], msg0);
-							browser_pushed = FALSE;
-							browser_repos = TRUE;  // TEST
-							browser_cd = TRUE;     //TEST
-						}
+						time_manip(path, &files[browser_sel], msg0);
+						browser_pushed = FALSE;
+						browser_repos = TRUE;  // TEST
+						browser_cd = TRUE;     //TEST
 					}
 					else if (ret == TIMEMANIP_CUSTOM) {
 						ret = time_manip_organize(path, &files[browser_sel], msg0);

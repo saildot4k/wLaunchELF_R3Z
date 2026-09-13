@@ -450,3 +450,4 @@ lang(448, Exploit_Not_enough_space_without_cleanup, "Not enough free space to in
 lang(449, Down, "Down")
 lang(450, Manual_Edit, "Manual Edit")
 lang(451, SAS_Timestamps, "SAS Timestamps")
+lang(452, Updating_Timestamp, "Updating timestamp: %s")

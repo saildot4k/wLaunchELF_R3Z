@@ -94,6 +94,23 @@ static int filerIsMcRootExploitFolderName(const char *name)
 	        !stricmp(name, HACK_FOLDER));
 }
 
+static int filerNameContainsTuna(const char *name)
+{
+	int i;
+
+	if (name == NULL)
+		return 0;
+	for (i = 0; name[i] != '\0'; i++) {
+		if (name[i + 1] == '\0' || name[i + 2] == '\0' || name[i + 3] == '\0')
+			break;
+		if ((name[i] == 'T' || name[i] == 't') && (name[i + 1] == 'U' || name[i + 1] == 'u') &&
+		    (name[i + 2] == 'N' || name[i + 2] == 'n') && (name[i + 3] == 'A' || name[i + 3] == 'a'))
+			return 1;
+	}
+
+	return 0;
+}
+
 static int filerIsSystemUpdateFolderName(const char *name)
 {
 	char region;
@@ -332,14 +349,6 @@ static int isHddCommonPath(const char *path)
 	        (partition[partition_len] == '/' || partition[partition_len] == '\0'));
 }
 
-int filerConfirmTimestampModify(const char *path, const FILEINFO *file)
-{
-	if (isMemoryCardRootPath(path) && file != NULL && filerIsMcRootExploitFolderName(file->name))
-		return filerConfirmExploitModify(path, file);
-
-	return 1;
-}
-
 int filerCanOrganizeFolderTimestamps(const char *path)
 {
 	return isMemoryCardRootPath(path) || isHddCommonPath(path);
@@ -461,7 +470,18 @@ static void normalizeCustomFolderTimestamp(sceMcStDateTime *timestamp, int reser
 	/* Set *Tuna Date reserves this timestamp on memory cards only. */
 	if (reserve_tuna_date && timestamp->Year == 2099 && timestamp->Month == 12 && timestamp->Day == 31 &&
 	    timestamp->Hour == 23 && timestamp->Min == 59 && timestamp->Sec == 59)
-		timestamp->Sec = 58;
+		 timestamp->Sec = 58;
+}
+
+static void setTunaFolderTimestamp(sceMcStDateTime *timestamp)
+{
+	timestamp->Resv2 = 0;
+	timestamp->Year = 2099;
+	timestamp->Month = 12;
+	timestamp->Day = 31;
+	timestamp->Hour = 23;
+	timestamp->Min = 59;
+	timestamp->Sec = 59;
 }
 
 static void normalizeCustomLocalTimestamp(sceMcStDateTime *timestamp)
@@ -1012,6 +1032,42 @@ static int setHddCommonFolderTimestamp(const char *path, const FILEINFO *file, c
 	return result;
 }
 
+static void drawTimestampProgress(int completed, int total, const char *folder_name)
+{
+	char status[MAX_PATH + 32];
+	char percent[16];
+	int x = SCREEN_MARGIN + FONT_WIDTH;
+	int box_w = SCREEN_WIDTH - x * 2;
+	int box_h = FONT_HEIGHT * 5 + 24;
+	int y = (SCREEN_HEIGHT - box_h) / 2;
+	int bar_x = x + 8;
+	int bar_y = y + FONT_HEIGHT * 2;
+	int bar_w = box_w - 16;
+	int bar_h = FONT_HEIGHT + 4;
+	int fill_w;
+	int percent_value;
+
+	if (total <= 0)
+		total = 1;
+	if (completed > total)
+		completed = total;
+	fill_w = (int)(((u64)completed * (u64)(bar_w - 2)) / (u64)total);
+	percent_value = (completed * 100) / total;
+	snprintf(percent, sizeof(percent), "%d%%", percent_value);
+	snprintf(status, sizeof(status), LNG(Updating_Timestamp), (folder_name != NULL) ? folder_name : "");
+
+	clrScr(setting->color[COLOR_BACKGR]);
+	setScrTmp(LNG(Set_Custom_Date), "");
+	drawPopSprite(setting->color[COLOR_BACKGR], x, y, x + box_w, y + box_h);
+	drawFrame(x, y, x + box_w, y + box_h, setting->color[COLOR_FRAME]);
+	drawFrame(bar_x, bar_y, bar_x + bar_w, bar_y + bar_h, setting->color[COLOR_FRAME]);
+	if (fill_w > 0)
+		drawSprite(setting->color[COLOR_SELECT], bar_x + 1, bar_y + 1, bar_x + 1 + fill_w, bar_y + bar_h - 1);
+	printXY(percent, bar_x + (bar_w - (int)strlen(percent) * FONT_WIDTH) / 2, bar_y + 3, setting->color[COLOR_TEXT], TRUE, 0);
+	printXY(status, x + 8, bar_y + bar_h + FONT_HEIGHT, setting->color[COLOR_TEXT], TRUE, box_w - 16);
+	drawScr();
+}
+
 void time_manip(const char *path, const FILEINFO *file, char *message)
 {
 	sceMcStDateTime timestamp;
@@ -1023,7 +1079,9 @@ void time_manip(const char *path, const FILEINFO *file, char *message)
 	timestamp.Day = 31;
 	timestamp.Month = 12;
 	timestamp.Year = 2099;
+	drawTimestampProgress(0, 1, file->name);
 	setMemoryCardFolderTimestamp(path, file, &timestamp, message);
+	drawTimestampProgress(1, 1, file->name);
 }
 
 int time_manip_custom(const char *path, const FILEINFO *file, char *message)
@@ -1034,6 +1092,8 @@ int time_manip_custom(const char *path, const FILEINFO *file, char *message)
 	int current_year;
 	int folder_count;
 	int selected_index;
+	int total;
+	int completed;
 	int updated;
 	int failed;
 	int i;
@@ -1047,6 +1107,10 @@ int time_manip_custom(const char *path, const FILEINFO *file, char *message)
 	if (folder_count <= 0) {
 		snprintf(message, MAX_PATH, "Unable to load folders.");
 		return -1;
+	}
+	for (i = 0; i < folder_count; i++) {
+		if (filerNameContainsTuna(timestamp_folders[i].name))
+			setTunaFolderTimestamp(&timestamp_folders[i].stats._Modify);
 	}
 
 	selected_index = -1;
@@ -1088,22 +1152,32 @@ int time_manip_custom(const char *path, const FILEINFO *file, char *message)
 		return 0;
 
 	for (i = 0; i < folder_count; i++) {
-		if (customDateEditorTimestampEqual(&timestamp_folders[i].stats._Modify, &timestamp_original[i]))
-			continue;
-		if (!filerConfirmTimestampModify(path, &timestamp_folders[i]))
-			return 0;
+		if (filerNameContainsTuna(timestamp_folders[i].name))
+			setTunaFolderTimestamp(&timestamp_folders[i].stats._Modify);
 	}
+
+	total = 0;
+	for (i = 0; i < folder_count; i++) {
+		if (!customDateEditorTimestampEqual(&timestamp_folders[i].stats._Modify, &timestamp_original[i]))
+			total++;
+	}
+	if (total > 0)
+		drawTimestampProgress(0, total, NULL);
 
 	updated = 0;
 	failed = 0;
+	completed = 0;
 	for (i = 0; i < folder_count; i++) {
 		if (customDateEditorTimestampEqual(&timestamp_folders[i].stats._Modify, &timestamp_original[i]))
 			continue;
+		drawTimestampProgress(completed, total, timestamp_folders[i].name);
 
 		if (reserve_tuna_date)
 			result = setMemoryCardFolderTimestamp(path, &timestamp_folders[i], &timestamp_folders[i].stats._Modify, message);
 		else
 			result = setHddCommonFolderTimestamp(path, &timestamp_folders[i], &timestamp_folders[i].stats._Modify, message);
+		completed++;
+		drawTimestampProgress(completed, total, timestamp_folders[i].name);
 		if (result == 0)
 			updated++;
 		else
@@ -1131,17 +1205,29 @@ static int selectTimestampOrganizationMode(void)
 		"Z-A",
 		LNG(SAS_Timestamps),
 	};
-	char tooltip[80];
 	int selection = TIMESTAMP_ORGANIZE_MANUAL;
 	int event = 1;
+	int post_event = 0;
 	int i;
+	int label_width;
+	int popup_x1;
+	int popup_y1;
+	int popup_x2;
+	int popup_y2;
 	int x;
 	int y;
 
-	if (swapKeys)
-		snprintf(tooltip, sizeof(tooltip), "\xFF" "1:%s \xFF" "0:%s \xFF" "3:%s", LNG(OK), LNG(Return), LNG(Return));
-	else
-		snprintf(tooltip, sizeof(tooltip), "\xFF" "0:%s \xFF" "1:%s \xFF" "3:%s", LNG(OK), LNG(Return), LNG(Return));
+	label_width = strlen(LNG(Set_Custom_Date));
+	for (i = 0; i < TIMESTAMP_ORGANIZE_COUNT; i++) {
+		if ((int)strlen(items[i]) > label_width)
+			label_width = strlen(items[i]);
+	}
+	popup_x1 = (SCREEN_WIDTH - (label_width + 5) * FONT_WIDTH) / 2;
+	popup_x2 = SCREEN_WIDTH - popup_x1;
+	popup_y1 = (SCREEN_HEIGHT - (TIMESTAMP_ORGANIZE_COUNT + 2) * FONT_HEIGHT) / 2;
+	popup_y2 = popup_y1 + (TIMESTAMP_ORGANIZE_COUNT + 2) * FONT_HEIGHT;
+	x = popup_x1 + FONT_WIDTH;
+	y = popup_y1 + FONT_HEIGHT / 2;
 
 	while (1) {
 		waitPadReady(0, 0);
@@ -1163,17 +1249,17 @@ static int selectTimestampOrganizationMode(void)
 			}
 		}
 
-		if (event) {
-			clrScr(setting->color[COLOR_BACKGR]);
-			setScrTmp(LNG(Set_Custom_Date), tooltip);
-			x = Menu_start_x;
-			y = Menu_start_y;
+		if (event || post_event) {
+			drawPopSprite(setting->color[COLOR_BACKGR], popup_x1, popup_y1, popup_x2, popup_y2);
+			drawFrame(popup_x1, popup_y1, popup_x2, popup_y2, setting->color[COLOR_FRAME]);
+			printXY(LNG(Set_Custom_Date), x + FONT_WIDTH, y, setting->color[COLOR_SELECT], TRUE, 0);
 			for (i = 0; i < TIMESTAMP_ORGANIZE_COUNT; i++) {
-				printXY(items[i], x + FONT_WIDTH * 2, y + i * FONT_HEIGHT, setting->color[COLOR_TEXT], TRUE, 0);
+				printXY(items[i], x + FONT_WIDTH * 2, y + (i + 1) * FONT_HEIGHT, setting->color[COLOR_TEXT], TRUE, 0);
 			}
-			drawChar(LEFT_CUR, x, y + selection * FONT_HEIGHT, setting->color[COLOR_SELECT]);
+			drawChar(LEFT_CUR, x, y + (selection + 1) * FONT_HEIGHT, setting->color[COLOR_SELECT]);
 		}
 		drawScr();
+		post_event = event;
 		event = 0;
 	}
 }
@@ -1437,6 +1523,8 @@ static int time_manip_automatic(const char *path, int mode, char *message)
 	int folder_count;
 	int index_count;
 	int reserve_tuna_date;
+	int total;
+	int completed;
 	int updated;
 	int failed;
 	int i;
@@ -1454,12 +1542,10 @@ static int time_manip_automatic(const char *path, int mode, char *message)
 
 	index_count = 0;
 	for (i = 0; i < folder_count; i++) {
-		if (!filerIsAutomaticTimestampExcludedFolder(timestamp_folders[i].name))
+		if (filerNameContainsTuna(timestamp_folders[i].name))
+			setTunaFolderTimestamp(&timestamp_folders[i].stats._Modify);
+		else if (!filerIsAutomaticTimestampExcludedFolder(timestamp_folders[i].name))
 			indexes[index_count++] = i;
-	}
-	if (index_count == 0) {
-		snprintf(message, MAX_PATH, "No folders eligible for automatic organization.");
-		return 0;
 	}
 
 	reserve_tuna_date = isMemoryCardRootPath(path);
@@ -1476,22 +1562,27 @@ static int time_manip_automatic(const char *path, int mode, char *message)
 		}
 	}
 
+	total = 0;
 	for (i = 0; i < folder_count; i++) {
-		if (customDateEditorTimestampEqual(&timestamp_folders[i].stats._Modify, &timestamp_original[i]))
-			continue;
-		if (!filerConfirmTimestampModify(path, &timestamp_folders[i]))
-			return 0;
+		if (!customDateEditorTimestampEqual(&timestamp_folders[i].stats._Modify, &timestamp_original[i]))
+			total++;
 	}
+	if (total > 0)
+		drawTimestampProgress(0, total, NULL);
 
 	updated = 0;
 	failed = 0;
+	completed = 0;
 	for (i = 0; i < folder_count; i++) {
 		if (customDateEditorTimestampEqual(&timestamp_folders[i].stats._Modify, &timestamp_original[i]))
 			continue;
+		drawTimestampProgress(completed, total, timestamp_folders[i].name);
 		if (reserve_tuna_date)
 			result = setMemoryCardFolderTimestamp(path, &timestamp_folders[i], &timestamp_folders[i].stats._Modify, message);
 		else
 			result = setHddCommonFolderTimestamp(path, &timestamp_folders[i], &timestamp_folders[i].stats._Modify, message);
+		completed++;
+		drawTimestampProgress(completed, total, timestamp_folders[i].name);
 		if (result == 0)
 			updated++;
 		else
