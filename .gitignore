@@ -19,3 +19,10 @@ iso/
 *.iso
 *.zip
 thirdparty/
+
+# User-provided MagicGate keys
+KEYS.DAT
+keys.dat
+PS2KEYS.dat
+PS2KEYS.DAT
+ps2keys.dat

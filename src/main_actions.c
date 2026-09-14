@@ -41,6 +41,24 @@ static int isHddLaunchPath(const char *path)
 	return (!strncmp(path, "hdd", 3) && path[3] >= '0' && path[3] <= '9' && path[4] == ':' && path[5] == '/');
 }
 
+static int isMiscAboutWlePath(const char *path)
+{
+	char current_path[MAX_PATH];
+	char legacy_path[MAX_PATH];
+
+	if (path == NULL || setting == NULL)
+		return FALSE;
+	if (!stricmp(path, setting->Misc_About_uLE))
+		return TRUE;
+
+	snprintf(current_path, sizeof(current_path), "%s%s", setting->Misc, LNG(About_uLE));
+	if (!stricmp(path, current_path))
+		return TRUE;
+
+	snprintf(legacy_path, sizeof(legacy_path), "%sAbout uLE", setting->Misc);
+	return !stricmp(path, legacy_path);
+}
+
 #ifdef XFROM
 static int isMbrLaunchPath(const char *path)
 {
@@ -504,7 +522,7 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 	} else if (!stricmp(path, setting->Misc_Debug_Info)) {
 		ShowDebugInfo(ctx->boot_argc, ctx->boot_argv, ctx->boot_path, ctx->default_osdsys_path2, ctx->rough_region, ctx->romver_data);
 		return;
-	} else if (!stricmp(path, setting->Misc_About_uLE)) {
+	} else if (isMiscAboutWlePath(path)) {
 		Show_About_uLE();
 		return;
 	} else if (!stricmp(path, setting->Misc_Show_Build_Info)) {

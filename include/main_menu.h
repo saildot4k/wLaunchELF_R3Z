@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include "launchelf.h"
+#include "main_console_info.h"
 
 enum MAIN_MENU_MODE {
 	MAIN_MENU_MODE_BUTTON = 0,
@@ -21,6 +22,10 @@ typedef struct
 	u64 init_delay_start;
 	u64 timeout_start;
 	int menu_lk[SETTING_LK_BTN_COUNT];
+	char console_model[CONSOLE_MODEL_NAME_MAX_LEN + 1];
+	char console_bootrom[CONSOLE_INFO_LINE_MAX_LEN];
+	char console_dvdver[CONSOLE_INFO_LINE_MAX_LEN];
+	int console_info_ready;
 } MainMenuState;
 
 void MainMenuState_Init(MainMenuState *state);

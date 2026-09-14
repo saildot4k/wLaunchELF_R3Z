@@ -67,6 +67,10 @@ static void get_model_fallback_name(const char *romver, char *model, size_t mode
 	snprintf(model, model_len, "Unknown");
 }
 
+static int mechacon_version_initialized = FALSE;
+static int mechacon_version_valid = FALSE;
+static unsigned int mechacon_version;
+
 static void initialize_model_cdvd_rpc(void)
 {
 	u8 mecha_version[3];
@@ -75,11 +79,48 @@ static void initialize_model_cdvd_rpc(void)
 
 	loadCdModules();
 	sceCdInit(SCECdINoD);
+	if (mechacon_version_initialized)
+		return;
+
+	mechacon_version_initialized = TRUE;
 
 	for (i = 0; i <= 100; i++) {
-		if (sceCdMV(mecha_version, &stat) != 0 && !(stat & 0x80))
+		if (sceCdMV(mecha_version, &stat) != 0 && !(stat & 0x80)) {
+			mechacon_version = mecha_version[2] | ((unsigned int)mecha_version[1] << 8) |
+			                  ((unsigned int)mecha_version[0] << 16);
+			mechacon_version_valid = TRUE;
 			return;
+		}
 	}
+}
+
+static int get_console_dvd_player_region(char *region)
+{
+	unsigned char region_data[16];
+
+	if (region == NULL)
+		return FALSE;
+
+	initialize_model_cdvd_rpc();
+	if (!mechacon_version_valid || mechacon_version <= 0x5FFFF)
+		return FALSE;
+
+	/* S36 returns the MagicGate DVD-player region used by rom1:DVDVER?. */
+	memset(region_data, 0, sizeof(region_data));
+	if (sceCdApplySCmd(0x36, NULL, 0, region_data) == 0 || (region_data[0] & (0x80 | 0x40)))
+		return FALSE;
+	if (!((region_data[9] >= 'A' && region_data[9] <= 'Z') ||
+	      (region_data[9] >= 'a' && region_data[9] <= 'z')))
+		return FALSE;
+
+	*region = region_data[9];
+	return TRUE;
+}
+
+static void initialize_console_rom1_driver(void)
+{
+	/* ADDDRV registers the rom1: device used by the internal DVD player. */
+	SifLoadModule("rom0:ADDDRV", 0, NULL);
 }
 
 int IsDtlConsoleIdentity(const char *romver, const char *model)
@@ -144,4 +185,70 @@ void GetConsoleModelName(const char *romver, char *model, size_t model_len)
 		return;
 
 	get_model_fallback_name(romver, model, model_len);
+}
+
+void FormatConsoleBootrom(char *dst, size_t dst_size, const char *romver)
+{
+	if (dst == NULL || dst_size == 0)
+		return;
+
+	if (romver != NULL && strlen(romver) >= 5)
+		snprintf(dst, dst_size, "BOOTROM: %c.%c%c %c", romver[1], romver[2], romver[3], romver[4]);
+	else
+		snprintf(dst, dst_size, "BOOTROM: ?.?? ?");
+}
+
+void GetConsoleDvdVersion(char *dst, size_t dst_size)
+{
+	char dvdver[16];
+	char regional_path[] = "rom1:DVDVER?";
+	int fd, read_len;
+	size_t i, version_len;
+
+	if (dst == NULL || dst_size == 0)
+		return;
+
+	initialize_console_rom1_driver();
+	fd = -1;
+	if (get_console_dvd_player_region(&regional_path[11]))
+		fd = genOpen(regional_path, FIO_O_RDONLY);
+	if (fd < 0)
+		fd = genOpen("rom1:DVDVER", FIO_O_RDONLY);
+	if (fd < 0) {
+		snprintf(dst, dst_size, "DVD: <unavailable>");
+		return;
+	}
+
+	memset(dvdver, 0, sizeof(dvdver));
+	read_len = genRead(fd, dvdver, sizeof(dvdver) - 1);
+	genClose(fd);
+	if (read_len <= 0) {
+		snprintf(dst, dst_size, "DVD: <unavailable>");
+		return;
+	}
+
+	dvdver[read_len] = '\0';
+	for (i = 0; dvdver[i] != '\0'; i++) {
+		if (dvdver[i] == '\r' || dvdver[i] == '\n') {
+			dvdver[i] = '\0';
+			break;
+		}
+	}
+	version_len = strlen(dvdver);
+
+	/* ROMs use either compact 0200E or already-readable 2.00E versions. */
+	if (version_len == 5 && dvdver[0] == '0' &&
+	    dvdver[1] >= '0' && dvdver[1] <= '9' &&
+	    dvdver[2] >= '0' && dvdver[2] <= '9' &&
+	    dvdver[3] >= '0' && dvdver[3] <= '9' &&
+	    ((dvdver[4] >= 'A' && dvdver[4] <= 'Z') || (dvdver[4] >= 'a' && dvdver[4] <= 'z')))
+		snprintf(dst, dst_size, "DVD: %c.%c%c %c", dvdver[1], dvdver[2], dvdver[3], dvdver[4]);
+	else if (version_len == 5 && dvdver[1] == '.' &&
+	         dvdver[0] >= '0' && dvdver[0] <= '9' &&
+	         dvdver[2] >= '0' && dvdver[2] <= '9' &&
+	         dvdver[3] >= '0' && dvdver[3] <= '9' &&
+	         ((dvdver[4] >= 'A' && dvdver[4] <= 'Z') || (dvdver[4] >= 'a' && dvdver[4] <= 'z')))
+		snprintf(dst, dst_size, "DVD: %.4s %c", dvdver, dvdver[4]);
+	else
+		snprintf(dst, dst_size, "DVD: %s", dvdver);
 }

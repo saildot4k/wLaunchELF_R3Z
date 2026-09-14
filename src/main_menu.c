@@ -28,6 +28,10 @@ void MainMenuState_Init(MainMenuState *state)
 	state->init_delay_start = 0;
 	state->timeout_start = 0;
 	memset(state->menu_lk, 0, sizeof(state->menu_lk));
+	memset(state->console_model, 0, sizeof(state->console_model));
+	memset(state->console_bootrom, 0, sizeof(state->console_bootrom));
+	memset(state->console_dvdver, 0, sizeof(state->console_dvdver));
+	state->console_info_ready = 0;
 }
 
 void MainMenuState_BeginTimers(MainMenuState *state)
@@ -77,7 +81,7 @@ int drawMainMenuScreen(MainMenuState *state, const char *main_msg)
 {
 	int nElfs = 0;
 	int i;
-	int x, y;
+	int x, y, console_info_y;
 	u64 color;
 	char *p;
 	char c[MAX_PATH + 8], f[MAX_PATH];
@@ -86,11 +90,20 @@ int drawMainMenuScreen(MainMenuState *state, const char *main_msg)
 		return 0;
 
 	setLaunchKeys();
+	if (!state->console_info_ready) {
+		if (ROMVER_data[0] == '\0')
+			uLE_InitializeRegion();
+		GetConsoleModelName(ROMVER_data, state->console_model, sizeof(state->console_model));
+		FormatConsoleBootrom(state->console_bootrom, sizeof(state->console_bootrom), ROMVER_data);
+		GetConsoleDvdVersion(state->console_dvdver, sizeof(state->console_dvdver));
+		state->console_info_ready = 1;
+	}
 
 	clrScr(setting->color[COLOR_BACKGR]);
 
 	x = Menu_start_x;
 	y = Menu_start_y;
+	console_info_y = Menu_end_y - 3 * FONT_HEIGHT;
 	c[0] = 0;
 	if (state->init_delay)
 		sprintf(c, "%s: %d", LNG(Init_Delay), state->init_delay / 1000);
@@ -203,6 +216,10 @@ int drawMainMenuScreen(MainMenuState *state, const char *main_msg)
 			y += FONT_HEIGHT;
 		}  //ends clause for defined LK_Path[i] valid for menu
 	}      //ends for
+	snprintf(c, sizeof(c), "MODEL: %s", state->console_model);
+	printXY(c, x + 4, console_info_y, setting->color[COLOR_TEXT], TRUE, 0);
+	printXY(state->console_bootrom, x + 4, console_info_y + FONT_HEIGHT, setting->color[COLOR_TEXT], TRUE, 0);
+	printXY(state->console_dvdver, x + 4, console_info_y + 2 * FONT_HEIGHT, setting->color[COLOR_TEXT], TRUE, 0);
 
 	if (state->mode == MAIN_MENU_MODE_BUTTON)
 		sprintf(c, "%s!", LNG(PUSH_ANY_BUTTON_or_DPAD));
