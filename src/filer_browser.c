@@ -450,7 +450,7 @@ static int menu(const char *path, FILEINFO *file)
 	} else {
 		enable[TIMEMANIP] = FALSE;
 	}
-	enable[TIMEMANIP_CUSTOM] = filerCanSetCustomTimestamp(path, file);
+	enable[TIMEMANIP_CUSTOM] = filerCanOrganizeFolderTimestamps(path);
 //#endif //TMANIP
 	if (genCmpFileExt(file->name, "ELF") && isTitleCfgPathEligible(path, menu_disabled))
 		enable[TITLE_CFG] = TRUE;
@@ -1539,27 +1539,18 @@ int getFilePath(char *out, int cnfmode)
 					}  //ends GETSIZE
 //#ifdef TMANIP
 					else if (ret == TIMEMANIP) {
-#ifdef TMANIP_MORON
-						sprintf(msg1, "\n\n %s  [%s]  ?\n", LNG(change_timestamp_of), HACK_FOLDER);
-#else
-						sprintf(msg1, "\n\n %s  [%s]  ?\n", LNG(change_timestamp_of), files[browser_sel].name);
-#endif //TMANIP_MORON
-						if (filerConfirmTimestampModify(path, &files[browser_sel]) > 0 && ynDialog(msg1) > 0) {
-							time_manip(path, &files[browser_sel], msg0);
-							browser_pushed = FALSE;
-							browser_repos = TRUE;  // TEST
-							browser_cd = TRUE;     //TEST
-						}
+						time_manip(path, &files[browser_sel], msg0);
+						browser_pushed = FALSE;
+						browser_repos = TRUE;  // TEST
+						browser_cd = TRUE;     //TEST
 					}
 					else if (ret == TIMEMANIP_CUSTOM) {
-						if (filerConfirmTimestampModify(path, &files[browser_sel]) > 0) {
-							ret = time_manip_custom(path, &files[browser_sel], msg0);
-							if (ret != 0)
-								browser_pushed = FALSE;
-							if (ret > 0) {
-								browser_repos = TRUE;
-								browser_cd = TRUE;
-							}
+						ret = time_manip_organize(path, &files[browser_sel], msg0);
+						if (ret != 0)
+							browser_pushed = FALSE;
+						if (ret > 0) {
+							browser_repos = TRUE;
+							browser_cd = TRUE;
 						}
 					}
 
