@@ -21,6 +21,7 @@ typedef struct
 	int second;
 	int use_12h;
 	int date_format;
+	int local_offset_minutes;
 	u64 last_tick_ms;
 	char time_text[16];
 	char date_text[16];
@@ -35,8 +36,10 @@ typedef struct
 } MenuTitleTempState;
 
 static MenuTitleClockState title_clock = {
-	0, 0, MENU_TITLE_CLOCK_YEAR_BASE, 1, 1, 0, 0, 0, 0, 0, 0, "", ""};
+	0, 0, MENU_TITLE_CLOCK_YEAR_BASE, 1, 1, 0, 0, 0, 0, 0, MENU_TITLE_PS2_RTC_BASE_OFFSET_MINUTES, 0, "", ""};
 static MenuTitleTempState title_temp = {0, 0, 0, ""};
+static int osd_local_offset_cached = 0;
+static int osd_local_offset_minutes = MENU_TITLE_PS2_RTC_BASE_OFFSET_MINUTES;
 
 static int bcdToInt(u8 value)
 {
@@ -224,6 +227,72 @@ static void readOsdClockFormats(int *use_12h, int *date_format, int *local_offse
 		*local_offset_minutes += 60;
 }
 
+static int isValidTimestamp(int year, int month, int day, int hour, int minute, int second)
+{
+	if (year < 0 || month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month))
+		return 0;
+	if (hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59)
+		return 0;
+
+	return 1;
+}
+
+static int getOsdLocalOffsetMinutes(void)
+{
+	int use_12h;
+	int date_format;
+	int local_offset_minutes;
+
+	if (title_clock.initialized && title_clock.valid)
+		return title_clock.local_offset_minutes;
+	if (osd_local_offset_cached)
+		return osd_local_offset_minutes;
+
+	readOsdClockFormats(&use_12h, &date_format, &local_offset_minutes);
+	osd_local_offset_minutes = local_offset_minutes;
+	osd_local_offset_cached = 1;
+	return osd_local_offset_minutes;
+}
+
+static int convertTimestampMinutes(int *year, int *month, int *day, int *hour, int *minute, int *second, int delta_minutes)
+{
+	MenuTitleClockState timestamp;
+
+	if (year == NULL || month == NULL || day == NULL || hour == NULL || minute == NULL || second == NULL)
+		return 0;
+	if (!isValidTimestamp(*year, *month, *day, *hour, *minute, *second))
+		return 0;
+
+	memset(&timestamp, 0, sizeof(timestamp));
+	timestamp.year = *year;
+	timestamp.month = *month;
+	timestamp.day = *day;
+	timestamp.hour = *hour;
+	timestamp.minute = *minute;
+	timestamp.second = *second;
+	shiftClockMinutes(&timestamp, delta_minutes);
+
+	*year = timestamp.year;
+	*month = timestamp.month;
+	*day = timestamp.day;
+	*hour = timestamp.hour;
+	*minute = timestamp.minute;
+	*second = timestamp.second;
+	return 1;
+}
+
+int menuTitleConvertTimestampToLocalTime(int *year, int *month, int *day, int *hour, int *minute, int *second)
+{
+	return convertTimestampMinutes(year, month, day, hour, minute, second,
+	                               getOsdLocalOffsetMinutes() - MENU_TITLE_PS2_RTC_BASE_OFFSET_MINUTES);
+}
+
+int menuTitleConvertTimestampFromLocalTime(int *year, int *month, int *day, int *hour, int *minute, int *second)
+{
+	return convertTimestampMinutes(year, month, day, hour, minute, second,
+	                               MENU_TITLE_PS2_RTC_BASE_OFFSET_MINUTES - getOsdLocalOffsetMinutes());
+}
+
 void menuTitleGetClockFormat(int *use_12h, int *date_format)
 {
 	int read_use_12h;
@@ -331,6 +400,9 @@ static int seedClockFromPs2(u64 tick_ms, int care_time, int care_date)
 	title_clock.second = bcdToInt(clock_data.second);
 	readOsdClockFormats(&title_clock.use_12h, &title_clock.date_format, &local_offset_minutes);
 	normalizeClockDate(&title_clock);
+	title_clock.local_offset_minutes = local_offset_minutes;
+	osd_local_offset_minutes = local_offset_minutes;
+	osd_local_offset_cached = 1;
 	shiftClockMinutes(&title_clock, local_offset_minutes - MENU_TITLE_PS2_RTC_BASE_OFFSET_MINUTES);
 
 	title_clock.initialized = 1;

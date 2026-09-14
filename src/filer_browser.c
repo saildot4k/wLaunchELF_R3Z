@@ -314,11 +314,16 @@ static int isTitleCfgPathEligible(const char *path, int menu_disabled)
 {
 	return ((!strncmp(path, "mass", 4)) ||
 	        (!strncmp(path, "usb", 3)) ||
+	        (!strncmp(path, "mc0:", 4)) ||
+	        (!strncmp(path, "mc1:", 4)) ||
 #ifdef MMCE
 	        (!strncmp(path, "mmce", 4)) ||
 #endif
 #ifdef MX4SIO
 	        (!strncmp(path, "mx4sio", 6)) ||
+#endif
+#ifdef UDPFS
+	        (!strncmp(path, "udpfs", 5)) ||
 #endif
 	        (!strncmp(path, "ata", 3)) ||
 	        (isHddBrowserPath(path) && !menu_disabled));
@@ -438,17 +443,14 @@ static int menu(const char *path, FILEINFO *file)
 		enable[GETSIZE] = FALSE;
 	}
 //#ifdef TMANIP
-	if (                                                        //if
-	    (file->stats.AttrFile & sceMcFileAttrSubdir) &&         //pointing to a folder
-	    (strcmp(file->name, "..")) &&                           //it isnt the ".." option
-	    ((!strcmp(path, "mc0:/")) || (!strcmp(path, "mc1:/")))  //we're on Memory card roots
-	) {
+	if ((file->stats.AttrFile & sceMcFileAttrSubdir) &&
+	    strcmp(file->name, "..") &&
+	    ((!strcmp(path, "mc0:/")) || (!strcmp(path, "mc1:/")))) {
 		enable[TIMEMANIP] = TRUE;
-		enable[TIMEMANIP_CUSTOM] = TRUE;
 	} else {
 		enable[TIMEMANIP] = FALSE;
-		enable[TIMEMANIP_CUSTOM] = FALSE;
-	} 
+	}
+	enable[TIMEMANIP_CUSTOM] = filerCanOrganizeFolderTimestamps(path);
 //#endif //TMANIP
 	if (genCmpFileExt(file->name, "ELF") && isTitleCfgPathEligible(path, menu_disabled))
 		enable[TITLE_CFG] = TRUE;
@@ -1035,10 +1037,21 @@ static void formatBrowserTimestamp(char *dst, size_t dst_size, const PS2TIME *ti
 	char date_text[16];
 	char time_text[16];
 	int year;
+	int month;
+	int day;
+	int hour;
+	int minute;
+	int second;
 
 	year = (timestamp->year < 2256) ? timestamp->year : (timestamp->year - 256);
-	menuTitleFormatClockDate(date_text, sizeof(date_text), year, timestamp->month, timestamp->day, date_format);
-	menuTitleFormatClockTime(time_text, sizeof(time_text), timestamp->hour, timestamp->min, timestamp->sec, use_12h);
+	month = timestamp->month;
+	day = timestamp->day;
+	hour = timestamp->hour;
+	minute = timestamp->min;
+	second = timestamp->sec;
+	menuTitleConvertTimestampToLocalTime(&year, &month, &day, &hour, &minute, &second);
+	menuTitleFormatClockDate(date_text, sizeof(date_text), year, month, day, date_format);
+	menuTitleFormatClockTime(time_text, sizeof(time_text), hour, minute, second, use_12h);
 	snprintf(dst, dst_size, "%s %s", time_text, date_text);
 }
 
@@ -1054,7 +1067,7 @@ int getFilePath(char *out, int cnfmode)
 	u64 color;
 	FILEINFO files[MAX_ENTRY];
 	int top = 0, rows;
-	int x, y, y0, y1, list_end_y, details_right_x;
+	int x, y, y0, y1, list_end_y;
 	int i, j, ret, rv = -1;  //NB: rv is for return value of this function
 	int usb_unit;
 	int event, post_event = 0;
@@ -1526,27 +1539,18 @@ int getFilePath(char *out, int cnfmode)
 					}  //ends GETSIZE
 //#ifdef TMANIP
 					else if (ret == TIMEMANIP) {
-#ifdef TMANIP_MORON
-						sprintf(msg1, "\n\n %s  [%s]  ?\n", LNG(change_timestamp_of), HACK_FOLDER);
-#else
-						sprintf(msg1, "\n\n %s  [%s]  ?\n", LNG(change_timestamp_of), files[browser_sel].name);
-#endif //TMANIP_MORON
-						if (filerConfirmExploitModify(path, &files[browser_sel]) > 0 && ynDialog(msg1) > 0) {
-							time_manip(path, &files[browser_sel], msg0);
-							browser_pushed = FALSE;
-							browser_repos = TRUE;  // TEST
-							browser_cd = TRUE;     //TEST
-						}
+						time_manip(path, &files[browser_sel], msg0);
+						browser_pushed = FALSE;
+						browser_repos = TRUE;  // TEST
+						browser_cd = TRUE;     //TEST
 					}
 					else if (ret == TIMEMANIP_CUSTOM) {
-						if (filerConfirmExploitModify(path, &files[browser_sel]) > 0) {
-							ret = time_manip_custom(path, &files[browser_sel], msg0);
-							if (ret != 0)
-								browser_pushed = FALSE;
-							if (ret > 0) {
-								browser_repos = TRUE;
-								browser_cd = TRUE;
-							}
+						ret = time_manip_organize(path, &files[browser_sel], msg0);
+						if (ret != 0)
+							browser_pushed = FALSE;
+						if (ret > 0) {
+							browser_repos = TRUE;
+							browser_cd = TRUE;
 						}
 					}
 
@@ -1732,8 +1736,6 @@ int getFilePath(char *out, int cnfmode)
 				menuTitleGetClockFormat(&use_12h, &date_format);
 			/* Keep the time/date edge immediately before the scrollbar in both clock formats. */
 			details_column = use_12h ? 41 : 44;
-			formatBrowserMissingTimestamp(tmp, sizeof(tmp), use_12h, date_format);
-			details_right_x = x + 4 + (details_column + 8 + strlen(tmp)) * FONT_WIDTH;
 
 			for (i = 0; i < rows; i++)  //Repeat loop for each browser text row
 			{
@@ -1948,14 +1950,7 @@ int getFilePath(char *out, int cnfmode)
 					sprintf(tmp, "[%.1fKB %s]", (double)freeSpace / 1024, LNG(free));
 				else
 					sprintf(tmp, "[%dB %s]", (int)freeSpace, LNG(free));
-				ret = strlen(tmp);
-				drawSprite(setting->color[COLOR_BACKGR],
-				           details_right_x - (ret + 1) * FONT_WIDTH, (Menu_message_y - 1),
-				           details_right_x, (Menu_message_y + FONT_HEIGHT));
-				printXY(tmp,
-				        details_right_x - ret * FONT_WIDTH,
-				        (Menu_message_y),
-				        setting->color[COLOR_SELECT], TRUE, 0);
+				setMenuHeaderRightStatus(tmp);
 			}
 		}  //ends if(event||post_event)
 		drawScr();
@@ -2027,6 +2022,11 @@ static void submenu_func_GetSize(char *mess, char *path, FILEINFO *files)
 
 	//----- Comment out this section to skip attributes entirely -----
 	if ((nmarks < 2) && (sel >= 0)) {
+		PS2TIME timestamp;
+		char timestamp_text[32];
+		int use_12h;
+		int date_format;
+
 		sprintf(filepath, "%s%s", path, files[sel].name);
 		//----- Start of section for debug display of attributes -----
 		/*
@@ -2053,15 +2053,10 @@ static void submenu_func_GetSize(char *mess, char *path, FILEINFO *files)
 			time->hour,time->min,time->sec,time->unknown);
 */
 		//----- End of section for debug display of attributes -----
-		sprintf(mess + text_pos, " m=%04X %04d.%02d.%02d %02d:%02d:%02d%n",
-		        files[sel].stats.AttrFile,
-		        files[sel].stats._Modify.Year,
-		        files[sel].stats._Modify.Month,
-		        files[sel].stats._Modify.Day,
-		        files[sel].stats._Modify.Hour,
-		        files[sel].stats._Modify.Min,
-		        files[sel].stats._Modify.Sec,
-		        &text_inc);
+		timestamp = *(PS2TIME *)&files[sel].stats._Modify;
+		menuTitleGetClockFormat(&use_12h, &date_format);
+		formatBrowserTimestamp(timestamp_text, sizeof(timestamp_text), &timestamp, use_12h, date_format);
+		sprintf(mess + text_pos, " m=%04X %s%n", files[sel].stats.AttrFile, timestamp_text, &text_inc);
 		text_pos += text_inc;
 		if (!strncmp(path, "mc", 2)) {
 			mcGetInfo(path[2] - '0', 0, &mctype_PSx, NULL, NULL);

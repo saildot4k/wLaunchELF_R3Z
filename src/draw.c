@@ -17,6 +17,8 @@ u64 updateScr_t = 0;  //dlanor: exit time of last drawScr()
 
 char LastMessage[MAX_TEXT_LINE + 2];
 static int menu_title_refresh_frames = 0;
+static char menu_title_right_status[MAX_TEXT_LINE + 1];
+static int menu_title_right_status_width = 0;
 
 /* Match the file browser time/date field immediately before its scrollbar. */
 #define MENU_TITLE_CLOCK_RIGHT_X (SCREEN_WIDTH - SCREEN_MARGIN - LINE_THICKNESS * 8 - 1)
@@ -32,6 +34,42 @@ int Menu_end_y;      //Normal menu display should not use pixels at this line or
 int Frame_end_y;     //first line of frame bottom
 int Menu_tooltip_y;  //Menus may also use this row for tooltips
 
+//--------------------------------------------------------------
+static void drawMenuTitleRightStatus(void)
+{
+	char temp_title[8];
+	int status_width, clear_width, x;
+
+	if (setting == NULL)
+		return;
+
+	menuTitleFormatTemperature(temp_title, sizeof(temp_title));
+	status_width = strlen(menu_title_right_status);
+	if (temp_title[0] != '\0')
+		status_width += strlen(temp_title) + (status_width > 0 ? 1 : 0);
+
+	clear_width = menu_title_right_status_width;
+	if (status_width > clear_width)
+		clear_width = status_width;
+	if (clear_width > 0)
+		drawSprite(setting->color[COLOR_BACKGR],
+		           MENU_TITLE_CLOCK_RIGHT_X - (clear_width + 1) * FONT_WIDTH,
+		           Menu_message_y - 1,
+		           MENU_TITLE_CLOCK_RIGHT_X, Menu_message_y + FONT_HEIGHT);
+
+	x = MENU_TITLE_CLOCK_RIGHT_X - status_width * FONT_WIDTH;
+	if (menu_title_right_status[0] != '\0') {
+		printXY(menu_title_right_status, x, Menu_message_y,
+		        setting->color[COLOR_SELECT], TRUE, 0);
+		x += strlen(menu_title_right_status) * FONT_WIDTH;
+		if (temp_title[0] != '\0')
+			x += FONT_WIDTH;
+	}
+	if (temp_title[0] != '\0')
+		printXY(temp_title, x, Menu_message_y, setting->color[COLOR_TEXT], TRUE, 0);
+
+	menu_title_right_status_width = status_width;
+}
 
 //--------------------------------------------------------------
 static void drawMenuTitleLine(void)
@@ -39,7 +77,6 @@ static void drawMenuTitleLine(void)
 	int x, y;
 	char app_title[64];
 	char clock_title[32];
-	char temp_title[8];
 
 	if (setting == NULL)
 		return;
@@ -50,16 +87,13 @@ static void drawMenuTitleLine(void)
 
 	drawSprite(setting->color[COLOR_BACKGR], 0, Menu_title_y - 1, SCREEN_WIDTH, Menu_message_y - 1);
 	printXY(app_title, x, y, setting->color[COLOR_FRAME], TRUE, 0);
-	menuTitleFormatTemperature(temp_title, sizeof(temp_title));
-	if (temp_title[0] != '\0')
-		printXY(temp_title, (SCREEN_WIDTH - FONT_WIDTH * strlen(temp_title)) / 2, y,
-		        setting->color[COLOR_TEXT], TRUE, 0);
 
 	menuTitleFormatClock(clock_title, sizeof(clock_title));
 	if (clock_title[0] != '\0')
 		printXY(clock_title,
 		        MENU_TITLE_CLOCK_RIGHT_X - FONT_WIDTH * strlen(clock_title),
 		        y, setting->color[COLOR_TEXT], TRUE, 0);
+	drawMenuTitleRightStatus();
 }
 //--------------------------------------------------------------
 static void updateDynamicMenuTitleLine(void)
@@ -78,17 +112,28 @@ void setScrTmp(const char *msg0, const char *msg1)
 	int x;
 
 	x = SCREEN_MARGIN;
+	menu_title_right_status[0] = '\0';
 	drawMenuTitleLine();
 
 	strncpy(LastMessage, msg0, MAX_TEXT_LINE);
 	LastMessage[MAX_TEXT_LINE] = '\0';
 	printXY(msg0, x, Menu_message_y, setting->color[COLOR_SELECT], TRUE, 0);
+	drawMenuTitleRightStatus();
 
 	if (setting->Menu_Frame)
 		drawFrame(SCREEN_MARGIN, Frame_start_y,
 		          SCREEN_WIDTH - SCREEN_MARGIN, Frame_end_y, setting->color[COLOR_FRAME]);
 
 	printXY(msg1, x, Menu_tooltip_y, setting->color[COLOR_SELECT], TRUE, 0);
+}
+//--------------------------------------------------------------
+void setMenuHeaderRightStatus(const char *status)
+{
+	if (status == NULL)
+		menu_title_right_status[0] = '\0';
+	else
+		snprintf(menu_title_right_status, sizeof(menu_title_right_status), "%s", status);
+	drawMenuTitleRightStatus();
 }
 //--------------------------------------------------------------
 void drawSprite(u64 color, int x1, int y1, int x2, int y2)
@@ -114,11 +159,13 @@ void drawOpSprite(u64 color, int x1, int y1, int x2, int y2)
 //--------------------------------------------------------------
 void drawMsg(const char *msg)
 {
+	menu_title_right_status[0] = '\0';
 	strncpy(LastMessage, msg, MAX_TEXT_LINE);
 	LastMessage[MAX_TEXT_LINE] = '\0';
 	drawSprite(setting->color[COLOR_BACKGR], 0, Menu_message_y - 1,
 	           SCREEN_WIDTH, Frame_start_y);
 	printXY(msg, SCREEN_MARGIN, Menu_message_y, setting->color[COLOR_SELECT], TRUE, 0);
+	drawMenuTitleRightStatus();
 	drawScr();
 }
 //--------------------------------------------------------------
@@ -127,6 +174,7 @@ void drawLastMsg(void)
 	drawSprite(setting->color[COLOR_BACKGR], 0, Menu_message_y - 1,
 	           SCREEN_WIDTH, Frame_start_y);
 	printXY(LastMessage, SCREEN_MARGIN, Menu_message_y, setting->color[COLOR_SELECT], TRUE, 0);
+	drawMenuTitleRightStatus();
 	drawScr();
 }
 //--------------------------------------------------------------
