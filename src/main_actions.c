@@ -105,7 +105,8 @@ static void executeBrowserSelection(char *selected_path, const MainExecuteContex
 			if (LaunchArgsPending() &&
 			    !genCmpFileExt(selected_path, "ELF") &&
 			    !genCmpFileExt(selected_path, "KELF") &&
-			    !genCmpFileExt(selected_path, "XLF"))
+			    !genCmpFileExt(selected_path, "XLF") &&
+			    !IsEmberDiscImagePath(selected_path))
 				LaunchArgsClear();
 			ExecuteMainAction(selected_path, ctx);
 		}
@@ -122,8 +123,12 @@ void ExecuteMainAction(char *pathin, const MainExecuteContext *ctx)
 	static char path[MAX_PATH];
 	static char fullpath[MAX_PATH];
 	static char party[MAX_PATH];
+	char ember_path[MAX_PATH];
+	char ember_arg[MAX_PATH];
+	char ember_arg0[MAX_PATH];
 	char *p;
 	int x, t = 0;
+	int ember_launch = 0;
 	char dvdpl_path[] = "mc0:/BREXEC-DVDPLAYER/dvdplayer.elf";
 	int dvdpl_update;
 #ifdef XFROM
@@ -133,13 +138,16 @@ void ExecuteMainAction(char *pathin, const MainExecuteContext *ctx)
 	if (ctx == NULL || pathin == NULL || pathin[0] == 0)
 		return;
 
+	ember_arg0[0] = '\0';
+
 	if (!uLE_related(path, pathin))  //1==uLE_rel 0==missing, -1==other dev
 		return;
 
 	if (LaunchArgsPending() &&
 	    !genCmpFileExt(path, "ELF") &&
 	    !genCmpFileExt(path, "KELF") &&
-	    !genCmpFileExt(path, "XLF"))
+	    !genCmpFileExt(path, "XLF") &&
+	    !IsEmberDiscImagePath(path))
 		LaunchArgsClear();
 
 Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
@@ -147,6 +155,26 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 	if (IsPopstarterVcdPath(path)) {
 		LaunchPopstarterVcd(path, ctx->main_msg, MAX_PATH);
 		return;
+	}
+
+	if (IsEmberDiscImagePath(path)) {
+		LaunchArgsClear();
+		if (PrepareEmberLaunch(path, ember_path, sizeof(ember_path),
+		                       ember_arg, sizeof(ember_arg), ctx->main_msg, MAX_PATH) < 0)
+			return;
+		if (BuildEmberArg0Path(ember_path, ember_arg0, sizeof(ember_arg0)) < 0) {
+			snprintf(ctx->main_msg, MAX_PATH, "Ember argv[0] path is too long: %s", ember_path);
+			return;
+		}
+		if (LaunchArgsLoadFromBuffer(path, ember_arg, (int)strlen(ember_arg), ctx->main_msg, MAX_PATH) < 0)
+			return;
+		if (!rebootIopAndLoadDeviceStackForPath(path)) {
+			LaunchArgsClear();
+			snprintf(ctx->main_msg, MAX_PATH, "Unable to reload Ember device drivers: %s", path);
+			return;
+		}
+		snprintf(path, sizeof(path), "%s", ember_path);
+		ember_launch = 1;
 	}
 
 	if (!strncmp(path, "mc", 2)) {
@@ -571,11 +599,14 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 				show_launch_gameid = buildLaunchGameID(fullpath, launch_gameid, sizeof(launch_gameid));
 			}
 
-			x = setting->reboot_iop_elf_load;
+			x = ember_launch ? 0 : setting->reboot_iop_elf_load;
 			CleanUpForExec();
 			if (show_launch_gameid)
 				displayRetroGemGameID(launch_gameid, 2);
-			RunLoaderElf(fullpath, party, path, t, x);
+			if (ember_arg0[0] != '\0')
+				RunLoaderElfWithArg0(fullpath, party, path, ember_arg0, t, x);
+			else
+				RunLoaderElf(fullpath, party, path, t, x);
 		}
 	} else {  //Invalid path
 		t = 0;

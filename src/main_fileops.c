@@ -77,6 +77,8 @@ int IsSupportedFileType(char *path)
 			return (checkELFheader(path) >= 0);
 		if (IsPopstarterVcdPath(path))
 			return 1;
+		if (IsEmberDiscImagePath(path))
+			return 1;
 		if (IsTextEditorFileType(path))
 			return 1;
 		return 0;

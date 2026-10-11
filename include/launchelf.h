@@ -391,6 +391,8 @@ int loadAtaModules(void);
 /* elf.c */
 int checkELFheader(char *filename);
 void RunLoaderElf(char *filename, char *party, const char *selected_path, int exec_kind, int reboot_iop_elf_load);
+void RunLoaderElfWithArg0(char *filename, char *party, const char *selected_path,
+                          const char *arg0_path, int exec_kind, int reboot_iop_elf_load);
 void RunLoaderMemory(const char *arg0, const char *mem_arg, int reboot_iop);
 void LaunchArgsClear(void);
 int LaunchArgsPending(void);
@@ -406,6 +408,12 @@ int PrepareMbrLaunchPayload(const char *path, char *mem_arg, size_t mem_arg_size
 /* popstarter.c */
 int IsPopstarterVcdPath(const char *path);
 int LaunchPopstarterVcd(const char *path, char *message, size_t message_size);
+
+/* ember.c */
+int IsEmberDiscImagePath(const char *path);
+int BuildEmberArg0Path(const char *ember_path, char *arg0_path, size_t arg0_path_size);
+int PrepareEmberLaunch(const char *image_path, char *ember_path, size_t ember_path_size,
+                       char *game_arg, size_t game_arg_size, char *message, size_t message_size);
 
 /* draw.c */
 #define FOLDER 0
