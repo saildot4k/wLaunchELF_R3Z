@@ -29,9 +29,9 @@ int cmpFile(FILEINFO *a, FILEINFO *b)
 				u64 time_a = *(u64 *)&a->stats._Modify;
 				u64 time_b = *(u64 *)&b->stats._Modify;
 				if (time_a > time_b)
-					return -1;
+					return file_sort_descending ? -1 : 1;
 				if (time_a < time_b)
-					return 1;
+					return file_sort_descending ? 1 : -1;
 			}
 		}
 		if (t) {
@@ -60,7 +60,7 @@ int cmpFile(FILEINFO *a, FILEINFO *b)
 			}
 			ret = ca - cb;
 			if (ret != 0)
-				return ret;
+				return file_sort_descending ? -ret : ret;
 		}
 		return 0;
 	}
