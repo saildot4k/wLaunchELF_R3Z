@@ -14,7 +14,7 @@
 #define ULE_VERSION_DEBUG_SUFFIX ""
 #endif
 
-#define ULE_VERSION "v4.78_R3Z" ULE_VERSION_DEBUG_SUFFIX
+#define ULE_VERSION "v4.79_R3Z" ULE_VERSION_DEBUG_SUFFIX
 //#ifndef ULE_VERDATE
 //#define ULE_VERDATE __DATE__
 //#endif
@@ -507,7 +507,7 @@ char *preloadCNF(char *path);          //loads file into RAM it allocates
 typedef struct
 {
 	char name[MAX_NAME];
-	unsigned char title[32 * 2 + 1];
+	unsigned char title[32 * 2 + 2];  //SJIS title, optional line separator, and terminator
 	sceMcTblGetDir stats;
 } FILEINFO;
 

@@ -401,7 +401,6 @@ static int menu(const char *path, FILEINFO *file)
 	menu_len = strlen(LNG(TextEditor)) > menu_len ? strlen(LNG(TextEditor)) : menu_len;
 	menu_len = strlen(LNG(Launch_With_Args)) > menu_len ? strlen(LNG(Launch_With_Args)) : menu_len;
 	menu_len = strlen(psu_action_label) > menu_len ? strlen(psu_action_label) : menu_len;
-	menu_len = strlen(LNG(time_manip)) > menu_len ? strlen(LNG(time_manip)) : menu_len;
 	menu_len = strlen(LNG(Set_Custom_Date)) > menu_len ? strlen(LNG(Set_Custom_Date)) : menu_len;
 	menu_len = strlen(LNG(title_cfg)) > menu_len ? strlen(LNG(title_cfg)) : menu_len;
 	menu_len = (strlen(LNG(Mount)) + 6) > menu_len ? (strlen(LNG(Mount)) + 6) : menu_len;
@@ -442,16 +441,7 @@ static int menu(const char *path, FILEINFO *file)
 		enable[MOUNTVMC1] = FALSE;
 		enable[GETSIZE] = FALSE;
 	}
-//#ifdef TMANIP
-	if ((file->stats.AttrFile & sceMcFileAttrSubdir) &&
-	    strcmp(file->name, "..") &&
-	    ((!strcmp(path, "mc0:/")) || (!strcmp(path, "mc1:/")))) {
-		enable[TIMEMANIP] = TRUE;
-	} else {
-		enable[TIMEMANIP] = FALSE;
-	}
 	enable[TIMEMANIP_CUSTOM] = filerCanOrganizeFolderTimestamps(path);
-//#endif //TMANIP
 	if (genCmpFileExt(file->name, "ELF") && isTitleCfgPathEligible(path, menu_disabled))
 		enable[TITLE_CFG] = TRUE;
 	else
@@ -571,8 +561,6 @@ static int menu(const char *path, FILEINFO *file)
 					strcpy(tmp, LNG(Launch_With_Args));
 				else if (i == TITLE_CFG)
 					strcpy(tmp, LNG(title_cfg));
-				else if (i == TIMEMANIP)
-					strcpy(tmp, LNG(time_manip));
 				else if (i == TIMEMANIP_CUSTOM)
 					strcpy(tmp, LNG(Set_Custom_Date));
 
@@ -753,6 +741,7 @@ static int BrowserModePopup(void)
 
 	int entry_file_show = file_show;
 	int entry_file_sort = file_sort;
+	int entry_file_sort_descending = file_sort_descending;
 
 	int Show_len = strlen(LNG(Show_Content_as)) + 1;
 	int Sort_len = strlen(LNG(Sort_Content_by)) + 1;
@@ -764,9 +753,15 @@ static int BrowserModePopup(void)
 		menu_len = i;
 	if (menu_len < (i = strlen(LNG(Game_Title)) + strlen(LNG(_plus_Details))))
 		menu_len = i;
+	if (menu_len < (i = strlen(LNG(Filename)) + strlen(" A -> Z")))
+		menu_len = i;
+	if (menu_len < (i = strlen(LNG(Game_Title)) + strlen(" A -> Z")))
+		menu_len = i;
 	if (menu_len < (i = strlen(LNG(No_Sort))))
 		menu_len = i;
-	if (menu_len < (i = strlen(LNG(Timestamp))))
+	if (menu_len < (i = strlen(LNG(Timestamp)) + 1 + strlen(LNG(Old_to_New))))
+		menu_len = i;
+	if (menu_len < (i = strlen(LNG(Timestamp)) + 1 + strlen(LNG(New_to_Old))))
 		menu_len = i;
 	if (menu_len < (i = strlen(LNG(Back_to_Browser))))
 		menu_len = i;
@@ -794,18 +789,22 @@ static int BrowserModePopup(void)
 		if (readpad()) {
 			switch (new_pad) {
 				case PAD_RIGHT:
+					file_sort_descending = FALSE;
 					file_sort = 0;
 					event |= 2;  //event |= valid pad command
 					break;
 				case PAD_DOWN:
+					file_sort_descending = (file_sort == 1) && !file_sort_descending;
 					file_sort = 1;
 					event |= 2;  //event |= valid pad command
 					break;
 				case PAD_LEFT:
+					file_sort_descending = (file_sort == 2) && !file_sort_descending;
 					file_sort = 2;
 					event |= 2;  //event |= valid pad command
 					break;
 				case PAD_UP:
+					file_sort_descending = (file_sort == 3) && !file_sort_descending;
 					file_sort = 3;
 					event |= 2;  //event |= valid pad command
 					break;
@@ -844,7 +843,8 @@ static int BrowserModePopup(void)
 					}
 					break;
 				case PAD_TRIANGLE:
-					return (file_show != entry_file_show) || (file_sort != entry_file_sort);
+					return (file_show != entry_file_show) || (file_sort != entry_file_sort) ||
+					       (file_sort_descending != entry_file_sort_descending);
 			}  //ends switch(new_pad)
 		}      //ends if(readpad())
 
@@ -882,17 +882,14 @@ static int BrowserModePopup(void)
 					             ": %s",
 					        LNG(No_Sort));
 				else if (i == 9)
-					sprintf(tmp, "\xFF"
-					             "; %s",
-					        LNG(Filename));
+					snprintf(tmp, sizeof(tmp), "\xFF" "; %s %s", LNG(Filename),
+					         (file_sort == 1 && file_sort_descending) ? "Z -> A" : "A -> Z");
 				else if (i == 10)
-					sprintf(tmp, "\xFF"
-					             "< %s",
-					        LNG(Game_Title));
+					snprintf(tmp, sizeof(tmp), "\xFF" "< %s %s", LNG(Game_Title),
+					         (file_sort == 2 && file_sort_descending) ? "Z -> A" : "A -> Z");
 				else if (i == 11)
-					sprintf(tmp, "\xFF"
-					             "= %s",
-					        LNG(Timestamp));
+					snprintf(tmp, sizeof(tmp), "\xFF" "= %s %s", LNG(Timestamp),
+					         (file_sort == 3 && file_sort_descending) ? LNG(New_to_Old) : LNG(Old_to_New));
 				else if (i == 13)
 					sprintf(tmp, "\xFF"
 					             "3 %s",
@@ -1101,6 +1098,7 @@ int getFilePath(char *out, int cnfmode)
 
 	file_show = 1;
 	file_sort = 1;
+	file_sort_descending = FALSE;
 
 	font_height = getBrowserListFontHeight();
 	rows = getBrowserListRows(path, font_height);
@@ -1537,13 +1535,6 @@ int getFilePath(char *out, int cnfmode)
 					else if (ret == GETSIZE) {
 						submenu_func_GetSize(msg0, path, files);
 					}  //ends GETSIZE
-//#ifdef TMANIP
-					else if (ret == TIMEMANIP) {
-						time_manip(path, &files[browser_sel], msg0);
-						browser_pushed = FALSE;
-						browser_repos = TRUE;  // TEST
-						browser_cd = TRUE;     //TEST
-					}
 					else if (ret == TIMEMANIP_CUSTOM) {
 						ret = time_manip_organize(path, &files[browser_sel], msg0);
 						if (ret != 0)

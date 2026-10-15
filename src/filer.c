@@ -76,6 +76,7 @@ int latestDVRPMount = -1;
 
 int file_show = 1;  //dlanor: 0==name_only, 1==name+size+time, 2==title+size+time
 int file_sort = 1;  //dlanor: 0==none, 1==name, 2==title, 3==mtime
+int file_sort_descending = FALSE;
 int size_valid = 0;
 int time_valid = 0;
 static char hddParties[2][MAX_PARTITIONS][MAX_PART_NAME + 1];
