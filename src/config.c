@@ -542,6 +542,7 @@ void saveConfigToPath(char *mainMsg, char *CNF, const char *target_path)
 	        "LANG_FILE = %s\r\n"
 	        "FONT_FILE = %s\r\n"
 	        "POPSTARTER_ELF = %s\r\n"
+	        "NEUTRINO_ELF = %s\r\n"
 	        "PSU_HugeNames = %d\r\n"
 	        "PSU_DateNames = %d\r\n"
 	        "PSU_NoOverwrite = %d\r\n"
@@ -568,6 +569,7 @@ void saveConfigToPath(char *mainMsg, char *CNF, const char *target_path)
 	        setting->lang_file,        //LANG_FILE
 	        setting->font_file,        //FONT_FILE
 	        setting->popstarter_file,  //POPSTARTER_ELF
+	        setting->neutrino_file,    //NEUTRINO_ELF
 	        setting->PSU_HugeNames,    //PSU_HugeNames
 	        setting->PSU_DateNames,    //PSU_DateNames
 	        setting->PSU_NoOverwrite,  //PSU_NoOverwrite
@@ -711,6 +713,7 @@ void initConfig(void)
 	setting->CNF_Path[0] = '\0';
 	setting->lang_file[0] = '\0';
 	setting->font_file[0] = '\0';
+  setting->neutrino_file[0] = '\0';
 	setting->popstarter_file[0] = '\0';
 	setting->timeout = DEF_TIMEOUT;
 	setting->Hide_Paths = DEF_HIDE_PATHS;
@@ -921,6 +924,8 @@ int loadConfig(char *mainMsg, char *CNF)
 			strcpy(setting->font_file, value);
 		else if (!strcmp(name, "POPSTARTER_ELF"))
 			strcpy(setting->popstarter_file, value);
+		else if (!strcmp(name, "NEUTRINO_ELF"))
+			strcpy(setting->neutrino_file, value);
 		//----------
 		else if (!strcmp(name, "PSU_HugeNames"))
 			setting->PSU_HugeNames = atoi(value);

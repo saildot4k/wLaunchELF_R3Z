@@ -77,7 +77,7 @@ int IsSupportedFileType(char *path)
 			return (checkELFheader(path) >= 0);
 		if (IsPopstarterVcdPath(path))
 			return 1;
-		if (IsEmberDiscImagePath(path))
+    if (genCmpFileExt(path, "ISO") || IsEmberDiscImagePath(path))
 			return 1;
 		if (IsTextEditorFileType(path))
 			return 1;

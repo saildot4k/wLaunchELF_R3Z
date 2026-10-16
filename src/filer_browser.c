@@ -13,6 +13,9 @@
 #define SOURCE_DEVICE_WAIT_INTERVAL_MS 1000
 #define SOURCE_DEVICE_WAIT_TIMEOUT_MS 6000
 
+#define SOURCE_DEVICE_WAIT_INTERVAL_MS 1000
+#define SOURCE_DEVICE_WAIT_TIMEOUT_MS 6000
+
 static int isHddBrowserPath(const char *path)
 {
 	return (!strncmp(path, "hdd", 3) && path[3] >= '0' && path[3] <= '9' && path[4] == ':' && path[5] == '/');

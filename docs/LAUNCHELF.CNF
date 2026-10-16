@@ -216,7 +216,7 @@ Init_Delay = 0
 VirtualKeyboardLayout = qwerty
 # ----------------------------------------------------------------------
 # Hide_Hdd controls which HDD/ATA root devices are hidden in FileBrowser.
-# This can be changed from the "Startup Settings" submenu. Values are:
+# This can be changed from the "Advanced Settings" submenu. Values are:
 # 0 => Show All
 # 1 => hide hdd1
 # 2 => hide hdd0 and hdd1
@@ -316,6 +316,13 @@ FONT_FILE =
 # This can be changed from the "Startup Settings" submenu.
 # ----------------------------------------------------------------------
 POPSTARTER_ELF =
+# ----------------------------------------------------------------------
+# NEUTRINO_ELF is required to launch ISO files through Neutrino. There is
+# no default path. When set, pressing OK on an .ISO file launches this ELF
+# with -dvd=<ISO path>. This can be changed from the "Startup Settings"
+# submenu.
+# ----------------------------------------------------------------------
+NEUTRINO_ELF =
 # From v3.92 Two options for PSU gamesave files are saved here.
 # Set PSU_HugeNames non-zero to make PSU names contain both original
 # gamesave folder names and the gamesave titles (from icon.sys).

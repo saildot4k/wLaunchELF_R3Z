@@ -571,6 +571,58 @@ void RunLoaderMemory(const char *arg0, const char *mem_arg, int reboot_iop)
 //--------------------------------------------------------------
 //End of func:  void RunLoaderMemory(const char *arg0, const char *mem_arg, int reboot_iop)
 //--------------------------------------------------------------
+void RunLoaderElfWithArgs(char *filename, char *party, int app_argc, char *app_argv[], int reboot_iop_elf_load)
+{
+#define ELFLOAD_CUSTOM_ARGC_MAX 8
+	char *argv[ELFLOAD_CUSTOM_ARGC_MAX + 2];
+	static char loader_path[MAX_PATH];
+	static char loader_arg[8];
+	int i;
+#ifdef DVRP
+	int dvr_pfs_ix = -1;
+	char dvr_pfs_name[10] = "dvr_pfs0:";
+#endif
+
+	if (filename == NULL || filename[0] == '\0' || app_argc < 1 ||
+	    app_argc > ELFLOAD_CUSTOM_ARGC_MAX || app_argv == NULL)
+		return;
+
+	snprintf(loader_path, sizeof(loader_path), "%s", filename);
+
+#ifdef DVRP
+	dvr_pfs_ix = (party != NULL) ? getDVRPPartyMountIndex(party) : -1;
+	if (dvr_pfs_ix >= 0)
+		dvr_pfs_name[7] = '0' + dvr_pfs_ix;
+#endif
+
+	if (party != NULL && isHddPartyPath(party) && !strncmp(filename, "pfs0:", 5)) {
+		if (0 > fileXioMount("pfs0:", party, FIO_MT_RDONLY)) {
+			unmountParty(0);
+			if (0 > fileXioMount("pfs0:", party, FIO_MT_RDONLY))
+				return;
+		}
+#ifdef DVRP
+	} else if (dvr_pfs_ix >= 0 && !strncmp(filename, dvr_pfs_name, 9)) {
+		if (0 > fileXioMount(dvr_pfs_name, party, FIO_MT_RDONLY)) {
+			unmountDVRPParty(dvr_pfs_ix);
+			if (0 > fileXioMount(dvr_pfs_name, party, FIO_MT_RDONLY))
+				return;
+		}
+#endif
+	}
+
+	for (i = 0; i < app_argc; i++)
+		argv[i] = app_argv[i];
+
+	argv[app_argc] = loader_path;
+	snprintf(loader_arg, sizeof(loader_arg), "%s", (reboot_iop_elf_load) ? "-la=ER" : "-la=E");
+	argv[app_argc + 1] = loader_arg;
+
+	RunEmbeddedLoader(app_argc + 2, argv);
+}
+//--------------------------------------------------------------
+//End of func:  void RunLoaderElfWithArgs(char *filename, char *party, int app_argc, char *app_argv[], int reboot_iop_elf_load)
+//--------------------------------------------------------------
 #ifdef XFROM
 static int isElfPayload(const u8 *payload, int payload_size)
 {

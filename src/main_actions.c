@@ -41,6 +41,493 @@ static int isHddLaunchPath(const char *path)
 	return (!strncmp(path, "hdd", 3) && path[3] >= '0' && path[3] <= '9' && path[4] == ':' && path[5] == '/');
 }
 
+static int isStandardHddPfsPath(const char *path)
+{
+	return (path != NULL &&
+	        !strncmp(path, "hdd", 3) &&
+	        path[3] >= '0' && path[3] <= '9' &&
+	        path[4] == ':' &&
+	        strstr(path + 5, ":pfs:") != NULL);
+}
+
+static int isIsoLaunchPath(const char *path)
+{
+	return (path != NULL && genCmpFileExt(path, "ISO"));
+}
+
+static int parseDeviceUnitPath(const char *path, const char *prefix, int prefix_len, int *unit, const char **suffix)
+{
+	if (path == NULL || prefix == NULL || unit == NULL || suffix == NULL)
+		return 0;
+	if (strncmp(path, prefix, prefix_len))
+		return 0;
+
+	if (path[prefix_len] == ':') {
+		*unit = 0;
+		*suffix = path + prefix_len + 1;
+		return 1;
+	}
+	if (path[prefix_len] >= '0' && path[prefix_len] <= '9' && path[prefix_len + 1] == ':') {
+		*unit = path[prefix_len] - '0';
+		*suffix = path + prefix_len + 2;
+		return 1;
+	}
+
+	return 0;
+}
+
+static const char *normalizeNeutrinoArgPath(const char *path, char *buffer, size_t buffer_size)
+{
+	const char *partition;
+	const char *subpath;
+	const char *suffix;
+	const char *pfs;
+	int part_len;
+	int unit;
+
+	if (path == NULL || path[0] == '\0' || buffer == NULL || buffer_size == 0)
+		return path;
+
+	if (isHddLaunchPath(path)) {
+		partition = path + 6;
+		if (partition[0] == '\0')
+			return path;
+
+		subpath = strchr(partition, '/');
+		if (subpath == NULL) {
+			snprintf(buffer, buffer_size, "hdd%c:%s:pfs:/", path[3], partition);
+		} else {
+			part_len = (int)(subpath - partition);
+			if (part_len <= 0)
+				return path;
+			snprintf(buffer, buffer_size, "hdd%c:%.*s:pfs:%s", path[3], part_len, partition, subpath);
+		}
+		return buffer;
+	}
+
+	if (!strncmp(path, "dvr_hdd0:/", 10)) {
+		partition = path + 10;
+		if (partition[0] == '\0')
+			return path;
+
+		subpath = strchr(partition, '/');
+		if (subpath == NULL) {
+			snprintf(buffer, buffer_size, "dvr_hdd0:%s:pfs:/", partition);
+		} else {
+			part_len = (int)(subpath - partition);
+			if (part_len <= 0)
+				return path;
+			snprintf(buffer, buffer_size, "dvr_hdd0:%.*s:pfs:%s", part_len, partition, subpath);
+		}
+		return buffer;
+	}
+
+	if (isStandardHddPfsPath(path)) {
+		pfs = strstr(path + 5, ":pfs:");
+		if (pfs != NULL && pfs[5] != '/')
+			snprintf(buffer, buffer_size, "%.*s:pfs:/%s", (int)(pfs - path), path, pfs + 5);
+		else
+			snprintf(buffer, buffer_size, "%s", path);
+		return buffer;
+	}
+
+	unit = 0;
+	if (!parseDeviceUnitPath(path, "usb", 3, &unit, &suffix) &&
+	    !parseDeviceUnitPath(path, "mass", 4, &unit, &suffix))
+		return path;
+
+	if (*suffix == '\0')
+		suffix = "/";
+
+	if (*suffix != '/')
+		snprintf(buffer, buffer_size, "usb%d:/%s", unit, suffix);
+	else
+		snprintf(buffer, buffer_size, "usb%d:%s", unit, suffix);
+
+	return buffer;
+}
+
+static void normalizeMassLoaderPath(const char *path, char *buffer, size_t buffer_size)
+{
+	const char *suffix;
+	const char *prefix;
+	int unit;
+
+	if (path == NULL || buffer == NULL || buffer_size == 0)
+		return;
+
+	unit = 0;
+	if (parseDeviceUnitPath(path, "mass", 4, &unit, &suffix)) {
+		prefix = "mass";
+	} else if (parseDeviceUnitPath(path, "usb", 3, &unit, &suffix)) {
+		prefix = "usb";
+	} else {
+		snprintf(buffer, buffer_size, "%s", path);
+		return;
+	}
+
+	if (*suffix == '\0')
+		suffix = "/";
+
+	if (*suffix != '/')
+		snprintf(buffer, buffer_size, "%s%d:/%s", prefix, unit, suffix);
+	else
+		snprintf(buffer, buffer_size, "%s%d:%s", prefix, unit, suffix);
+}
+
+static const char *copyNeutrinoArgPath(const char *path, char *buffer, size_t buffer_size)
+{
+	const char *normalized_path;
+
+	if (buffer == NULL || buffer_size == 0)
+		return path;
+
+	normalized_path = normalizeNeutrinoArgPath(path, buffer, buffer_size);
+	if (normalized_path != buffer)
+		snprintf(buffer, buffer_size, "%s", (normalized_path != NULL) ? normalized_path : "");
+
+	return buffer;
+}
+
+static const char *normalizeNeutrinoMediaPath(const char *path, char *buffer, size_t buffer_size)
+{
+	const char *suffix;
+	const char *prefix;
+	int unit;
+
+	if (path == NULL || path[0] == '\0' || buffer == NULL || buffer_size == 0)
+		return path;
+
+	unit = 0;
+	if (parseDeviceUnitPath(path, "usb", 3, &unit, &suffix) ||
+	    parseDeviceUnitPath(path, "mass", 4, &unit, &suffix)) {
+		prefix = "usb";
+	} else if (parseDeviceUnitPath(path, "ata", 3, &unit, &suffix)) {
+		prefix = "ata";
+	} else if (parseDeviceUnitPath(path, "mx4sio", 6, &unit, &suffix)) {
+		prefix = "mx4sio";
+	} else if (parseDeviceUnitPath(path, "udpbd", 5, &unit, &suffix)) {
+		prefix = "udpbd";
+	} else if (parseDeviceUnitPath(path, "udpfs", 5, &unit, &suffix)) {
+		prefix = "udpfs";
+	} else if (parseDeviceUnitPath(path, "mmce", 4, &unit, &suffix)) {
+		prefix = "mmce";
+	} else {
+		return normalizeNeutrinoArgPath(path, buffer, buffer_size);
+	}
+
+	if (*suffix == '\0')
+		suffix = "/";
+
+	snprintf(buffer, buffer_size, "%s:%s", prefix, suffix);
+	return buffer;
+}
+
+static const char *copyNeutrinoMediaPath(const char *path, char *buffer, size_t buffer_size)
+{
+	const char *normalized_path;
+
+	if (buffer == NULL || buffer_size == 0)
+		return path;
+
+	normalized_path = normalizeNeutrinoMediaPath(path, buffer, buffer_size);
+	if (normalized_path != buffer)
+		snprintf(buffer, buffer_size, "%s", (normalized_path != NULL) ? normalized_path : "");
+
+	return buffer;
+}
+
+static int copyPathDirectory(const char *path, char *buffer, size_t buffer_size)
+{
+	char *colon;
+	char *slash;
+
+	if (path == NULL || path[0] == '\0' || buffer == NULL || buffer_size == 0)
+		return 0;
+
+	if (path != buffer)
+		snprintf(buffer, buffer_size, "%s", path);
+	colon = strchr(buffer, ':');
+	slash = strrchr(buffer, '/');
+	if (slash != NULL && (colon == NULL || slash > colon)) {
+		if (colon != NULL && slash == colon + 1)
+			slash[1] = '\0';
+		else
+			*slash = '\0';
+		return 1;
+	}
+
+	if (colon != NULL) {
+		colon[1] = '\0';
+		return 1;
+	}
+
+	return 0;
+}
+
+static int checkExecutablePath(const char *path, int *exec_kind)
+{
+	char tmp[MAX_PATH];
+	int kind;
+
+	if (path == NULL || path[0] == '\0' || exec_kind == NULL)
+		return 0;
+
+	snprintf(tmp, sizeof(tmp), "%s", path);
+	kind = checkELFheader(tmp);
+	if (kind <= 0)
+		return 0;
+
+	*exec_kind = kind;
+	return 1;
+}
+
+static int prepareStandardHddPfsElfLaunch(const char *path, char *fullpath, size_t fullpath_size, char *party, size_t party_size, int *exec_kind)
+{
+	const char *pfs;
+	size_t party_len;
+	const char *subpath;
+
+	if (!isStandardHddPfsPath(path))
+		return 0;
+	if (!loadHddModules())
+		return -1;
+	if (!checkExecutablePath(path, exec_kind))
+		return -1;
+
+	pfs = strstr(path + 5, ":pfs:");
+	party_len = (size_t)(pfs - path);
+	if (party_len == 0 || party_len >= party_size)
+		return -1;
+
+	memcpy(party, path, party_len);
+	party[party_len] = '\0';
+
+	subpath = pfs + 5;
+	if (subpath[0] == '\0')
+		subpath = "/";
+	if (subpath[0] == '/')
+		snprintf(fullpath, fullpath_size, "pfs0:%s", subpath);
+	else
+		snprintf(fullpath, fullpath_size, "pfs0:/%s", subpath);
+	return 1;
+}
+
+static int prepareConfiguredElfLaunch(const char *elf_path, char *fullpath, size_t fullpath_size, char *party, size_t party_size, int *exec_kind)
+{
+	char *p;
+	int ret;
+
+	if (elf_path == NULL || elf_path[0] == '\0' || fullpath == NULL || party == NULL || exec_kind == NULL)
+		return 0;
+
+	fullpath[0] = '\0';
+	party[0] = '\0';
+
+	ret = prepareStandardHddPfsElfLaunch(elf_path, fullpath, fullpath_size, party, party_size, exec_kind);
+	if (ret != 0)
+		return (ret > 0);
+
+	if (!strncmp(elf_path, "mc:/", 4)) {
+		snprintf(fullpath, fullpath_size, "mc0:%s", elf_path + 3);
+		if (checkExecutablePath(fullpath, exec_kind))
+			return 1;
+
+		snprintf(fullpath, fullpath_size, "mc1:%s", elf_path + 3);
+		return checkExecutablePath(fullpath, exec_kind);
+	}
+
+	if (!strncmp(elf_path, "mc", 2)) {
+		snprintf(fullpath, fullpath_size, "%s", elf_path);
+		return checkExecutablePath(fullpath, exec_kind);
+	}
+
+	if (isHddLaunchPath(elf_path)) {
+		loadHddModules();
+		if (!checkExecutablePath(elf_path, exec_kind))
+			return 0;
+		snprintf(party, party_size, "hdd%c:%s", elf_path[3], elf_path + 6);
+		p = strchr(party, '/');
+		if (p == NULL)
+			return 0;
+		snprintf(fullpath, fullpath_size, "pfs0:%s", p);
+		*p = '\0';
+		return 1;
+	}
+
+	if (!strncmp(elf_path, "dvr_hdd0:/", 10)) {
+#ifdef DVRP
+		if (!console_is_PSX)
+			return 0;
+		loadDVRPHddModules();
+		if (!checkExecutablePath(elf_path, exec_kind))
+			return 0;
+		snprintf(party, party_size, "dvr_hdd0:%s", elf_path + 10);
+		p = strchr(party, '/');
+		if (p != NULL) {
+			snprintf(fullpath, fullpath_size, "dvr_pfs0:%s", p);
+			*p = '\0';
+			fullpath[7] = (getDVRPPartyMountIndex(party) == 1) ? '1' : '0';
+		} else {
+			snprintf(fullpath, fullpath_size, "dvr_pfs%d:/", (getDVRPPartyMountIndex(party) == 1) ? 1 : 0);
+		}
+		return 1;
+#else
+		return 0;
+#endif
+	}
+
+	if (!strncmp(elf_path, "xfrom", 5)) {
+#ifdef XFROM
+		if (!console_is_PSX || !loadFlashModules())
+			return 0;
+		if (!checkExecutablePath(elf_path, exec_kind))
+			return 0;
+		snprintf(fullpath, fullpath_size, "%s", elf_path);
+		return 1;
+#else
+		return 0;
+#endif
+	}
+
+	if (!strncmp(elf_path, "mx4sio", 6)) {
+#ifdef MX4SIO
+		if (!mx4sio_driver_running && !loadMx4sioModules())
+			return 0;
+		if (!checkExecutablePath(elf_path, exec_kind))
+			return 0;
+		snprintf(fullpath, fullpath_size, "%s", elf_path);
+		return 1;
+#else
+		return 0;
+#endif
+	}
+
+	if (!strncmp(elf_path, "mmce", 4)) {
+#ifdef MMCE
+		loadMmceModules();
+		if (!checkExecutablePath(elf_path, exec_kind))
+			return 0;
+		snprintf(fullpath, fullpath_size, "%s", elf_path);
+		return 1;
+#else
+		return 0;
+#endif
+	}
+
+	if (!strncmp(elf_path, "usb", 3)) {
+		char loader_path[MAX_PATH];
+
+		if (!checkExecutablePath(elf_path, exec_kind))
+			return 0;
+		if (genFixPath(elf_path, loader_path) < 0)
+			return 0;
+		normalizeMassLoaderPath(loader_path, fullpath, fullpath_size);
+		return 1;
+	}
+
+	if (!strncmp(elf_path, "ata", 3)) {
+		char *pathSep;
+
+#ifdef EXFAT
+		loadAtaModules();
+#endif
+		if (!checkExecutablePath(elf_path, exec_kind))
+			return 0;
+		if (!strncmp(elf_path, "ata:", 4))
+			snprintf(fullpath, fullpath_size, "ata0:%s", elf_path + 4);
+		else
+			snprintf(fullpath, fullpath_size, "%s", elf_path);
+		pathSep = strchr(fullpath, '/');
+		if (pathSep && (pathSep - fullpath < 7) && pathSep[-1] == ':')
+			strcpy(fullpath + (pathSep - fullpath), pathSep + 1);
+		return 1;
+	}
+
+	if (!strncmp(elf_path, "mass", 4)) {
+		if (!checkExecutablePath(elf_path, exec_kind))
+			return 0;
+		normalizeMassLoaderPath(elf_path, fullpath, fullpath_size);
+		return 1;
+	}
+
+	if (!strncmp(elf_path, "host:", 5)) {
+#ifdef ETH
+		initHOST();
+		if (!checkExecutablePath(elf_path, exec_kind))
+			return 0;
+		snprintf(fullpath, fullpath_size, "host:%s", (elf_path[5] == '/') ? elf_path + 6 : elf_path + 5);
+		makeHostPath(fullpath, fullpath);
+		return 1;
+#else
+		return 0;
+#endif
+	}
+
+	if (!strncmp(elf_path, "udpfs:", 6)) {
+#ifdef UDPFS
+		load_udpfs();
+		if (!checkExecutablePath(elf_path, exec_kind))
+			return 0;
+		snprintf(fullpath, fullpath_size, "%s", elf_path);
+		return 1;
+#else
+		return 0;
+#endif
+	}
+
+	snprintf(fullpath, fullpath_size, "%s", elf_path);
+	return checkExecutablePath(fullpath, exec_kind);
+}
+
+static int LaunchNeutrinoIso(const char *iso_path, char *message, size_t message_size)
+{
+	static char neutrino_fullpath[MAX_PATH];
+	static char neutrino_party[MAX_PATH];
+	static char neutrino_arg0[MAX_PATH];
+	static char iso_arg[MAX_PATH];
+	static char cwd_path[MAX_PATH];
+	static char cwd_arg[MAX_PATH + 6];
+	static char dvd_arg[MAX_PATH + 6];
+	char *args[3];
+	int exec_kind;
+
+	if (!isIsoLaunchPath(iso_path))
+		return 0;
+
+	if (setting->neutrino_file[0] == '\0') {
+		snprintf(message, message_size, "NEUTRINO ELF %s.", LNG(is_Not_Found));
+		return 1;
+	}
+
+	if (!prepareConfiguredElfLaunch(setting->neutrino_file, neutrino_fullpath, sizeof(neutrino_fullpath),
+	                                neutrino_party, sizeof(neutrino_party), &exec_kind)) {
+		snprintf(message, message_size, "NEUTRINO ELF %s.", LNG(is_Not_Found));
+		return 1;
+	}
+
+	copyNeutrinoArgPath(setting->neutrino_file, neutrino_arg0, sizeof(neutrino_arg0));
+	copyNeutrinoMediaPath(iso_path, iso_arg, sizeof(iso_arg));
+	copyNeutrinoArgPath(neutrino_fullpath, cwd_path, sizeof(cwd_path));
+	if (!copyPathDirectory(cwd_path, cwd_path, sizeof(cwd_path)) ||
+	    snprintf(cwd_arg, sizeof(cwd_arg), "-cwd=%s", cwd_path) >= (int)sizeof(cwd_arg)) {
+		snprintf(message, message_size, "%s.", LNG(Failed));
+		return 1;
+	}
+	if (snprintf(dvd_arg, sizeof(dvd_arg), "-dvd=%s", iso_arg) >= (int)sizeof(dvd_arg)) {
+		snprintf(message, message_size, "%s.", LNG(Failed));
+		return 1;
+	}
+
+	args[0] = neutrino_arg0;
+	args[1] = dvd_arg;
+	args[2] = cwd_arg;
+
+	CleanUpForExec();
+	RunLoaderElfWithArgs(neutrino_fullpath, neutrino_party, 3, args, 0);
+	return 1;
+}
+
 static int isMiscAboutWlePath(const char *path)
 {
 	char current_path[MAX_PATH];
@@ -157,6 +644,8 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		return;
 	}
 
+	if (LaunchNeutrinoIso(path, ctx->main_msg, MAX_PATH))
+		return;
 	if (IsEmberDiscImagePath(path)) {
 		LaunchArgsClear();
 		if (PrepareEmberLaunch(path, ember_path, sizeof(ember_path),
