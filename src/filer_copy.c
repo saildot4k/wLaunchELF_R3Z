@@ -505,7 +505,7 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 			if (!setting->PSU_HugeNames)
 				cp = np;  //cp = start of the pure filename
 
-			if ((file_show == 2) || setting->PSU_HugeNames) {  //at request, use game title
+			if (fileShowTitles() || setting->PSU_HugeNames) {  //at request, use game title
 				ret = filerGetGameTitle(inPath, &file, file.title);
 				if ((ret == 0) && file.title[0] && setting->PSU_HugeNames) {
 					*cp++ = '_';

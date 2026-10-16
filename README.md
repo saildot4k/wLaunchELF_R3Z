@@ -11,7 +11,7 @@ wLaunchELF, formerly known as uLaunchELF, also known as wLE or uLE (abbreviated)
 | __mx4sio:/__[^1] | SD card interface over memory card port. | Always |
 | __hdd:/__[^2] | APA formatted internal HDD | Hidden on deckard |
 | __ata:/__[^2] | BDM hard drive, exFAT for now till more are supported | Hiddon on deckard |
-| __xfrom:/__ | PSX DESR-XXXX flash storage | Hidden on non-PSX |
+| __xfrom0:/__ | PSX DESR-XXXX flash storage | Hidden on non-PSX |
 | __dvr_hdd0:/__ | PSX DESR-XXXX digital video recorder hdd partition/side | Hidden on non-PSX |
 | __cdfs:/__ | CD/DVD File System | Always |
 | __udpfs:/__ | Network interface used with [PCM720s UDPFSD Server](https://github.com/pcm720/udpfsd) | Always |
