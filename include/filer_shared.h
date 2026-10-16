@@ -27,7 +27,8 @@ enum {
 	MOUNTVMC1,
 	GETSIZE,
 	OPEN_TEXTEDITOR,
-	TIMEMANIP,
+	LAUNCH_ELF_ARGS,
+	TIMEMANIP_CUSTOM,
 	TITLE_CFG,
 	NUM_MENU
 };
@@ -64,6 +65,7 @@ extern int fileMode;
 
 extern int file_show;
 extern int file_sort;
+extern int file_sort_descending;
 extern int size_valid;
 extern int time_valid;
 

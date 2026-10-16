@@ -14,7 +14,7 @@
 #define ULE_VERSION_DEBUG_SUFFIX ""
 #endif
 
-#define ULE_VERSION "v4.70_R3Z" ULE_VERSION_DEBUG_SUFFIX
+#define ULE_VERSION "v4.79_R3Z" ULE_VERSION_DEBUG_SUFFIX
 //#ifndef ULE_VERDATE
 //#define ULE_VERDATE __DATE__
 //#endif
@@ -185,7 +185,6 @@ enum {
 	MAX_PATH = 1025,
 	MAX_ENTRY = 2048,
 	MAX_PARTITIONS = 1400,
-	MAX_MENU_TITLE = 40,
 	MAX_ELF_TITLE = 72,
 	MAX_TEXT_LINE = 80
 };
@@ -278,10 +277,10 @@ typedef struct
 	char Misc_About_uLE[64];
 	char Misc_Show_Build_Info[64];
 	char Misc_OSDSYS[64];
+	char Misc_Exploit_Installer[64];
 	char Misc_Reboot_IOP[64];
 	char usbkbd_file[MAX_PATH];
 	char kbdmap_file[MAX_PATH];
-	char Menu_Title[MAX_MENU_TITLE + 1];
 	char lang_file[MAX_PATH];
 	char font_file[MAX_PATH];
 	char popstarter_file[MAX_PATH];
@@ -345,6 +344,7 @@ extern char SystemCnf_BOOT2[MAX_PATH];
 extern char SystemCnf_VER[10];
 extern char SystemCnf_VMODE[10];
 extern char ROMVER_data[16];
+extern char rough_region;
 
 #ifdef MX4SIO
 extern u8 mx4sio_driver_running;
@@ -369,6 +369,7 @@ int uLE_related(char *pathout, const char *pathin);
 int wleExists(const char *path);
 int IsTextEditorFileType(const char *path);
 void getIpConfig(void);
+void updateIpConfigRuntimeState(void);
 int readSystemCnf(void);
 int uLE_InitializeRegion(void);
 int uLE_cdDiscValid(void);
@@ -392,7 +393,16 @@ int loadAtaModules(void);
 int checkELFheader(char *filename);
 void RunLoaderElf(char *filename, char *party, const char *selected_path, int exec_kind, int reboot_iop_elf_load);
 void RunLoaderElfWithArgs(char *filename, char *party, int app_argc, char *app_argv[], int reboot_iop_elf_load);
+void RunLoaderElfWithArg0(char *filename, char *party, const char *selected_path,
+                          const char *arg0_path, int exec_kind, int reboot_iop_elf_load);
 void RunLoaderMemory(const char *arg0, const char *mem_arg, int reboot_iop);
+void LaunchArgsClear(void);
+int LaunchArgsPending(void);
+int LaunchArgsGetCount(void);
+int LaunchArgsLoadFromFile(const char *path, char *message, size_t message_size);
+int LaunchArgsLoadSidecarForExec(const char *exec_path, char *message, size_t message_size);
+int LaunchArgsLoadFromBuffer(const char *source, const char *buffer, int size, char *message, size_t message_size);
+int LaunchArgsCopyToArgv(char **argv, int max_args);
 #ifdef XFROM
 int PrepareMbrLaunchPayload(const char *path, char *mem_arg, size_t mem_arg_size);
 #endif
@@ -400,6 +410,12 @@ int PrepareMbrLaunchPayload(const char *path, char *mem_arg, size_t mem_arg_size
 /* popstarter.c */
 int IsPopstarterVcdPath(const char *path);
 int LaunchPopstarterVcd(const char *path, char *message, size_t message_size);
+
+/* ember.c */
+int IsEmberDiscImagePath(const char *path);
+int BuildEmberArg0Path(const char *ember_path, char *arg0_path, size_t arg0_path_size);
+int PrepareEmberLaunch(const char *image_path, char *ember_path, size_t ember_path_size,
+                       char *game_arg, size_t game_arg_size, char *message, size_t message_size);
 
 /* draw.c */
 #define FOLDER 0
@@ -423,6 +439,7 @@ extern int Menu_tooltip_y;
 extern u8 FontBuffer[256 * 16];
 
 void setScrTmp(const char *msg0, const char *msg1);
+void setMenuHeaderRightStatus(const char *status);
 void drawSprite(u64 color, int x1, int y1, int x2, int y2);
 void drawPopSprite(u64 color, int x1, int y1, int x2, int y2);
 void drawOpSprite(u64 color, int x1, int y1, int x2, int y2);
@@ -492,7 +509,7 @@ char *preloadCNF(char *path);          //loads file into RAM it allocates
 typedef struct
 {
 	char name[MAX_NAME];
-	unsigned char title[32 * 2 + 1];
+	unsigned char title[32 * 2 + 2];  //SJIS title, optional line separator, and terminator
 	sceMcTblGetDir stats;
 } FILEINFO;
 
@@ -527,6 +544,8 @@ int genWrite(int fd, void *buf, int size);
 int genClose(int fd);
 int genDopen(char *path);
 int genDclose(int fd);
+int genGetStat(const char *path, iox_stat_t *stat);
+int genMkdir(const char *path, int mode);
 int genRemove(char *path);
 int genRmdir(char *path);
 int genCmpFileExt(const char *filename, const char *extension);
@@ -546,7 +565,13 @@ void DebugDisp(char *Message);
 void hddManager(void);
 
 /* editor.c */
-void TextEditor(char *path);
+enum {
+	TEXTEDITOR_RESULT_EXIT = 0,
+	TEXTEDITOR_RESULT_LAUNCH_ARGS = 1,
+	TEXTEDITOR_RESULT_BROWSE_DIR = 2
+};
+
+int TextEditor(char *path);
 
 /* timer.c */
 extern u64 WaitTime;

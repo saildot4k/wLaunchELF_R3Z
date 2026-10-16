@@ -6,6 +6,7 @@
 #include "filer_actions.h"
 #include "filer_shared.h"
 #include "gui_hdd0_format.h"
+#include "init.h"
 #include "psu_functions.h"
 #include "psu_types.h"
 
@@ -96,6 +97,7 @@ static int applyMcInfoToMcPath(const char *path, const sceMcTblGetDir *info)
 	if (strncmp(path, "mc", 2))
 		return -1;
 
+	ensureMemoryCardPortAccessible(path[2] - '0');
 	mcGetInfo(path[2] - '0', 0, &mctype, &dummy, &dummy);
 	mcSync(0, NULL, &dummy);
 	mcSetFileInfo(path[2] - '0', 0, &path[4], info, MC_SFI);
@@ -206,12 +208,40 @@ static int applyMcInfoToXfromPath(const char *path, const sceMcTblGetDir *info)
 // these were added in v3.62, by me (dlanor).
 // From v3.91 This routine also extracts titles from PSU files.
 //--------------------------------------------------------------
+static void joinIconSysTitleLines(unsigned char *title, int line_break)
+{
+	int i;
+	size_t length = strlen((const char *)title);
+
+	if (line_break <= 0 || line_break >= (int)length)
+		return;
+
+	/* Ignore offsets inside a Shift-JIS character. */
+	for (i = 0; i < line_break; i++) {
+		if ((title[i] >= 0x81 && title[i] <= 0x9F) || (title[i] >= 0xE0 && title[i] <= 0xFC))
+			i++;
+	}
+	if (i != line_break)
+		return;
+
+	/* Keep existing ASCII or full-width spaces at the line boundary. */
+	if (title[line_break - 1] == ' ' || title[line_break] == ' ' ||
+	    (line_break >= 2 && title[line_break - 2] == 0x81 && title[line_break - 1] == 0x40) ||
+	    (title[line_break] == 0x81 && title[line_break + 1] == 0x40))
+		return;
+
+	memmove(title + line_break + 1, title + line_break, length - line_break + 1);
+	title[line_break] = ' ';
+}
+
 int filerGetGameTitle(const char *path, const FILEINFO *file, unsigned char *out)
 {
 	char party[MAX_NAME], dir[MAX_PATH], tmpdir[MAX_PATH];
 	int fd = -1, size, ret;
 	psu_header PSU_head;
 	int i, tst, PSU_content, psu_pad_pos;
+	unsigned char icon_header[8];
+	int title_line_break = 0;
 
 	out[0] = '\0';  //Start by making an empty result string, for failures
 
@@ -263,10 +293,8 @@ int filerGetGameTitle(const char *path, const FILEINFO *file, unsigned char *out
 			if (tst != sizeof(PSU_head))
 				goto finish;  //Abort if read fails
 			PSU_head.name[sizeof(PSU_head.name) - 1] = '\0';
-			if (!strcmp((char *)PSU_head.name, "icon.sys")) {
-				genLseek(fd, 0xC0, SEEK_CUR);
-				goto read_title;
-			}
+			if (!strcmp((char *)PSU_head.name, "icon.sys"))
+				goto read_icon_title;
 			if (PSU_head.size) {
 				psu_pad_pos = (PSU_head.size + 0x3FF) & -0x400;
 				genLseek(fd, psu_pad_pos, SEEK_CUR);
@@ -284,8 +312,8 @@ int filerGetGameTitle(const char *path, const FILEINFO *file, unsigned char *out
 	if ((fd = genOpen(tmpdir, FIO_O_RDONLY)) >= 0) {
 		if ((size = genLseek(fd, 0, SEEK_END)) <= 0x100)
 			goto finish;
-		genLseek(fd, 0xC0, SEEK_SET);
-		goto read_title;
+		genLseek(fd, 0, SEEK_SET);
+		goto read_icon_title;
 	}
 	//Next try to find a valid PS1 savefile inside the folder instead
 	strcpy(tmpdir, dir);
@@ -303,10 +331,23 @@ get_PS1_GameTitle:
 	if (strncmp((const char *)out, "SC", 2))
 		goto finish;  //PS1 gamesaves always start with "SC"
 	genLseek(fd, 4, SEEK_SET);
+	goto read_title;
+
+read_icon_title:
+	if (genRead(fd, icon_header, sizeof(icon_header)) != sizeof(icon_header) ||
+	    memcmp(icon_header, "PS2D", 4))
+		goto finish;
+	/* nlOffset is a little-endian byte offset into the SJIS title. */
+	title_line_break = icon_header[6] | (icon_header[7] << 8);
+	if (genLseek(fd, 0xC0 - sizeof(icon_header), SEEK_CUR) < 0)
+		goto finish;
 
 read_title:
-	genRead(fd, out, 32 * 2);
-	out[32 * 2] = 0;
+	size = genRead(fd, out, 32 * 2);
+	if (size <= 0)
+		goto finish;
+	out[size] = 0;
+	joinIconSysTitleLines(out, title_line_break);
 	genClose(fd);
 	fd = -1;
 	ret = 0;
@@ -534,11 +575,16 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 				if (ynDialog(progress) < 0)
 					return -1;
 				if (PasteMode == PM_PSU_RESTORE) {
+					if (filerConfirmExploitDelete(outPath, &newfile) < 0)
+						return -1;
 					ret = delete (outPath, &newfile);  //Attempt recursive delete
 					if (ret < 0)
 						return -1;
 					if (newdir(outPath, newfile.name) < 0)
 						return -1;
+				} else if (!filerIsExploitProtectedPath(outPath, NULL) &&
+				           filerConfirmExploitModify(outPath, &newfile) < 0) {
+					return -1;
 				}
 				drawMsg(LNG(Pasting));
 			} else if (ret < 0) {
@@ -637,6 +683,7 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 				return -1;
 		} else if (PM_flag[recurses + 1] == PM_NORMAL) {             //Normal mode folder paste closure
 			if (!strncmp(out, "mc", 2)) {                            //Handle folder copied to MC
+				ensureMemoryCardPortAccessible(out[2] - '0');
 				ret = MC_SFI;                                   //default request for changing entire mcTable
 				if (!isMemoryCardLikePath(in)) {                //Handle folder copied from non-MC/non-VMC to MC
 					file.stats.AttrFile = MC_ATTR_norm_folder;  //normalize MC folder attribute
@@ -1026,6 +1073,7 @@ copy_file_data_done:
 	}
 
 	if (!strncmp(out, "mc", 2)) {                                 //Handle file copied to MC
+		ensureMemoryCardPortAccessible(out[2] - '0');
 		ret = MC_SFI;                                 //default request for changing entire mcTable
 		if (!isMemoryCardLikePath(in)) {              //Handle file copied from non-MC/non-VMC to MC
 			file.stats.AttrFile = MC_ATTR_norm_file;  //normalize MC file attribute

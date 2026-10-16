@@ -4,7 +4,6 @@
 #include "launchelf.h"
 #include "libmc.h"
 #include "math.h"
-#include <sjis.h>
 extern u8 font_uLE[];
 
 static u16 *tex_buffer;
@@ -14,6 +13,43 @@ static u16 *tex_buffer;
 #define ICON_MARGIN 0
 #define FONT_WIDTH 8
 #define FONT_HEIGHT 16
+#define ICON_SYS_TITLE_MAX_CHARS 16
+
+static const u16 icon_title_sjis[] = {
+	0x8140, 0x8149, 0x8168, 0x8194, 0x8190, 0x8193, 0x8195, 0x8166,
+	0x8169, 0x816a, 0x8196, 0x817b, 0x8143, 0x817c, 0x8144, 0x815e,
+	0x824f, 0x8250, 0x8251, 0x8252, 0x8253, 0x8254, 0x8255, 0x8256,
+	0x8257, 0x8258, 0x8146, 0x8147, 0x8183, 0x8181, 0x8184, 0x8148,
+	0x8197, 0x8260, 0x8261, 0x8262, 0x8263, 0x8264, 0x8265, 0x8266,
+	0x8267, 0x8268, 0x8269, 0x826a, 0x826b, 0x826c, 0x826d, 0x826e,
+	0x826f, 0x8270, 0x8271, 0x8272, 0x8273, 0x8274, 0x8275, 0x8276,
+	0x8277, 0x8278, 0x8279, 0x816d, 0x815f, 0x816e, 0x814f, 0x8151,
+	0x814d, 0x8281, 0x8282, 0x8283, 0x8284, 0x8285, 0x8286, 0x8287,
+	0x8288, 0x8289, 0x828a, 0x828b, 0x828c, 0x828d, 0x828e, 0x828f,
+	0x8290, 0x8291, 0x8292, 0x8293, 0x8294, 0x8295, 0x8296, 0x8297,
+	0x8298, 0x8299, 0x829a, 0x816f, 0x8162, 0x8170, 0x8160,
+};
+
+static void icon_title_encode_sjis(unsigned char *dst, size_t dst_size, const char *src)
+{
+	size_t src_index, dst_index;
+
+	if (dst_size == 0)
+		return;
+
+	dst_index = 0;
+	for (src_index = 0; src[src_index] != 0 && src_index < ICON_SYS_TITLE_MAX_CHARS; src_index++) {
+		unsigned char c = (unsigned char)src[src_index];
+		u16 sjis = c >= 0x20 && c <= 0x7e ? icon_title_sjis[c - 0x20] : 0x8148;
+
+		if (dst_index + 2 >= dst_size)
+			break;
+		dst[dst_index++] = sjis >> 8;
+		dst[dst_index++] = sjis & 0xff;
+	}
+	dst[dst_index] = 0;
+}
+
 
 //f16 = s16/4096
 #define f16 s16
@@ -334,7 +370,7 @@ io_error:
 //--------------------------------------------------------------
 /*
  * This makes the icon.sys file that goes along with the icon itself
- * text is the text that the browser shows (max of 32 characters)
+ * text is the text that the browser shows (max of 16 characters)
  * iconname is the icon file that it refers to(usually icon.icn/or icon.ico)
  * filename is where to store the icon.sys file(eg: mc0:/FOLDER/icon.sys)
  */
@@ -349,7 +385,7 @@ int make_iconsys(char *title, char *iconname, char *filename)
 
 	strcpy((char *)icon_sys.head, "PS2D");
 	icon_sys.nlOffset = 0;  //0=automagically wordwrap, otherwise newline position(multiple of 2)
-	transcpy_sjis((char *)icon_sys.title, (const unsigned char *)title);
+	icon_title_encode_sjis((unsigned char *)icon_sys.title, sizeof(icon_sys.title), title);
 
 	icon_sys.trans = 0x40;
 	// default values from mcIconSysGen

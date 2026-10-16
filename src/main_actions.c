@@ -4,6 +4,7 @@
 #include "launchelf.h"
 #include "init.h"
 #include "main_actions.h"
+#include "main_exploit_installer.h"
 #include "main_gameid.h"
 #include "main_history.h"
 #include "main_info_screens.h"
@@ -527,6 +528,24 @@ static int LaunchNeutrinoIso(const char *iso_path, char *message, size_t message
 	return 1;
 }
 
+static int isMiscAboutWlePath(const char *path)
+{
+	char current_path[MAX_PATH];
+	char legacy_path[MAX_PATH];
+
+	if (path == NULL || setting == NULL)
+		return FALSE;
+	if (!stricmp(path, setting->Misc_About_uLE))
+		return TRUE;
+
+	snprintf(current_path, sizeof(current_path), "%s%s", setting->Misc, LNG(About_uLE));
+	if (!stricmp(path, current_path))
+		return TRUE;
+
+	snprintf(legacy_path, sizeof(legacy_path), "%sAbout uLE", setting->Misc);
+	return !stricmp(path, legacy_path);
+}
+
 #ifdef XFROM
 static int isMbrLaunchPath(const char *path)
 {
@@ -537,6 +556,51 @@ static int isMbrLaunchPath(const char *path)
 }
 #endif
 
+static const char *getLaunchArgsSidecarBasePath(const char *path, const char *fullpath)
+{
+	if (path != NULL && !strncmp(path, "mc:/", 4) && fullpath != NULL && fullpath[0] != '\0')
+		return fullpath;
+	return path;
+}
+
+static void getTextEditorReturnPath(char *out)
+{
+	getFilePath(out, FALSE);
+	LastDir[0] = '\0';
+}
+
+static void executeBrowserSelection(char *selected_path, const MainExecuteContext *ctx)
+{
+	int editor_result;
+
+	while (selected_path[0]) {
+		if (IsTextEditorFileType(selected_path)) {
+			editor_result = TextEditor(selected_path);
+			selected_path[0] = 0;
+			if (editor_result == TEXTEDITOR_RESULT_LAUNCH_ARGS) {
+				getFilePath(selected_path, FALSE);
+				if (!selected_path[0])
+					LaunchArgsClear();
+				continue;
+			}
+			LaunchArgsClear();
+			if (editor_result == TEXTEDITOR_RESULT_BROWSE_DIR) {
+				getTextEditorReturnPath(selected_path);
+				continue;
+			}
+		} else {
+			if (LaunchArgsPending() &&
+			    !genCmpFileExt(selected_path, "ELF") &&
+			    !genCmpFileExt(selected_path, "KELF") &&
+			    !genCmpFileExt(selected_path, "XLF") &&
+			    !IsEmberDiscImagePath(selected_path))
+				LaunchArgsClear();
+			ExecuteMainAction(selected_path, ctx);
+		}
+		break;
+	}
+}
+
 // Execute. Execute an action. May be called recursively.
 // For any path specified, its device must be accessible.
 //------------------------------
@@ -546,8 +610,12 @@ void ExecuteMainAction(char *pathin, const MainExecuteContext *ctx)
 	static char path[MAX_PATH];
 	static char fullpath[MAX_PATH];
 	static char party[MAX_PATH];
+	char ember_path[MAX_PATH];
+	char ember_arg[MAX_PATH];
+	char ember_arg0[MAX_PATH];
 	char *p;
 	int x, t = 0;
+	int ember_launch = 0;
 	char dvdpl_path[] = "mc0:/BREXEC-DVDPLAYER/dvdplayer.elf";
 	int dvdpl_update;
 #ifdef XFROM
@@ -557,8 +625,17 @@ void ExecuteMainAction(char *pathin, const MainExecuteContext *ctx)
 	if (ctx == NULL || pathin == NULL || pathin[0] == 0)
 		return;
 
+	ember_arg0[0] = '\0';
+
 	if (!uLE_related(path, pathin))  //1==uLE_rel 0==missing, -1==other dev
 		return;
+
+	if (LaunchArgsPending() &&
+	    !genCmpFileExt(path, "ELF") &&
+	    !genCmpFileExt(path, "KELF") &&
+	    !genCmpFileExt(path, "XLF") &&
+	    !IsEmberDiscImagePath(path))
+		LaunchArgsClear();
 
 Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 
@@ -569,6 +646,25 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 
 	if (LaunchNeutrinoIso(path, ctx->main_msg, MAX_PATH))
 		return;
+	if (IsEmberDiscImagePath(path)) {
+		LaunchArgsClear();
+		if (PrepareEmberLaunch(path, ember_path, sizeof(ember_path),
+		                       ember_arg, sizeof(ember_arg), ctx->main_msg, MAX_PATH) < 0)
+			return;
+		if (BuildEmberArg0Path(ember_path, ember_arg0, sizeof(ember_arg0)) < 0) {
+			snprintf(ctx->main_msg, MAX_PATH, "Ember argv[0] path is too long: %s", ember_path);
+			return;
+		}
+		if (LaunchArgsLoadFromBuffer(path, ember_arg, (int)strlen(ember_arg), ctx->main_msg, MAX_PATH) < 0)
+			return;
+		if (!rebootIopAndLoadDeviceStackForPath(path)) {
+			LaunchArgsClear();
+			snprintf(ctx->main_msg, MAX_PATH, "Unable to reload Ember device drivers: %s", path);
+			return;
+		}
+		snprintf(path, sizeof(path), "%s", ember_path);
+		ember_launch = 1;
+	}
 
 	if (!strncmp(path, "mc", 2)) {
 		party[0] = 0;
@@ -598,6 +694,7 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 
 		x = setting->reboot_iop_elf_load;
 		CleanUpForExec();
+		LaunchArgsClear();
 		RunLoaderMemory("rom0:HDDBOOT", mbr_mem_arg, x);
 		return;
 	}
@@ -893,13 +990,7 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		tmp[0] = 0;
 		LastDir[0] = 0;
 		getFilePath(tmp, FALSE);
-		if (tmp[0]) {
-			if (IsTextEditorFileType(tmp)) {
-
-				TextEditor(tmp);
-			} else
-				ExecuteMainAction(tmp, ctx);
-		}
+		executeBrowserSelection(tmp, ctx);
 		return;
 	} else if (!stricmp(path, setting->Misc_PS2Browser)) {
 		char *args[1] = {"BootBrowser"};
@@ -923,7 +1014,18 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		hddManager();
 		return;
 	} else if (!stricmp(path, setting->Misc_TextEditor)) {
-		TextEditor(NULL);
+		t = TextEditor(NULL);
+		if (t == TEXTEDITOR_RESULT_LAUNCH_ARGS) {
+			tmp[0] = 0;
+			getFilePath(tmp, FALSE);
+			if (!tmp[0])
+				LaunchArgsClear();
+			executeBrowserSelection(tmp, ctx);
+		} else if (t == TEXTEDITOR_RESULT_BROWSE_DIR) {
+			tmp[0] = 0;
+			getTextEditorReturnPath(tmp);
+			executeBrowserSelection(tmp, ctx);
+		}
 		return;
 	} else if (!stricmp(path, setting->Misc_Configure)) {
 		Load_External_Language();
@@ -937,11 +1039,14 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 	} else if (!stricmp(path, setting->Misc_Debug_Info)) {
 		ShowDebugInfo(ctx->boot_argc, ctx->boot_argv, ctx->boot_path, ctx->default_osdsys_path2, ctx->rough_region, ctx->romver_data);
 		return;
-	} else if (!stricmp(path, setting->Misc_About_uLE)) {
+	} else if (isMiscAboutWlePath(path)) {
 		Show_About_uLE();
 		return;
 	} else if (!stricmp(path, setting->Misc_Show_Build_Info)) {
 		Show_build_info();
+		return;
+	} else if (!stricmp(path, setting->Misc_Exploit_Installer)) {
+		ShowExploitInstaller(ctx);
 		return;
 	} else if (!stricmp(path, setting->Misc_Reboot_IOP)) {
 		ctx->main_msg[0] = 0;
@@ -968,6 +1073,10 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 			int have_launch_gameid = 0;
 			char launch_gameid[12];
 
+			if (!LaunchArgsPending() &&
+			    LaunchArgsLoadSidecarForExec(getLaunchArgsSidecarBasePath(path, fullpath), ctx->main_msg, MAX_PATH) < 0)
+				return;
+
 			if (disc_launch) {
 				have_launch_gameid = buildLaunchGameID(fullpath, launch_gameid, sizeof(launch_gameid));
 				if (have_launch_gameid) {
@@ -979,15 +1088,19 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 				show_launch_gameid = buildLaunchGameID(fullpath, launch_gameid, sizeof(launch_gameid));
 			}
 
-			x = setting->reboot_iop_elf_load;
+			x = ember_launch ? 0 : setting->reboot_iop_elf_load;
 			CleanUpForExec();
 			if (show_launch_gameid)
 				displayRetroGemGameID(launch_gameid, 2);
-			RunLoaderElf(fullpath, party, path, t, x);
+			if (ember_arg0[0] != '\0')
+				RunLoaderElfWithArg0(fullpath, party, path, ember_arg0, t, x);
+			else
+				RunLoaderElf(fullpath, party, path, t, x);
 		}
 	} else {  //Invalid path
 		t = 0;
 	ELFnotFound:
+		LaunchArgsClear();
 		if (t == 0)
 			sprintf(ctx->main_msg, "%s %s.", fullpath, LNG(is_Not_Found));
 		else

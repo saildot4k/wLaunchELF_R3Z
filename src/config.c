@@ -4,6 +4,7 @@
 #include "launchelf.h"
 #include "config_private.h"
 #include "gui_colors.h"
+#include "init.h"
 #include <stdbool.h>
 #include <stdlib.h>
 
@@ -352,6 +353,7 @@ void configEnsureSysconfDir(const char *path)
 	if (path == NULL)
 		return;
 	if (!strncmp(path, "mc0:/SYS-CONF/", 14) || !strncmp(path, "mc1:/SYS-CONF/", 14)) {
+		ensureMemoryCardPortAccessible(path[2] - '0');
 		mcSync(0, NULL, NULL);
 		mcMkDir(path[2] - '0', 0, "SYS-CONF");
 		mcSync(0, NULL, &ret);
@@ -486,6 +488,7 @@ void saveConfigToPath(char *mainMsg, char *CNF, const char *target_path)
 	        "Misc_PS2Net = %s\r\n"
 	        "Misc_PS2PowerOff = %s\r\n"
 	        "Misc_HddManager = %s\r\n"
+	        "Misc_Exploit_Installer = %s\r\n"
 	        "Misc_TextEditor = %s\r\n"
 	        "Misc_Configure = %s\r\n"
 	        "Misc_ShowFont = %s\r\n"
@@ -502,6 +505,7 @@ void saveConfigToPath(char *mainMsg, char *CNF, const char *target_path)
 	        setting->Misc_PS2Net + i,
 	        setting->Misc_PS2PowerOff + i,
 	        setting->Misc_HddManager + i,
+	        setting->Misc_Exploit_Installer + i,
 	        setting->Misc_TextEditor + i,
 	        setting->Misc_Configure + i,
 	        setting->Misc_ShowFont + i,
@@ -523,7 +527,6 @@ void saveConfigToPath(char *mainMsg, char *CNF, const char *target_path)
 	        "NET_HOSTwrite = %d\r\n"
 	        "APP_GameID = %d\r\n"
 	        "CDROM_Disable_GameID = %d\r\n"
-	        "Menu_Title = %s\r\n"
 	        "Init_Delay = %d\r\n"
 	        "REBOOT_IOP_ELFLOAD = %d\r\n"
 	        "VirtualKeyboardLayout = %s\r\n"
@@ -551,7 +554,6 @@ void saveConfigToPath(char *mainMsg, char *CNF, const char *target_path)
 	        setting->HOSTwrite,        //NET_HOST_write
 	        setting->app_gameid,       //app_gameid
 	        setting->cdrom_disable_gameid, //cdrom_disable_gameid
-	        setting->Menu_Title,       //Menu_Title
 	        setting->Init_Delay,       //Init_Delay
 	        setting->reboot_iop_elf_load,
 	        getVirtualKeyboardLayoutConfigName(setting->virtual_keyboard_layout),
@@ -684,6 +686,7 @@ void initConfig(void)
 	sprintf(setting->Misc_PS2Net, "%s/%s", LNG_DEF(MISC), LNG_DEF(PS2Net));
 	sprintf(setting->Misc_PS2PowerOff, "%s/%s", LNG_DEF(MISC), LNG_DEF(PS2PowerOff));
 	sprintf(setting->Misc_HddManager, "%s/%s", LNG_DEF(MISC), LNG_DEF(HddManager));
+	sprintf(setting->Misc_Exploit_Installer, "%s/%s", LNG_DEF(MISC), LNG_DEF(Exploit_Installer));
 	sprintf(setting->Misc_TextEditor, "%s/%s", LNG_DEF(MISC), LNG_DEF(TextEditor));
 	sprintf(setting->Misc_Configure, "%s/%s", LNG_DEF(MISC), LNG_DEF(Configure));
 	sprintf(setting->Misc_ShowFont, "%s/%s", LNG_DEF(MISC), LNG_DEF(ShowFont));
@@ -707,12 +710,11 @@ void initConfig(void)
 	setting->LK_Flag[SETTING_LK_TRIANGLE] = 1;
 	setting->usbkbd_file[0] = '\0';
 	setting->kbdmap_file[0] = '\0';
-	setting->Menu_Title[0] = '\0';
-		setting->CNF_Path[0] = '\0';
-		setting->lang_file[0] = '\0';
-		setting->font_file[0] = '\0';
-		setting->popstarter_file[0] = '\0';
-		setting->neutrino_file[0] = '\0';
+	setting->CNF_Path[0] = '\0';
+	setting->lang_file[0] = '\0';
+	setting->font_file[0] = '\0';
+  setting->neutrino_file[0] = '\0';
+	setting->popstarter_file[0] = '\0';
 	setting->timeout = DEF_TIMEOUT;
 	setting->Hide_Paths = DEF_HIDE_PATHS;
 	setting->color[COLOR_BACKGR] = DEF_COLOR1;
@@ -866,6 +868,9 @@ int loadConfig(char *mainMsg, char *CNF)
 				sprintf(setting->Misc_Show_Build_Info, "%s%s", setting->Misc, value);
 			else if (!strcmp(name, "Misc_OSDSYS"))
 				sprintf(setting->Misc_OSDSYS, "%s%s", setting->Misc, value);
+			else if (!strcmp(name, "Misc_Exploit_Installer"))
+				sprintf(setting->Misc_Exploit_Installer, "%s%s", setting->Misc,
+				        !strcmp(value, "Exploit Installer") ? LNG_DEF(Exploit_Installer) : value);
 			else if (!strcmp(name, "Misc_Reboot_IOP"))
 				sprintf(setting->Misc_Reboot_IOP, "%s%s", setting->Misc, value);
 			//----------
@@ -885,8 +890,7 @@ int loadConfig(char *mainMsg, char *CNF)
 		else if (!strcmp(name, "CDROM_Disable_GameID") || !strcmp(name, "cdrom_disable_gameid") || !strcmp(name, "Disable_Disc_GameID"))
 			setting->cdrom_disable_gameid = atoi(value);
 		else if (!strcmp(name, "Menu_Title")) {
-			strncpy(setting->Menu_Title, value, MAX_MENU_TITLE);
-			setting->Menu_Title[MAX_MENU_TITLE] = '\0';
+			// Legacy setting ignored. The title bar is fixed at runtime.
 		} else if (!strcmp(name, "Init_Delay"))
 			setting->Init_Delay = atoi(value);
 		else if (!strcmp(name, "USBKBD_USED"))
@@ -972,7 +976,6 @@ int loadConfig(char *mainMsg, char *CNF)
 //---------------------------------------------------------------------------
 // Other settings by EP
 // sincro: ADD USBD SELECTOR MENU
-// dlanor: Add Menu_Title config
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------

@@ -66,7 +66,8 @@ int IsTextEditorFileType(const char *path)
 	        genCmpFileExt(path, "XML") ||
 	        genCmpFileExt(path, "TOML") ||
 	        genCmpFileExt(path, "YAML") ||
-	        genCmpFileExt(path, "YML"));
+	        genCmpFileExt(path, "YML") ||
+	        genCmpFileExt(path, "ARG"));
 }
 
 int IsSupportedFileType(char *path)
@@ -76,7 +77,7 @@ int IsSupportedFileType(char *path)
 			return (checkELFheader(path) >= 0);
 		if (IsPopstarterVcdPath(path))
 			return 1;
-		if (genCmpFileExt(path, "ISO"))
+    if (genCmpFileExt(path, "ISO") || IsEmberDiscImagePath(path))
 			return 1;
 		if (IsTextEditorFileType(path))
 			return 1;

@@ -7,6 +7,11 @@
 #include "filer_shared.h"
 #include "gui_hdd0_format.h"
 #include "init.h"
+#include "main_console_info.h"
+#include "main_title.h"
+
+#define SOURCE_DEVICE_WAIT_INTERVAL_MS 1000
+#define SOURCE_DEVICE_WAIT_TIMEOUT_MS 6000
 
 #define SOURCE_DEVICE_WAIT_INTERVAL_MS 1000
 #define SOURCE_DEVICE_WAIT_TIMEOUT_MS 6000
@@ -312,11 +317,16 @@ static int isTitleCfgPathEligible(const char *path, int menu_disabled)
 {
 	return ((!strncmp(path, "mass", 4)) ||
 	        (!strncmp(path, "usb", 3)) ||
+	        (!strncmp(path, "mc0:", 4)) ||
+	        (!strncmp(path, "mc1:", 4)) ||
 #ifdef MMCE
 	        (!strncmp(path, "mmce", 4)) ||
 #endif
 #ifdef MX4SIO
 	        (!strncmp(path, "mx4sio", 6)) ||
+#endif
+#ifdef UDPFS
+	        (!strncmp(path, "udpfs", 5)) ||
 #endif
 	        (!strncmp(path, "ata", 3)) ||
 	        (isHddBrowserPath(path) && !menu_disabled));
@@ -392,8 +402,9 @@ static int menu(const char *path, FILEINFO *file)
 	menu_len = strlen(LNG(New_Dir)) > menu_len ? strlen(LNG(New_Dir)) : menu_len;
 	menu_len = strlen(LNG(Get_Size)) > menu_len ? strlen(LNG(Get_Size)) : menu_len;
 	menu_len = strlen(LNG(TextEditor)) > menu_len ? strlen(LNG(TextEditor)) : menu_len;
+	menu_len = strlen(LNG(Launch_With_Args)) > menu_len ? strlen(LNG(Launch_With_Args)) : menu_len;
 	menu_len = strlen(psu_action_label) > menu_len ? strlen(psu_action_label) : menu_len;
-	menu_len = strlen(LNG(time_manip)) > menu_len ? strlen(LNG(time_manip)) : menu_len;
+	menu_len = strlen(LNG(Set_Custom_Date)) > menu_len ? strlen(LNG(Set_Custom_Date)) : menu_len;
 	menu_len = strlen(LNG(title_cfg)) > menu_len ? strlen(LNG(title_cfg)) : menu_len;
 	menu_len = (strlen(LNG(Mount)) + 6) > menu_len ? (strlen(LNG(Mount)) + 6) : menu_len;
 	
@@ -433,23 +444,14 @@ static int menu(const char *path, FILEINFO *file)
 		enable[MOUNTVMC1] = FALSE;
 		enable[GETSIZE] = FALSE;
 	}
-//#ifdef TMANIP
-	if (                                                        //if
-	    (file->stats.AttrFile & sceMcFileAttrSubdir) &&         //pointing to a folder
-	    (strcmp(file->name, "..")) &&                           //it isnt the ".." option
-	    ((!strcmp(path, "mc0:/")) || (!strcmp(path, "mc1:/")))  //we're on Memory card roots
-	) {
-		enable[TIMEMANIP] = TRUE;
-	} else {
-		enable[TIMEMANIP] = FALSE;
-	} 
-//#endif //TMANIP
+	enable[TIMEMANIP_CUSTOM] = filerCanOrganizeFolderTimestamps(path);
 	if (genCmpFileExt(file->name, "ELF") && isTitleCfgPathEligible(path, menu_disabled))
 		enable[TITLE_CFG] = TRUE;
 	else
 		enable[TITLE_CFG] = FALSE;
 
 	enable[OPEN_TEXTEDITOR] = canOpenInTextEditor(path, file);
+	enable[LAUNCH_ELF_ARGS] = enable[OPEN_TEXTEDITOR];
 
 
 	if (write_disabled || menu_disabled) {
@@ -471,6 +473,8 @@ static int menu(const char *path, FILEINFO *file)
 			enable[RENAME] = FALSE;
 			enable[GETSIZE] = FALSE;
 		}
+		if (filerIsExploitProtectedPath(path, file))
+			enable[RENAME] = FALSE;
 	} else {
 		enable[RENAME] = FALSE;
 	}
@@ -556,12 +560,12 @@ static int menu(const char *path, FILEINFO *file)
 					strcpy(tmp, LNG(Get_Size));
 				else if (i == OPEN_TEXTEDITOR)
 					strcpy(tmp, LNG(TextEditor));
+				else if (i == LAUNCH_ELF_ARGS)
+					strcpy(tmp, LNG(Launch_With_Args));
 				else if (i == TITLE_CFG)
 					strcpy(tmp, LNG(title_cfg));
-#ifdef TMANIP
-				else if (i == TIMEMANIP)
-					strcpy(tmp, LNG(time_manip));
-#endif //TMANIP
+				else if (i == TIMEMANIP_CUSTOM)
+					strcpy(tmp, LNG(Set_Custom_Date));
 
 				if (enable[i])
 					color = setting->color[COLOR_TEXT];
@@ -740,6 +744,7 @@ static int BrowserModePopup(void)
 
 	int entry_file_show = file_show;
 	int entry_file_sort = file_sort;
+	int entry_file_sort_descending = file_sort_descending;
 
 	int Show_len = strlen(LNG(Show_Content_as)) + 1;
 	int Sort_len = strlen(LNG(Sort_Content_by)) + 1;
@@ -751,9 +756,15 @@ static int BrowserModePopup(void)
 		menu_len = i;
 	if (menu_len < (i = strlen(LNG(Game_Title)) + strlen(LNG(_plus_Details))))
 		menu_len = i;
+	if (menu_len < (i = strlen(LNG(Filename)) + strlen(" A -> Z")))
+		menu_len = i;
+	if (menu_len < (i = strlen(LNG(Game_Title)) + strlen(" A -> Z")))
+		menu_len = i;
 	if (menu_len < (i = strlen(LNG(No_Sort))))
 		menu_len = i;
-	if (menu_len < (i = strlen(LNG(Timestamp))))
+	if (menu_len < (i = strlen(LNG(Timestamp)) + 1 + strlen(LNG(Old_to_New))))
+		menu_len = i;
+	if (menu_len < (i = strlen(LNG(Timestamp)) + 1 + strlen(LNG(New_to_Old))))
 		menu_len = i;
 	if (menu_len < (i = strlen(LNG(Back_to_Browser))))
 		menu_len = i;
@@ -781,18 +792,22 @@ static int BrowserModePopup(void)
 		if (readpad()) {
 			switch (new_pad) {
 				case PAD_RIGHT:
+					file_sort_descending = FALSE;
 					file_sort = 0;
 					event |= 2;  //event |= valid pad command
 					break;
 				case PAD_DOWN:
+					file_sort_descending = (file_sort == 1) && !file_sort_descending;
 					file_sort = 1;
 					event |= 2;  //event |= valid pad command
 					break;
 				case PAD_LEFT:
+					file_sort_descending = (file_sort == 2) && !file_sort_descending;
 					file_sort = 2;
 					event |= 2;  //event |= valid pad command
 					break;
 				case PAD_UP:
+					file_sort_descending = (file_sort == 3) && !file_sort_descending;
 					file_sort = 3;
 					event |= 2;  //event |= valid pad command
 					break;
@@ -831,7 +846,8 @@ static int BrowserModePopup(void)
 					}
 					break;
 				case PAD_TRIANGLE:
-					return (file_show != entry_file_show) || (file_sort != entry_file_sort);
+					return (file_show != entry_file_show) || (file_sort != entry_file_sort) ||
+					       (file_sort_descending != entry_file_sort_descending);
 			}  //ends switch(new_pad)
 		}      //ends if(readpad())
 
@@ -869,17 +885,14 @@ static int BrowserModePopup(void)
 					             ": %s",
 					        LNG(No_Sort));
 				else if (i == 9)
-					sprintf(tmp, "\xFF"
-					             "; %s",
-					        LNG(Filename));
+					snprintf(tmp, sizeof(tmp), "\xFF" "; %s %s", LNG(Filename),
+					         (file_sort == 1 && file_sort_descending) ? "Z -> A" : "A -> Z");
 				else if (i == 10)
-					sprintf(tmp, "\xFF"
-					             "< %s",
-					        LNG(Game_Title));
+					snprintf(tmp, sizeof(tmp), "\xFF" "< %s %s", LNG(Game_Title),
+					         (file_sort == 2 && file_sort_descending) ? "Z -> A" : "A -> Z");
 				else if (i == 11)
-					sprintf(tmp, "\xFF"
-					             "= %s",
-					        LNG(Timestamp));
+					snprintf(tmp, sizeof(tmp), "\xFF" "= %s %s", LNG(Timestamp),
+					         (file_sort == 3 && file_sort_descending) ? LNG(New_to_Old) : LNG(Old_to_New));
 				else if (i == 13)
 					sprintf(tmp, "\xFF"
 					             "3 %s",
@@ -957,21 +970,112 @@ static void skipRootSpacerSelection(const char *path, FILEINFO *files, int nfile
 	}
 }
 
+static int getBrowserListFontHeight(void)
+{
+	return ((file_show == 2) && (elisaFnt != NULL)) ? (FONT_HEIGHT + 2) : FONT_HEIGHT;
+}
+
+static int getBrowserDeviceInfoRows(const char *path)
+{
+	return (path[0] == '\0') ? 3 : 0;
+}
+
+static int getBrowserListRows(const char *path, int font_height)
+{
+	int rows;
+
+	rows = (Menu_end_y - Menu_start_y) / font_height - getBrowserDeviceInfoRows(path);
+	return (rows > 0) ? rows : 1;
+}
+
+static int getBrowserListEndY(const char *path, int font_height)
+{
+	return Menu_end_y - getBrowserDeviceInfoRows(path) * font_height;
+}
+
+static int getCenteredListTop(int selected, int count, int rows)
+{
+	int top, max_top, center_row;
+
+	if (rows <= 0 || count <= rows)
+		return 0;
+
+	if (selected < 0)
+		selected = 0;
+	else if (selected >= count)
+		selected = count - 1;
+
+	center_row = (rows - 1) / 2;
+	max_top = count - rows;
+	top = selected - center_row;
+
+	if (top < 0)
+		top = 0;
+	else if (top > max_top)
+		top = max_top;
+
+	return top;
+}
+
+static void formatBrowserMissingTimestamp(char *dst, size_t dst_size, int use_12h, int date_format)
+{
+	const char *date_text;
+
+	if (date_format == 1 || date_format == 2)
+		date_text = "--/--/----";
+	else
+		date_text = "----/--/--";
+
+	if (use_12h)
+		snprintf(dst, dst_size, "--:--:-- -- %s", date_text);
+	else
+		snprintf(dst, dst_size, "--:--:-- %s", date_text);
+}
+
+static void formatBrowserTimestamp(char *dst, size_t dst_size, const PS2TIME *timestamp, int use_12h, int date_format)
+{
+	char date_text[16];
+	char time_text[16];
+	int year;
+	int month;
+	int day;
+	int hour;
+	int minute;
+	int second;
+
+	year = (timestamp->year < 2256) ? timestamp->year : (timestamp->year - 256);
+	month = timestamp->month;
+	day = timestamp->day;
+	hour = timestamp->hour;
+	minute = timestamp->min;
+	second = timestamp->sec;
+	menuTitleConvertTimestampToLocalTime(&year, &month, &day, &hour, &minute, &second);
+	menuTitleFormatClockDate(date_text, sizeof(date_text), year, month, day, date_format);
+	menuTitleFormatClockTime(time_text, sizeof(time_text), hour, minute, second, use_12h);
+	snprintf(dst, dst_size, "%s %s", time_text, date_text);
+}
+
 int getFilePath(char *out, int cnfmode)
 {
 	char path[MAX_PATH], cursorEntry[MAX_PATH],
 	    msg0[MAX_PATH], msg1[MAX_PATH],
 	    tmp[MAX_PATH], tmp1[MAX_PATH], tmp2[MAX_PATH], ext[8], *p;
+	char device_model[CONSOLE_MODEL_NAME_MAX_LEN + 1];
+	char device_bootrom[CONSOLE_INFO_LINE_MAX_LEN];
+	char device_dvdver[CONSOLE_INFO_LINE_MAX_LEN];
 	const unsigned char *mcTitle;
 	u64 color;
 	FILEINFO files[MAX_ENTRY];
 	int top = 0, rows;
-	int x, y, y0, y1;
+	int x, y, y0, y1, list_end_y;
 	int i, j, ret, rv = -1;  //NB: rv is for return value of this function
 	int usb_unit;
 	int event, post_event = 0;
 	int font_height;
 	int iconbase, iconcolr;
+	int use_12h = 0, date_format = 0;
+	int details_column;
+	int device_info_ready = FALSE;
 
 	elisa_failed = FALSE;  //set at failure to load font, cleared at each browser entry
 
@@ -997,11 +1101,10 @@ int getFilePath(char *out, int cnfmode)
 
 	file_show = 1;
 	file_sort = 1;
+	file_sort_descending = FALSE;
 
-	font_height = FONT_HEIGHT;
-	if ((file_show == 2) && (elisaFnt != NULL))
-		font_height = FONT_HEIGHT + 2;
-	rows = (Menu_end_y - Menu_start_y) / font_height;
+	font_height = getBrowserListFontHeight();
+	rows = getBrowserListRows(path, font_height);
 
 	event = 1;  //event = initial entry
 	while (1) {
@@ -1152,6 +1255,7 @@ int getFilePath(char *out, int cnfmode)
 						strcpy(ext, "*");
 					browser_cd = TRUE;
 				} else if ((!swapKeys && (new_pad & PAD_CROSS)) || (swapKeys && (new_pad & PAD_CIRCLE))) {  //Cancel command ?
+					LaunchArgsClear();
 					unmountAll();
 					return rv;
 				}
@@ -1159,6 +1263,25 @@ int getFilePath(char *out, int cnfmode)
 				if (new_pad & PAD_R1) {
 					ret = menu(path, &files[browser_sel]);
 					if (ret == COPY || ret == CUT) {
+						if (ret == CUT) {
+							const FILEINFO *protected_file = NULL;
+
+							if (nmarks > 0) {
+								for (i = 0; i < browser_nfiles; i++) {
+									if (marks[i] && filerIsExploitProtectedPath(path, &files[i])) {
+										protected_file = &files[i];
+										break;
+									}
+								}
+							} else if (filerIsExploitProtectedPath(path, &files[browser_sel]))
+								protected_file = &files[browser_sel];
+							if (protected_file != NULL) {
+								if (filerConfirmExploitModify(path, protected_file) < 0) {
+									browser_pushed = FALSE;
+									continue;
+								}
+							}
+						}
 						strcpy(clipPath, path);
 						if (nmarks > 0) {
 							for (i = nclipFiles = 0; i < browser_nfiles; i++)
@@ -1188,17 +1311,21 @@ int getFilePath(char *out, int cnfmode)
 					}  //ends COPY and CUT
 					else if (ret == DELETE) {
 						if (nmarks == 0) {  //dlanor: using title was inappropriate here (filesystem op)
-							sprintf(tmp, "%s", files[browser_sel].name);
-							if (files[browser_sel].stats.AttrFile & sceMcFileAttrSubdir)
-								strcat(tmp, "/");
-							sprintf(tmp1, "\n%s ?", LNG(Delete));
-							strcat(tmp, tmp1);
-							ret = ynDialog(tmp);
+							if (filerIsExploitProtectedPath(path, &files[browser_sel])) {
+								ret = filerConfirmExploitDelete(path, &files[browser_sel]);
+							} else {
+								sprintf(tmp, "%s", files[browser_sel].name);
+								if (files[browser_sel].stats.AttrFile & sceMcFileAttrSubdir)
+									strcat(tmp, "/");
+								sprintf(tmp1, "\n%s ?", LNG(Delete));
+								strcat(tmp, tmp1);
+								ret = ynDialog(tmp);
+							}
 						} else
 							ret = ynDialog(LNG(Mark_Files_Delete));
 
 						if (ret > 0) {
-							int first_deleted = 0;
+							int first_deleted = -1;
 							if (nmarks == 0) {
 								strcpy(tmp, files[browser_sel].name);
 								if (files[browser_sel].stats.AttrFile & sceMcFileAttrSubdir)
@@ -1207,10 +1334,15 @@ int getFilePath(char *out, int cnfmode)
 								strcat(tmp, tmp1);
 								drawMsg(tmp);
 								ret = delete (path, &files[browser_sel]);
+								if (ret >= 0)
+									first_deleted = browser_sel;
 							} else {
 								for (i = 0; i < browser_nfiles; i++) {
 									if (marks[i]) {
-										if (!first_deleted)     //if this is the first mark
+										if (filerIsExploitProtectedPath(path, &files[i]) &&
+										    filerConfirmExploitDelete(path, &files[i]) < 0)
+											continue;
+										if (first_deleted < 0)   //if this is the first mark
 											first_deleted = i;  //then memorize it for cursor positioning
 										strcpy(tmp, files[i].name);
 										if (files[i].stats.AttrFile & sceMcFileAttrSubdir)
@@ -1225,10 +1357,12 @@ int getFilePath(char *out, int cnfmode)
 								}
 							}
 							if (ret >= 0) {
-								if (nmarks == 0)
-									strcpy(cursorEntry, files[browser_sel - 1].name);
-								else
-									strcpy(cursorEntry, files[first_deleted - 1].name);
+								if (first_deleted >= 0) {
+									int cursor_source = first_deleted - 1;
+									if (cursor_source < 0)
+										cursor_source = 0;
+									strcpy(cursorEntry, files[cursor_source].name);
+								}
 							} else {
 								strcpy(cursorEntry, files[browser_sel].name);
 								sprintf(msg0, "%s Err=%d", LNG(Delete_Failed), ret);
@@ -1239,22 +1373,34 @@ int getFilePath(char *out, int cnfmode)
 						}
 					}  //ends DELETE
 					else if (ret == RENAME) {
-						strcpy(tmp, files[browser_sel].name);
-						if (keyboard(tmp, 36) > 0) {
-							if (Rename(path, &files[browser_sel], tmp) < 0) {
-								browser_pushed = FALSE;
-								strcpy(msg0, LNG(Rename_Failed));
-							} else
-								browser_cd = TRUE;
+						if (filerIsExploitProtectedPath(path, &files[browser_sel])) {
+							browser_pushed = FALSE;
+							strcpy(msg0, LNG(Rename_Failed));
+						} else {
+							strcpy(tmp, files[browser_sel].name);
+							if (keyboard(tmp, 36) > 0) {
+								if (Rename(path, &files[browser_sel], tmp) < 0) {
+									browser_pushed = FALSE;
+									strcpy(msg0, LNG(Rename_Failed));
+								} else
+									browser_cd = TRUE;
+							}
 						}
 					}  //ends RENAME
-					else if (ret == PASTE)
-						submenu_func_Paste(msg0, path);
-					else if (ret == PSUPASTE)
-						submenu_func_psuPaste(msg0, path);
+					else if (ret == PASTE) {
+						if (filerConfirmExploitModify(path, NULL) > 0)
+							submenu_func_Paste(msg0, path);
+						else
+							browser_pushed = FALSE;
+					} else if (ret == PSUPASTE) {
+						if (filerConfirmExploitModify(path, NULL) > 0)
+							submenu_func_psuPaste(msg0, path);
+						else
+							browser_pushed = FALSE;
+					}
 					else if (ret == NEWDIR) {
 						tmp[0] = 0;
-						if (keyboard(tmp, 36) > 0) {
+						if (filerConfirmExploitModify(path, NULL) > 0 && keyboard(tmp, 36) > 0) {
 							ret = newdir(path, tmp);
 							if (ret == -17) {
 								strcpy(msg0, LNG(directory_already_exists));
@@ -1272,8 +1418,12 @@ int getFilePath(char *out, int cnfmode)
 							}
 						}
 					}  //ends NEWDIR
-						else if (ret == NEWICON) {
-							strcpy(tmp, LNG(Icon_Title));
+					else if (ret == NEWICON) {
+						if (filerConfirmExploitModify(path, NULL) < 0) {
+							browser_pushed = FALSE;
+							continue;
+						}
+						strcpy(tmp, LNG(Icon_Title));
 							if (keyboard(tmp, 36) <= 0)
 								goto DoneIcon;
 							if (genFixPath(path, tmp1) < 0) {
@@ -1363,37 +1513,49 @@ int getFilePath(char *out, int cnfmode)
 						}
 					}  //ends MOUNTVMCx
 					else if (ret == OPEN_TEXTEDITOR) {
-						snprintf(tmp1, sizeof(tmp1), "%s%s", path, files[browser_sel].name);
-						TextEditor(tmp1);
-						strcpy(cursorEntry, files[browser_sel].name);
-						browser_pushed = FALSE;
-						browser_repos = TRUE;
-						browser_cd = TRUE;
+						if (filerConfirmExploitModify(path, &files[browser_sel]) > 0) {
+							snprintf(tmp1, sizeof(tmp1), "%s%s", path, files[browser_sel].name);
+							ret = TextEditor(tmp1);
+							strcpy(cursorEntry, files[browser_sel].name);
+							browser_pushed = FALSE;
+							browser_repos = TRUE;
+							browser_cd = TRUE;
+							if (ret == TEXTEDITOR_RESULT_LAUNCH_ARGS)
+								snprintf(msg0, sizeof(msg0), LNG(Launch_Args_Loaded), LaunchArgsGetCount());
+							else
+								LaunchArgsClear();
+						} else
+							browser_pushed = FALSE;
 					}  //ends OPEN_TEXTEDITOR
+					else if (ret == LAUNCH_ELF_ARGS) {
+						snprintf(tmp1, sizeof(tmp1), "%s%s", path, files[browser_sel].name);
+						if (LaunchArgsLoadFromFile(tmp1, msg0, sizeof(msg0)) > 0) {
+							strcpy(cursorEntry, files[browser_sel].name);
+							browser_repos = TRUE;
+						}
+						browser_pushed = FALSE;
+					}  //ends LAUNCH_ELF_ARGS
 					else if (ret == GETSIZE) {
 						submenu_func_GetSize(msg0, path, files);
 					}  //ends GETSIZE
-//#ifdef TMANIP
-					else if (ret == TIMEMANIP) {
-#ifdef TMANIP_MORON
-						sprintf(msg1, "\n\n %s  [%s]  ?\n", LNG(change_timestamp_of), HACK_FOLDER);
-#else
-						sprintf(msg1, "\n\n %s  [%s]  ?\n", LNG(change_timestamp_of), files[browser_sel].name);
-#endif //TMANIP_MORON
-						if (ynDialog(msg1) > 0) {
-							time_manip(path, &files[browser_sel], msg0);
+					else if (ret == TIMEMANIP_CUSTOM) {
+						ret = time_manip_organize(path, &files[browser_sel], msg0);
+						if (ret != 0)
 							browser_pushed = FALSE;
-							browser_repos = TRUE;  // TEST
-							browser_cd = TRUE;     //TEST
+						if (ret > 0) {
+							browser_repos = TRUE;
+							browser_cd = TRUE;
 						}
 					}
-//#endif //TMANIP
 
 				else if (ret == TITLE_CFG) {
-					make_title_cfg(path, &files[browser_sel], msg0);
-					browser_pushed = FALSE;
-					browser_repos = TRUE;  // TEST
-					browser_cd = TRUE;     //TEST
+					if (filerConfirmExploitModify(path, &files[browser_sel]) > 0) {
+						make_title_cfg(path, &files[browser_sel], msg0);
+						browser_pushed = FALSE;
+						browser_repos = TRUE;  // TEST
+						browser_cd = TRUE;     //TEST
+					} else
+						browser_pushed = FALSE;
 				}
 				   //R1 menu handling is completed above
 			} else if ((!swapKeys && new_pad & PAD_CROSS) || (swapKeys && new_pad & PAD_CIRCLE)) {
@@ -1423,6 +1585,7 @@ int getFilePath(char *out, int cnfmode)
 					}
 				}
 			} else if (new_pad & PAD_SELECT) {  //Leaving the browser ?
+				LaunchArgsClear();
 				unmountAll();
 				return rv;
 			}
@@ -1468,6 +1631,8 @@ int getFilePath(char *out, int cnfmode)
 				browser_pushed = FALSE;
 				rebootIopAndReloadCoreStackSilent();
 				path[0] = '\0';
+				strcpy(cursorEntry, "udpfs:");
+				browser_repos = TRUE;
 				browser_nfiles = setFileList(path, ext, files, cnfmode);
 			}
 #endif
@@ -1516,7 +1681,6 @@ int getFilePath(char *out, int cnfmode)
 				for (i = 0; i < browser_nfiles; i++) {
 					if (!strcmp(cursorEntry, files[i].name)) {
 						browser_sel = i;
-						top = browser_sel - 3;
 						break;
 					}
 				}
@@ -1528,20 +1692,16 @@ int getFilePath(char *out, int cnfmode)
 		}  //ends if(browser_cd)
 		if (!strncmp(path, "cdfs", 4))
 			uLE_cdStop();
-		if (top > browser_nfiles - rows)
-			top = browser_nfiles - rows;
-		if (top < 0)
-			top = 0;
+
+		font_height = getBrowserListFontHeight();
+		rows = getBrowserListRows(path, font_height);
 		if (browser_sel >= browser_nfiles)
 			browser_sel = browser_nfiles - 1;
 		if (browser_sel < 0)
 			browser_sel = 0;
 		if (browser_nfiles > 0)
 			skipRootSpacerSelection(path, files, browser_nfiles, &browser_sel, 1);
-		if (browser_sel >= top + rows)
-			top = browser_sel - rows + 1;
-		if (browser_sel < top)
-			top = browser_sel;
+		top = getCenteredListTop(browser_sel, browser_nfiles, rows);
 
 		if (event || post_event) {  //NB: We need to update two frame buffers per event
 
@@ -1550,12 +1710,26 @@ int getFilePath(char *out, int cnfmode)
 
 			x = Menu_start_x;
 			y = Menu_start_y;
-			font_height = FONT_HEIGHT;
-			if ((file_show == 2) && (elisaFnt != NULL)) {
+			font_height = getBrowserListFontHeight();
+			if (font_height != FONT_HEIGHT) {
 				y -= 2;
-				font_height = FONT_HEIGHT + 2;
 			}
-			rows = (Menu_end_y - Menu_start_y) / font_height;
+			rows = getBrowserListRows(path, font_height);
+			list_end_y = getBrowserListEndY(path, font_height);
+
+			if (path[0] == '\0' && !device_info_ready) {
+				if (ROMVER_data[0] == '\0')
+					uLE_InitializeRegion();
+				GetConsoleModelName(ROMVER_data, device_model, sizeof(device_model));
+				FormatConsoleBootrom(device_bootrom, sizeof(device_bootrom), ROMVER_data);
+				GetConsoleDvdVersion(device_dvdver, sizeof(device_dvdver));
+				device_info_ready = TRUE;
+			}
+
+			if (file_show > 0)
+				menuTitleGetClockFormat(&use_12h, &date_format);
+			/* Keep the time/date edge immediately before the scrollbar in both clock formats. */
+			details_column = use_12h ? 41 : 44;
 
 			for (i = 0; i < rows; i++)  //Repeat loop for each browser text row
 			{
@@ -1589,7 +1763,7 @@ int getFilePath(char *out, int cnfmode)
 					else
 						strcpy(tmp, files[top + i].name);
 					if (file_show > 0) {  //Does display mode include file details ?
-						name_limit = 43 * 8;
+						name_limit = (details_column - 1) * FONT_WIDTH;
 					} else {  //Filenames are shown without file details
 						name_limit = 71 * 8;
 					}
@@ -1616,6 +1790,7 @@ int getFilePath(char *out, int cnfmode)
 					u64 size = ((u64)files[top + i].stats.Reserve2 << 32) | files[top + i].stats.FileSizeByte;
 					int scale = 0;  //0==Bytes, 1==KBytes, 2==MBytes, 3==GB
 					char scale_s[6] = " KMGTP";
+					char timestamp_text[32];
 					PS2TIME timestamp = *(PS2TIME *)&files[top + i].stats._Modify;
 
 					if (!size_valid)
@@ -1636,18 +1811,13 @@ int getFilePath(char *out, int cnfmode)
 					}
 
 					if (!time_valid || !(top + i))
-						strcat(tmp, " ----.--.-- --:--:--");
+						formatBrowserMissingTimestamp(timestamp_text, sizeof(timestamp_text), use_12h, date_format);
 					else {
-						sprintf(tmp + strlen(tmp), " %04d.%02d.%02d %02d:%02d:%02d",
-						        ((timestamp.year < 2256) ? timestamp.year : (timestamp.year - 256)),
-						        timestamp.month,
-						        timestamp.day,
-						        timestamp.hour,
-						        timestamp.min,
-						        timestamp.sec);
+						formatBrowserTimestamp(timestamp_text, sizeof(timestamp_text), &timestamp, use_12h, date_format);
 					}
+					sprintf(tmp + strlen(tmp), " %s", timestamp_text);
 
-					printXY(tmp, x + 4 + 44 * FONT_WIDTH, y, color, TRUE, 0);
+					printXY(tmp, x + 4 + details_column * FONT_WIDTH, y, color, TRUE, 0);
 				}
 				if (setting->FB_NoIcons) {  //if FileBrowser should not use icons
 					if (marks[top + i])
@@ -1672,7 +1842,8 @@ int getFilePath(char *out, int cnfmode)
 									genCmpFileExt(files[top + i].name, "XML") ||
 									genCmpFileExt(files[top + i].name, "TOML") ||
 									genCmpFileExt(files[top + i].name, "YAML") ||
-									genCmpFileExt(files[top + i].name, "YML")
+									genCmpFileExt(files[top + i].name, "YML") ||
+									genCmpFileExt(files[top + i].name, "ARG")
 									)
 							iconcolr = COLOR_GRAPH4;
 						else
@@ -1687,13 +1858,19 @@ int getFilePath(char *out, int cnfmode)
 			}                             //ends for, so all browser rows were fixed above
 			if (browser_nfiles > rows) {  //if more files than available rows, use scrollbar
 				drawFrame(SCREEN_WIDTH - SCREEN_MARGIN - LINE_THICKNESS * 8, Frame_start_y,
-				          SCREEN_WIDTH - SCREEN_MARGIN, Frame_end_y, setting->color[COLOR_FRAME]);
-				y0 = (Menu_end_y - Menu_start_y + 8) * ((double)top / browser_nfiles);
-				y1 = (Menu_end_y - Menu_start_y + 8) * ((double)(top + rows) / browser_nfiles);
+				          SCREEN_WIDTH - SCREEN_MARGIN, list_end_y + 4, setting->color[COLOR_FRAME]);
+				y0 = (list_end_y - Menu_start_y + 8) * ((double)top / browser_nfiles);
+				y1 = (list_end_y - Menu_start_y + 8) * ((double)(top + rows) / browser_nfiles);
 				drawOpSprite(setting->color[COLOR_FRAME],
 				             SCREEN_WIDTH - SCREEN_MARGIN - LINE_THICKNESS * 6, (y0 + Menu_start_y - 4),
 				             SCREEN_WIDTH - SCREEN_MARGIN - LINE_THICKNESS * 2, (y1 + Menu_start_y - 4));
 			}                  //ends clause for scrollbar
+			if (path[0] == '\0') {
+				snprintf(tmp, sizeof(tmp), "MODEL: %s", device_model);
+				printXY(tmp, x + 4, list_end_y, setting->color[COLOR_TEXT], TRUE, 0);
+				printXY(device_bootrom, x + 4, list_end_y + font_height, setting->color[COLOR_TEXT], TRUE, 0);
+				printXY(device_dvdver, x + 4, list_end_y + 2 * font_height, setting->color[COLOR_TEXT], TRUE, 0);
+			}
 			if (nclipFiles) {  //if Something in clipboard, emulate LED indicator
 				u64 LED_colour, RIM_colour = GS_SETREG_RGBA(0, 0, 0, 0);
 				int RIM_w = 4, LED_w = 6, indicator_w = LED_w + 2 * RIM_w;
@@ -1767,14 +1944,7 @@ int getFilePath(char *out, int cnfmode)
 					sprintf(tmp, "[%.1fKB %s]", (double)freeSpace / 1024, LNG(free));
 				else
 					sprintf(tmp, "[%dB %s]", (int)freeSpace, LNG(free));
-				ret = strlen(tmp);
-				drawSprite(setting->color[COLOR_BACKGR],
-				           SCREEN_WIDTH - SCREEN_MARGIN - (ret + 1) * FONT_WIDTH, (Menu_message_y - 1),
-				           SCREEN_WIDTH - SCREEN_MARGIN, (Menu_message_y + FONT_HEIGHT));
-				printXY(tmp,
-				        SCREEN_WIDTH - SCREEN_MARGIN - ret * FONT_WIDTH,
-				        (Menu_message_y),
-				        setting->color[COLOR_SELECT], TRUE, 0);
+				setMenuHeaderRightStatus(tmp);
 			}
 		}  //ends if(event||post_event)
 		drawScr();
@@ -1783,6 +1953,8 @@ int getFilePath(char *out, int cnfmode)
 	}  //ends while
 
 	//Leaving the browser
+	if (rv <= 0)
+		LaunchArgsClear();
 	unmountAll();
 	return rv;
 }
@@ -1844,6 +2016,11 @@ static void submenu_func_GetSize(char *mess, char *path, FILEINFO *files)
 
 	//----- Comment out this section to skip attributes entirely -----
 	if ((nmarks < 2) && (sel >= 0)) {
+		PS2TIME timestamp;
+		char timestamp_text[32];
+		int use_12h;
+		int date_format;
+
 		sprintf(filepath, "%s%s", path, files[sel].name);
 		//----- Start of section for debug display of attributes -----
 		/*
@@ -1870,15 +2047,10 @@ static void submenu_func_GetSize(char *mess, char *path, FILEINFO *files)
 			time->hour,time->min,time->sec,time->unknown);
 */
 		//----- End of section for debug display of attributes -----
-		sprintf(mess + text_pos, " m=%04X %04d.%02d.%02d %02d:%02d:%02d%n",
-		        files[sel].stats.AttrFile,
-		        files[sel].stats._Modify.Year,
-		        files[sel].stats._Modify.Month,
-		        files[sel].stats._Modify.Day,
-		        files[sel].stats._Modify.Hour,
-		        files[sel].stats._Modify.Min,
-		        files[sel].stats._Modify.Sec,
-		        &text_inc);
+		timestamp = *(PS2TIME *)&files[sel].stats._Modify;
+		menuTitleGetClockFormat(&use_12h, &date_format);
+		formatBrowserTimestamp(timestamp_text, sizeof(timestamp_text), &timestamp, use_12h, date_format);
+		sprintf(mess + text_pos, " m=%04X %s%n", files[sel].stats.AttrFile, timestamp_text, &text_inc);
 		text_pos += text_inc;
 		if (!strncmp(path, "mc", 2)) {
 			mcGetInfo(path[2] - '0', 0, &mctype_PSx, NULL, NULL);
@@ -1963,6 +2135,10 @@ static void subfunc_Paste(char *mess, char *path)
 	}
 	if ((ret >= 0) && browser_cut) {
 		for (i = 0; i < nclipFiles; i++) {
+			if (filerConfirmExploitDelete(clipPath, &clipFiles[i]) < 0) {
+				ret = -1;
+				break;
+			}
 			ret = delete (clipPath, &clipFiles[i]);
 			if (ret < 0)
 				break;

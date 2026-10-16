@@ -322,6 +322,8 @@ int mcman_getstat2(int port, int slot, const char *filename, MC_IO_STA_T *stat)
 	DPRINTF("mcman_getstat2 port%d slot%d filename %s\n", port, slot, filename);
 
 	r = mcman_cachedirentry(port, slot, filename, NULL, &fse, 1);
+	if (r > 0)
+		return sceMcResNoEntry;
 	if (r != sceMcResSucceed)
 		return r;
 
@@ -371,6 +373,8 @@ int mcman_setinfo2(int port, int slot, const char *filename, sceMcTblGetDir *inf
 	DPRINTF("mcman_setinfo2 port%d slot%d filename %s flags %x\n", port, slot, filename, flags);
 
 	r = mcman_cachedirentry(port, slot, filename, &dirInfo, &fse, 1); //dirInfo=sp218 fse=sp228
+	if (r > 0)
+		return sceMcResNoEntry;
 	if (r != sceMcResSucceed)
 		return r;
 

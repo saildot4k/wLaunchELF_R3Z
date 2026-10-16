@@ -7,6 +7,7 @@
 #include "gui_sort.h"
 #include "filer_shared.h"
 #include "filer_internal.h"
+#include "init.h"
 #include "main_startup.h"
 
 #define MC_ATTR_norm_folder 0x8427  //Normal folder on PS2 MC
@@ -18,6 +19,9 @@ static int getHideHddMode(void)
 
 	if (boot_show_all_devices)
 		return HIDE_HDD_SHOW_ALL;
+
+	if (shouldHideHddAtaDevices())
+		return HIDE_HDD_HDD01_ATA01;
 
 	return (mode >= 0 && mode < HIDE_HDD_COUNT) ? mode : HIDE_HDD_HDD1_ATA1;
 }
@@ -72,6 +76,7 @@ int latestDVRPMount = -1;
 
 int file_show = 1;  //dlanor: 0==name_only, 1==name+size+time, 2==title+size+time
 int file_sort = 1;  //dlanor: 0==none, 1==name, 2==title, 3==mtime
+int file_sort_descending = FALSE;
 int size_valid = 0;
 int time_valid = 0;
 static char hddParties[2][MAX_PARTITIONS][MAX_PART_NAME + 1];
@@ -150,6 +155,8 @@ int readGENERIC(const char *path, FILEINFO *info, int max);
 #define USB_DISCOVERY_ATTEMPTS 3
 #define USB_DISCOVERY_SETTLE_MS 500
 #define ROOT_MC_POLL_INTERVAL_MS 500
+#define MC_BROWSER_RETRY_COUNT 4
+#define MC_BROWSER_RETRY_DELAY_US 100000
 
 static int root_mc_present[2] = {1, 1};
 static int root_mc_poll_active = 0;
@@ -284,24 +291,66 @@ static int readGENERICWithFirstOpenRetry(const char *path, FILEINFO *info, int m
 
 //--------------------------------------------------------------
 //--------------------------------------------------------------
+static int waitMemoryCardReadyForBrowse(int port)
+{
+	int attempt, start_ret, ret;
+
+	ret = sceMcResFailDetect;
+	for (attempt = 0; attempt < MC_BROWSER_RETRY_COUNT; attempt++) {
+		mcSync(0, NULL, NULL);
+		start_ret = mcGetInfo(port, 0, &mctype_PSx, NULL, NULL);
+		if (start_ret < 0)
+			ret = start_ret;
+		else
+			mcSync(0, NULL, &ret);
+
+		if (ret == sceMcResSucceed)
+			return sceMcResSucceed;
+		if (ret == sceMcResChangedCard) {
+			if (attempt + 1 == MC_BROWSER_RETRY_COUNT)
+				return sceMcResSucceed;
+		} else
+			break;
+		DelayThread(MC_BROWSER_RETRY_DELAY_US);
+	}
+
+	return ret;
+}
+
 int readMC(const char *path, FILEINFO *info, int max)
 {
 	static sceMcTblGetDir mcDir[MAX_ENTRY] __attribute__((aligned(64)));
 	char dir[MAX_PATH];
-	int i, j, ret;
+	int i, j, port, ret;
 
-	mcSync(0, NULL, NULL);
+	port = path[2] - '0';
+	if (port < 0 || port > 1)
+		return 0;
 
-	mcGetInfo(path[2] - '0', 0, &mctype_PSx, NULL, NULL);
-	mcSync(0, NULL, &ret);
+	ensureMemoryCardPortAccessible(port);
+
+	ret = waitMemoryCardReadyForBrowse(port);
 	if (mctype_PSx == 2)  //PS2 MC ?
 		time_valid = 1;
 	size_valid = 1;
+	if (ret != sceMcResSucceed)
+		return 0;
 
 	strcpy(dir, &path[4]);
 	strcat(dir, "*");
-	mcGetDir(path[2] - '0', 0, dir, 0, MAX_ENTRY - 2, mcDir);
-	mcSync(0, NULL, &ret);
+	for (i = 0; i < MC_BROWSER_RETRY_COUNT; i++) {
+		mcGetDir(port, 0, dir, 0, MAX_ENTRY - 2, mcDir);
+		mcSync(0, NULL, &ret);
+		if (ret >= 0)
+			break;
+		if (ret != sceMcResChangedCard)
+			break;
+		if (waitMemoryCardReadyForBrowse(port) != sceMcResSucceed)
+			break;
+		DelayThread(MC_BROWSER_RETRY_DELAY_US);
+	}
+	if (ret < 0)
+		return 0;
 
 	for (i = j = 0; i < ret; i++) {
 		if (mcDir[i].AttrFile & sceMcFileAttrSubdir &&
@@ -612,7 +661,9 @@ int genFixPath(const char *inp_path, char *gen_path)
 	strcpy(gen_path, uLE_path);  //Assume no path patching needed
 	pathSep = strchr(uLE_path, '/');
 
-	if (!strncmp(uLE_path, "cdfs", 4)) {  //if using CD or DVD disc path
+	if (!strncmp(uLE_path, "mc1:", 4)) {
+		ensureMemoryCardPortAccessible(1);
+	} else if (!strncmp(uLE_path, "cdfs", 4)) {  //if using CD or DVD disc path
 		LCDVD_FLUSHCACHE();
 		LCDVD_DISKREADY(0);
 		//end of clause for using a CD or DVD path
@@ -1790,6 +1841,8 @@ int setFileList(const char *path, const char *ext, FILEINFO *files, int cnfmode)
 		strcpy(files[nfiles].name, LNG(OSDSYS));
 		files[nfiles++].stats.AttrFile = sceMcFileAttrFile;
 		strcpy(files[nfiles].name, LNG(HddManager));
+		files[nfiles++].stats.AttrFile = sceMcFileAttrFile;
+		strcpy(files[nfiles].name, LNG(Exploit_Installer));
 		files[nfiles++].stats.AttrFile = sceMcFileAttrFile;
 		strcpy(files[nfiles].name, LNG(TextEditor));
 		files[nfiles++].stats.AttrFile = sceMcFileAttrFile;

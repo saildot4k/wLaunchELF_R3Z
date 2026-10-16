@@ -64,6 +64,42 @@ static void editorKeyboardPrintLeft(const char *label, int box_left, int box_rig
 	printXY(label, x, y, color, TRUE, editorKeyboardTextWidth(x, box_right));
 }
 
+static int editorRememberPathDir(const char *path)
+{
+	const char *slash;
+	const char *colon;
+	size_t dir_len;
+
+	if (path == NULL || path[0] == '\0')
+		return 0;
+
+	slash = strrchr(path, '/');
+	colon = strrchr(path, ':');
+	if (slash != NULL)
+		dir_len = (size_t)(slash - path) + 1;
+	else if (colon != NULL)
+		dir_len = (size_t)(colon - path) + 1;
+	else
+		return 0;
+	if (dir_len >= MAX_NAME)
+		return 0;
+
+	memcpy(LastDir, path, dir_len);
+	LastDir[dir_len] = '\0';
+	return 1;
+}
+
+static int editorRememberActiveDir(void)
+{
+	if (Active_Window < 0 || Active_Window >= 10)
+		return 0;
+	if (!Window[Active_Window][OPENED])
+		return 0;
+	if (Window[Active_Window][CREATED])
+		return 0;
+	return editorRememberPathDir(Path[Active_Window]);
+}
+
 //ends Window_Selector.
 //--------------------------------------------------------------
 //--------------------------------------------------------------
@@ -73,7 +109,7 @@ static void editorKeyboardPrintLeft(const char *label, int box_left, int box_rig
 //--------------------------------------------------------------
 //--------------------------------------------------------------
 //--------------------------------------------------------------
-void TextEditor(char *path)
+int TextEditor(char *path)
 {
 	char tmp[MAX_PATH], tmp1[MAX_PATH], tmp2[MAX_PATH];
 	unsigned int key_char;
@@ -85,6 +121,7 @@ void TextEditor(char *path)
 	int tmpLen = 0;
 	int event = 1, post_event = 0;
 	int Editor_Start = 0;
+	int editor_result = TEXTEDITOR_RESULT_EXIT;
 	int key_grid_first_col, key_grid_visible_cols, key_grid_visible_w, key_grid_area_x, key_grid_area_w, KEY_GRID_X, KEY_SPECIAL_GRID_X;
 	u64 color;
 	const int KEY_W = 350,
@@ -203,6 +240,8 @@ void TextEditor(char *path)
 						goto unsave;
 				}
 			force:
+				if (editor_result == TEXTEDITOR_RESULT_EXIT && editorRememberActiveDir())
+					editor_result = TEXTEDITOR_RESULT_BROWSE_DIR;
 				for (i = 0; i < 10; i++) {
 					if (Window[i][OPENED]) {
 						editorClose(i);
@@ -215,11 +254,15 @@ void TextEditor(char *path)
 				Mark[MARK_IN] = 0, Mark[MARK_OUT] = 0, Mark[MARK_TMP] = 0,
 				Mark[MARK_SIZE] = 0, Mark[MARK_PRINT] = 0, Mark[MARK_COLOR] = 0;
 
-				return;
+				return editor_result;
 			unsave:
-				if (ynDialog(LNG(Exit_Without_Saving)) != 1)
+				if (ynDialog(LNG(Exit_Without_Saving)) != 1) {
+					if (editor_result == TEXTEDITOR_RESULT_LAUNCH_ARGS) {
+						LaunchArgsClear();
+						editor_result = TEXTEDITOR_RESULT_EXIT;
+					}
 					goto abort;
-				else
+				} else
 					goto force;
 			} else if (new_pad & PAD_R1) {
 			menu:
@@ -300,6 +343,13 @@ void TextEditor(char *path)
 					if (ret >= 0) {
 						Active_Window = ret;
 						editorResetState();
+					}
+				} else if (ret == LAUNCH_WITH_ARGS) {
+					ret = LaunchArgsLoadFromBuffer(Path[Active_Window], TextBuffer[Active_Window], TextSize[Active_Window], tmp, sizeof(tmp));
+					drawMsg(tmp);
+					if (ret > 0) {
+						editor_result = TEXTEDITOR_RESULT_LAUNCH_ARGS;
+						goto exit;
 					}
 				} else if (ret == EXIT) {
 					goto exit;
@@ -631,7 +681,7 @@ void TextEditor(char *path)
 		event = 0;
 	}  //ends while.
 
-	return;
+	return TEXTEDITOR_RESULT_EXIT;
 }
 //--------------------------------------------------------------
 //End of file: editor.c
