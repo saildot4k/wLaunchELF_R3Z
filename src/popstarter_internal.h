@@ -46,7 +46,6 @@ int splitPopstarterHddLaunchPath(const char *path, char *hdd_device, size_t hdd_
                                  char *partition, size_t partition_size, const char **subpath);
 int isHddPartyPath(const char *party);
 int prefixCaseCmp(const char *value, const char *prefix, size_t prefix_len);
-int openPathForRead(const char *path, char *opened_path, size_t opened_path_size);
 int prepareLaunch(const char *path, char *arg, size_t arg_size, POPSTARTER_CANDIDATE_LIST *candidates);
 
 int validateVcd(const char *path);

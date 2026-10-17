@@ -175,8 +175,8 @@ NET_HOSTwrite = 0
 # ----------------------------------------------------------------------
 APP_GameID = 0
 # ----------------------------------------------------------------------
-# CDROM_Disable_GameID disables RetroGEM visual Game ID for PS1/PS2 disc
-# launches (MISC/PS2Disc path). Default is 0 (disc Game ID enabled).
+# CDROM_Disable_GameID disables RetroGEM visual Game ID for PS1/PS2 disc,
+# POPStarter VCD and Neutrino ISO launches. Default is 0 (Game ID enabled).
 # ----------------------------------------------------------------------
 CDROM_Disable_GameID = 0
 # Menu_Frame flags whether or not the big frame that encloses the menu

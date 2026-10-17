@@ -58,6 +58,10 @@ Selecting an ISO opens a launch-options screen with game compatibility toggles, 
 
 Configure the Neutrino ELF path in Startup Settings. Supported compatibility modes are 0, 2, 3, 5, and 7; mode 1 is Neutrino's dummy entry and is omitted. The available arguments follow [Neutrino's usage documentation](https://github.com/ps2max32/neutrino#usage-instructions).
 
+Before launch, the game ID is read from the ISO's `SYSTEM.CNF` (`BOOT2`). When **Disable RetroGem Game ID for Discs** is OFF, a valid ID is displayed using RetroGem's visual Game ID, including on MX4SIO and builds without MMCE support.
+
+MMCE builds also send a valid serial such as `SLUS_123.45` to responding MMCE devices in both slots. Each card is given up to 15 seconds to finish switching. The slot containing Neutrino's ELF on `mc0:` or `mc1:` is skipped. Unknown IDs and MMCE errors do not prevent launch. MMCE switching is skipped when the ISO or Neutrino ELF uses MX4SIO because the drivers conflict.
+
 ### LaunchELF with Args
 
 <details>

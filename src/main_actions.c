@@ -9,6 +9,7 @@
 #include "main_history.h"
 #include "main_info_screens.h"
 #include "gui_neutrino.h"
+#include "neutrino_gameid.h"
 
 //CleanUpForExec releases uLE stuff preparatory to launching some other application
 //------------------------------
@@ -492,6 +493,8 @@ static int LaunchNeutrinoIso(const char *iso_path, char *message, size_t message
 	static char dvd_arg[MAX_PATH + 6];
 	static NEUTRINO_OPTION_ARGS option_args;
 	NEUTRINO_LAUNCH_OPTIONS options;
+	char gameID[NEUTRINO_GAME_ID_SIZE];
+	int have_gameid, show_gameid;
 	char *args[3 + NEUTRINO_OPTION_ARGC_MAX];
 	int exec_kind, option_argc, i, argc = 3;
 
@@ -512,6 +515,8 @@ static int LaunchNeutrinoIso(const char *iso_path, char *message, size_t message
 		return 1;
 	}
 
+	/* Extract the ID before ELF preparation, which may remount devices. */
+	have_gameid = prepareNeutrinoGameID(iso_path, setting->neutrino_file, gameID, sizeof(gameID));
 	if (!prepareConfiguredElfLaunch(setting->neutrino_file, neutrino_fullpath, sizeof(neutrino_fullpath),
 	                                neutrino_party, sizeof(neutrino_party), &exec_kind)) {
 		snprintf(message, message_size, "NEUTRINO ELF %s.", LNG(is_Not_Found));
@@ -542,7 +547,14 @@ static int LaunchNeutrinoIso(const char *iso_path, char *message, size_t message
 	for (i = 0; i < option_argc; i++)
 		args[argc++] = option_args.argv[i];
 
+	/* All launch checks have passed; leave the VMC holding Neutrino unchanged. */
+#ifdef MMCE
+	setNeutrinoMmceGameID(gameID, iso_path, neutrino_fullpath);
+#endif
+	show_gameid = have_gameid && !setting->cdrom_disable_gameid;
 	CleanUpForExec();
+	if (show_gameid)
+		displayRetroGemGameID(gameID, 2);
 	RunLoaderElfWithArgs(neutrino_fullpath, neutrino_party, argc, args, 0);
 	return 1;
 }
