@@ -125,7 +125,7 @@ ifeq ($(DVRP),1)
 endif
 
 ifeq ($(MMCE),1)
-    EE_OBJS += mmceman_irx.o
+    EE_OBJS += mmceman_irx.o neutrino_gameid.o
     EE_CFLAGS += -DMMCE
     HAS_MMCE = -MMCE
     SIO2MAN = 1

@@ -14,7 +14,7 @@
 #define ULE_VERSION_DEBUG_SUFFIX ""
 #endif
 
-#define ULE_VERSION "v4.79_R3Z" ULE_VERSION_DEBUG_SUFFIX
+#define ULE_VERSION "v4.80_R3Z" ULE_VERSION_DEBUG_SUFFIX
 //#ifndef ULE_VERDATE
 //#define ULE_VERDATE __DATE__
 //#endif
@@ -541,6 +541,7 @@ void genLimObjName(char *uLE_path, int reserve);
 int genFixPath(const char *inp_path, char *gen_path);
 /* mode must use fileXio-compatible flags (FIO_O_*). */
 int genOpen(const char *path, int mode);
+int openPathForRead(const char *path, char *opened_path, size_t opened_path_size);
 s64 genLseek(int fd, s64 where, int how);
 int genRead(int fd, void *buf, int size);
 int genWrite(int fd, void *buf, int size);
