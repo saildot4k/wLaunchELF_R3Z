@@ -6,10 +6,12 @@
 #define ISO_PVD_SEARCH_SECTORS 32
 #define ISO_MAX_ROOT_SECTORS 64
 #define ISO_CNF_SIZE 4096
+#ifdef MMCE
 #define MMCE_CMD_PING 0x1
 #define MMCE_CMD_GET_STATUS 0x2
 #define MMCE_CMD_SET_GAMEID 0x8
 #define MMCE_SWITCH_POLLS 15
+#endif
 
 static u32 isoReadLe32(const unsigned char *value)
 {
@@ -192,7 +194,7 @@ static int parseIsoGameID(const char *cnf, char *gameID)
 	return 0;
 }
 
-int prepareNeutrinoMmceGameID(const char *iso_path, const char *elf_path, char *gameID, size_t gameID_len)
+int prepareNeutrinoGameID(const char *iso_path, const char *elf_path, char *gameID, size_t gameID_len)
 {
 	char cnf[ISO_CNF_SIZE + 1] __attribute__((aligned(16)));
 	int fd, result;
@@ -201,12 +203,15 @@ int prepareNeutrinoMmceGameID(const char *iso_path, const char *elf_path, char *
 		return 0;
 	gameID[0] = '\0';
 	if (gameID_len < NEUTRINO_GAME_ID_SIZE || iso_path == NULL || elf_path == NULL ||
-	    iso_path[0] == '\0' || elf_path[0] == '\0' ||
-	    !strncmp(iso_path, "mx4sio", 6) || !strncmp(elf_path, "mx4sio", 6))
+	    iso_path[0] == '\0' || elf_path[0] == '\0')
 		return 0;
-	/* Load before opening the ISO or preparing the ELF: switching from MX4SIO resets the IOP. */
-	if (!loadMmceModules())
-		return 0;
+#ifdef MMCE
+	/* Load before opening the ISO or preparing the ELF: switching from MX4SIO resets the IOP.
+	 * A driver failure must still allow the ISO ID to be read for RetroGem.
+	 */
+	if (strncmp(iso_path, "mx4sio", 6) && strncmp(elf_path, "mx4sio", 6))
+		loadMmceModules();
+#endif
 #ifdef ETH
 	if (!strncmp(iso_path, "host:", 5))
 		initHOST();
@@ -223,12 +228,14 @@ int prepareNeutrinoMmceGameID(const char *iso_path, const char *elf_path, char *
 	return result;
 }
 
-void setNeutrinoMmceGameID(const char *gameID, const char *elf_path)
+#ifdef MMCE
+void setNeutrinoMmceGameID(const char *gameID, const char *iso_path, const char *elf_path)
 {
 	char device[] = "mmce0:";
 	int port, poll, status;
 
-	if (!validGameID(gameID) || elf_path == NULL || !strncmp(elf_path, "mx4sio", 6))
+	if (!validGameID(gameID) || iso_path == NULL || elf_path == NULL ||
+	    !strncmp(iso_path, "mx4sio", 6) || !strncmp(elf_path, "mx4sio", 6))
 		return;
 #ifdef MX4SIO
 	if (mx4sio_driver_running)
@@ -253,3 +260,4 @@ void setNeutrinoMmceGameID(const char *gameID, const char *elf_path)
 		DPRINTF("Neutrino MMCE: %s game=%s polls=%d\n", device, gameID, poll);
 	}
 }
+#endif
