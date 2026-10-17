@@ -19,7 +19,7 @@ typedef struct
 	char *argv[NEUTRINO_OPTION_ARGC_MAX];
 } NEUTRINO_OPTION_ARGS;
 
-int showNeutrinoLaunchOptions(NEUTRINO_LAUNCH_OPTIONS *options);
+int showNeutrinoLaunchOptions(const char *iso_path, NEUTRINO_LAUNCH_OPTIONS *options);
 int buildNeutrinoOptionArgs(const NEUTRINO_LAUNCH_OPTIONS *options, NEUTRINO_OPTION_ARGS *args);
 
 #endif

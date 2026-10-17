@@ -229,8 +229,8 @@ Hide_Hdd = 5
 # ----------------------------------------------------------------------
 # Disable automatic disc-image launching through each supported loader.
 # These can be changed from the "Advanced Settings" submenu.
-# 0 => NO, support enabled (default if omitted)
-# 1 => YES, support disabled in FileBrowser and saved launch keys
+# 0 => OFF, support enabled (default if omitted)
+# 1 => ON, support disabled in FileBrowser and saved launch keys
 # EMBER handles BIN/CUE, POPSTARTER handles VCD, and NEUTRINO handles ISO.
 # The image files remain available for normal file operations.
 # ----------------------------------------------------------------------

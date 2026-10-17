@@ -507,7 +507,7 @@ static int LaunchNeutrinoIso(const char *iso_path, char *message, size_t message
 		return 1;
 	}
 
-	if (!showNeutrinoLaunchOptions(&options)) {
+	if (!showNeutrinoLaunchOptions(iso_path, &options)) {
 		message[0] = '\0';
 		return 1;
 	}

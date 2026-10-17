@@ -85,20 +85,9 @@ int buildNeutrinoOptionArgs(const NEUTRINO_LAUNCH_OPTIONS *options, NEUTRINO_OPT
 
 static int moveNeutrinoSelection(int selection, int direction)
 {
-	if (direction < 0) {
-		if (selection == 0)
-			return NEUTRINO_CANCEL;
-		if (selection >= NEUTRINO_RUN)
-			return selection - 2;
-		if (selection >= NEUTRINO_DEBUG_COLORS)
-			return NEUTRINO_VIDEO_COMPATIBILITY;
-		return selection - 1;
-	}
-	if (selection >= NEUTRINO_RUN)
-		return 0;
-	if (selection >= NEUTRINO_DEBUG_COLORS)
-		return selection + 2;
-	return selection + 1;
+	if (direction < 0)
+		return selection > 0 ? selection - 1 : NEUTRINO_CANCEL;
+	return selection < NEUTRINO_CANCEL ? selection + 1 : 0;
 }
 
 static void drawNeutrinoHeading(const char *heading, int y)
@@ -117,20 +106,19 @@ static void drawNeutrinoOption(const char *text, int item, int selection, int x,
 		drawChar(LEFT_CUR, x - 2 * FONT_WIDTH, y, color);
 }
 
-int showNeutrinoLaunchOptions(NEUTRINO_LAUNCH_OPTIONS *options)
+int showNeutrinoLaunchOptions(const char *iso_path, NEUTRINO_LAUNCH_OPTIONS *options)
 {
 	char text[128];
 	int selection = 0, event = 1, post_event = 0;
 	int width = SCREEN_WIDTH - 2 * SCREEN_MARGIN;
-	int height = 17 * FONT_HEIGHT;
+	int height = 16 * FONT_HEIGHT;
 	int left = (SCREEN_WIDTH - width) / 2;
 	int top = (SCREEN_HEIGHT - height) / 2;
 	int x = left + 3 * FONT_WIDTH;
-	int right_x = left + width / 2 + 3 * FONT_WIDTH;
 	int y = top + FONT_HEIGHT / 2;
 	int i, direction;
 
-	if (options == NULL)
+	if (iso_path == NULL || iso_path[0] == '\0' || options == NULL)
 		return FALSE;
 	memset(options, 0, sizeof(*options));
 	while (1) {
@@ -151,10 +139,6 @@ int showNeutrinoLaunchOptions(NEUTRINO_LAUNCH_OPTIONS *options)
 					options->video_mode = (options->video_mode + direction + NEUTRINO_VIDEO_COUNT) % NEUTRINO_VIDEO_COUNT;
 				else if (selection == NEUTRINO_VIDEO_COMPATIBILITY)
 					options->video_compatibility = (options->video_compatibility + direction + NEUTRINO_VIDEO_COMPAT_COUNT) % NEUTRINO_VIDEO_COMPAT_COUNT;
-				else if (selection == NEUTRINO_DEBUG_COLORS || selection == NEUTRINO_LOGO)
-					selection = (selection == NEUTRINO_DEBUG_COLORS) ? NEUTRINO_LOGO : NEUTRINO_DEBUG_COLORS;
-				else if (selection == NEUTRINO_RUN || selection == NEUTRINO_CANCEL)
-					selection = (selection == NEUTRINO_RUN) ? NEUTRINO_CANCEL : NEUTRINO_RUN;
 				event = 1;
 			} else if ((swapKeys && (new_pad & PAD_CROSS)) || (!swapKeys && (new_pad & PAD_CIRCLE))) {
 				if (selection < NEUTRINO_COMPAT_COUNT)
@@ -175,7 +159,9 @@ int showNeutrinoLaunchOptions(NEUTRINO_LAUNCH_OPTIONS *options)
 
 		if (event || post_event) {
 			clrScr(setting->color[COLOR_BACKGR]);
-			setScrTmp("", "");
+			snprintf(text, sizeof(text), "D-pad: %s  \xFF" "%c: %s  \xFF" "3: %s",
+			         LNG(Select), swapKeys ? '1' : '0', LNG(Change), LNG(Cancel));
+			setScrTmp(iso_path, text);
 			drawPopSprite(setting->color[COLOR_BACKGR], left, top, left + width, top + height);
 			drawFrame(left, top, left + width, top + height, setting->color[COLOR_FRAME]);
 			drawNeutrinoHeading("Game Compatibility", y);
@@ -193,12 +179,9 @@ int showNeutrinoLaunchOptions(NEUTRINO_LAUNCH_OPTIONS *options)
 			snprintf(text, sizeof(text), "Debug Colors: %s", options->debug_colors ? LNG(YES) : LNG(NO));
 			drawNeutrinoOption(text, NEUTRINO_DEBUG_COLORS, selection, x, y + 11 * FONT_HEIGHT);
 			snprintf(text, sizeof(text), "PS2 Logo: %s", options->logo ? LNG(YES) : LNG(NO));
-			drawNeutrinoOption(text, NEUTRINO_LOGO, selection, right_x, y + 11 * FONT_HEIGHT);
+			drawNeutrinoOption(text, NEUTRINO_LOGO, selection, x, y + 12 * FONT_HEIGHT);
 			drawNeutrinoOption("Run", NEUTRINO_RUN, selection, x, y + 13 * FONT_HEIGHT);
-			drawNeutrinoOption(LNG(Cancel), NEUTRINO_CANCEL, selection, right_x, y + 13 * FONT_HEIGHT);
-			snprintf(text, sizeof(text), "D-pad: %s  \xFF" "%c: %s  \xFF" "3: %s",
-			         LNG(Select), swapKeys ? '1' : '0', LNG(Change), LNG(Cancel));
-			printXY(text, x, y + 15 * FONT_HEIGHT, setting->color[COLOR_TEXT], TRUE, 0);
+			drawNeutrinoOption(LNG(Cancel), NEUTRINO_CANCEL, selection, x, y + 14 * FONT_HEIGHT);
 		}
 		drawScr();
 		post_event = event;

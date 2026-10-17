@@ -264,15 +264,15 @@ void Config_Advanced(void)
 				y += FONT_HEIGHT;
 				y += FONT_HEIGHT / 2;
 
-				configFormatLabelValueAligned(c, sizeof(c), disable_ember_label, setting->disable_ember ? LNG(YES) : LNG(NO), bool_label_width);
+				configFormatLabelValueAligned(c, sizeof(c), disable_ember_label, setting->disable_ember ? LNG(ON) : LNG(OFF), bool_label_width);
 				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 				y += FONT_HEIGHT;
 
-				configFormatLabelValueAligned(c, sizeof(c), disable_popstarter_label, setting->disable_popstarter ? LNG(YES) : LNG(NO), bool_label_width);
+				configFormatLabelValueAligned(c, sizeof(c), disable_popstarter_label, setting->disable_popstarter ? LNG(ON) : LNG(OFF), bool_label_width);
 				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 				y += FONT_HEIGHT;
 
-				configFormatLabelValueAligned(c, sizeof(c), disable_neutrino_label, setting->disable_neutrino ? LNG(YES) : LNG(NO), bool_label_width);
+				configFormatLabelValueAligned(c, sizeof(c), disable_neutrino_label, setting->disable_neutrino ? LNG(ON) : LNG(OFF), bool_label_width);
 				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 				y += FONT_HEIGHT;
 				y += FONT_HEIGHT / 2;
