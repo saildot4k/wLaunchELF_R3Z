@@ -494,6 +494,10 @@ static int LaunchNeutrinoIso(const char *iso_path, char *message, size_t message
 
 	if (!isIsoLaunchPath(iso_path))
 		return 0;
+	if (setting->disable_neutrino) {
+		snprintf(message, message_size, "NEUTRINO support is disabled.");
+		return 1;
+	}
 
 	if (setting->neutrino_file[0] == '\0') {
 		snprintf(message, message_size, "NEUTRINO ELF %s.", LNG(is_Not_Found));
@@ -640,6 +644,10 @@ void ExecuteMainAction(char *pathin, const MainExecuteContext *ctx)
 Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 
 	if (IsPopstarterVcdPath(path)) {
+		if (setting->disable_popstarter) {
+			snprintf(ctx->main_msg, MAX_PATH, "POPSTARTER support is disabled.");
+			return;
+		}
 		LaunchPopstarterVcd(path, ctx->main_msg, MAX_PATH);
 		return;
 	}
@@ -648,6 +656,10 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		return;
 	if (IsEmberDiscImagePath(path)) {
 		LaunchArgsClear();
+		if (setting->disable_ember) {
+			snprintf(ctx->main_msg, MAX_PATH, "EMBER support is disabled.");
+			return;
+		}
 		if (PrepareEmberLaunch(path, ember_path, sizeof(ember_path),
 		                       ember_arg, sizeof(ember_arg), ctx->main_msg, MAX_PATH) < 0)
 			return;

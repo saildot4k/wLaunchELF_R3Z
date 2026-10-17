@@ -227,6 +227,17 @@ VirtualKeyboardLayout = qwerty
 # ----------------------------------------------------------------------
 Hide_Hdd = 5
 # ----------------------------------------------------------------------
+# Disable automatic disc-image launching through each supported loader.
+# These can be changed from the "Advanced Settings" submenu.
+# 0 => NO, support enabled (default if omitted)
+# 1 => YES, support disabled in FileBrowser and saved launch keys
+# EMBER handles BIN/CUE, POPSTARTER handles VCD, and NEUTRINO handles ISO.
+# The image files remain available for normal file operations.
+# ----------------------------------------------------------------------
+Disable_EMBER = 0
+Disable_POPSTARTER = 0
+Disable_NEUTRINO = 0
+# ----------------------------------------------------------------------
 # Hide_MCMMCE controls whether FileBrowser hides mc0/mc1 and mmce0/mmce1
 # when their matching memory card slot is not detected. This is a
 # config-only option and is not exposed in the UI.

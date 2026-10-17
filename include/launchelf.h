@@ -303,6 +303,9 @@ typedef struct
 	int reboot_iop_elf_load;
 	int virtual_keyboard_layout;
 	int Hide_Hdd;
+	int disable_ember;
+	int disable_popstarter;
+	int disable_neutrino;
 	int Hide_MCMMCE;
 	int Show_Titles;
 	int PathPad_Lock;
