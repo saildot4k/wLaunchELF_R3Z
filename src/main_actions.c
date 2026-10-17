@@ -8,6 +8,7 @@
 #include "main_gameid.h"
 #include "main_history.h"
 #include "main_info_screens.h"
+#include "gui_neutrino.h"
 
 //CleanUpForExec releases uLE stuff preparatory to launching some other application
 //------------------------------
@@ -489,8 +490,10 @@ static int LaunchNeutrinoIso(const char *iso_path, char *message, size_t message
 	static char cwd_path[MAX_PATH];
 	static char cwd_arg[MAX_PATH + 6];
 	static char dvd_arg[MAX_PATH + 6];
-	char *args[3];
-	int exec_kind;
+	static NEUTRINO_OPTION_ARGS option_args;
+	NEUTRINO_LAUNCH_OPTIONS options;
+	char *args[3 + NEUTRINO_OPTION_ARGC_MAX];
+	int exec_kind, option_argc, i, argc = 3;
 
 	if (!isIsoLaunchPath(iso_path))
 		return 0;
@@ -501,6 +504,11 @@ static int LaunchNeutrinoIso(const char *iso_path, char *message, size_t message
 
 	if (setting->neutrino_file[0] == '\0') {
 		snprintf(message, message_size, "NEUTRINO ELF %s.", LNG(is_Not_Found));
+		return 1;
+	}
+
+	if (!showNeutrinoLaunchOptions(iso_path, &options)) {
+		message[0] = '\0';
 		return 1;
 	}
 
@@ -526,9 +534,16 @@ static int LaunchNeutrinoIso(const char *iso_path, char *message, size_t message
 	args[0] = neutrino_arg0;
 	args[1] = dvd_arg;
 	args[2] = cwd_arg;
+	option_argc = buildNeutrinoOptionArgs(&options, &option_args);
+	if (option_argc < 0) {
+		snprintf(message, message_size, "%s.", LNG(Failed));
+		return 1;
+	}
+	for (i = 0; i < option_argc; i++)
+		args[argc++] = option_args.argv[i];
 
 	CleanUpForExec();
-	RunLoaderElfWithArgs(neutrino_fullpath, neutrino_party, 3, args, 0);
+	RunLoaderElfWithArgs(neutrino_fullpath, neutrino_party, argc, args, 0);
 	return 1;
 }
 

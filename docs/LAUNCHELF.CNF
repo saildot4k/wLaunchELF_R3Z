@@ -229,8 +229,8 @@ Hide_Hdd = 5
 # ----------------------------------------------------------------------
 # Disable automatic disc-image launching through each supported loader.
 # These can be changed from the "Advanced Settings" submenu.
-# 0 => NO, support enabled (default if omitted)
-# 1 => YES, support disabled in FileBrowser and saved launch keys
+# 0 => OFF, support enabled (default if omitted)
+# 1 => ON, support disabled in FileBrowser and saved launch keys
 # EMBER handles BIN/CUE, POPSTARTER handles VCD, and NEUTRINO handles ISO.
 # The image files remain available for normal file operations.
 # ----------------------------------------------------------------------
@@ -329,9 +329,12 @@ FONT_FILE =
 POPSTARTER_ELF =
 # ----------------------------------------------------------------------
 # NEUTRINO_ELF is required to launch ISO files through Neutrino. There is
-# no default path. When set, pressing OK on an .ISO file launches this ELF
-# with -dvd=<ISO path>. This can be changed from the "Startup Settings"
-# submenu.
+# no default path. Selecting an .ISO opens the Neutrino launch-options
+# screen for game compatibility, video mode/compatibility, debug colors,
+# and the PS2 logo. Run passes these options with -dvd=<ISO path> and
+# -cwd=<Neutrino directory>; Cancel aborts the launch. These choices reset
+# for each launch and are never saved. The ELF path can be changed from
+# the "Startup Settings" submenu.
 # ----------------------------------------------------------------------
 NEUTRINO_ELF =
 # From v3.92 Two options for PSU gamesave files are saved here.

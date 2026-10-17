@@ -52,6 +52,12 @@ Drivers load on demand for maximum compatibility and initial boot speed.
   - Sort order: Manual, A-Z, Z-A, SAS Timestamps (should ignore game saves)
 
 
+### Neutrino ISO launch options
+
+Selecting an ISO opens a launch-options screen with game compatibility toggles, Video Mode and Video Compatibility selectors, Debug Colors, and PS2 Logo. Use Left/Right to cycle the two video settings, then choose Run or Cancel. Choices reset each time and are never saved.
+
+Configure the Neutrino ELF path in Startup Settings. Supported compatibility modes are 0, 2, 3, 5, and 7; mode 1 is Neutrino's dummy entry and is omitted. The available arguments follow [Neutrino's usage documentation](https://github.com/ps2max32/neutrino#usage-instructions).
+
 ### LaunchELF with Args
 
 <details>
