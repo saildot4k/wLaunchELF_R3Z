@@ -571,6 +571,58 @@ void RunLoaderMemory(const char *arg0, const char *mem_arg, int reboot_iop)
 //--------------------------------------------------------------
 //End of func:  void RunLoaderMemory(const char *arg0, const char *mem_arg, int reboot_iop)
 //--------------------------------------------------------------
+void RunLoaderElfWithArgs(char *filename, char *party, int app_argc, char *app_argv[], int reboot_iop_elf_load)
+{
+#define ELFLOAD_CUSTOM_ARGC_MAX 8
+	char *argv[ELFLOAD_CUSTOM_ARGC_MAX + 2];
+	static char loader_path[MAX_PATH];
+	static char loader_arg[8];
+	int i;
+#ifdef DVRP
+	int dvr_pfs_ix = -1;
+	char dvr_pfs_name[10] = "dvr_pfs0:";
+#endif
+
+	if (filename == NULL || filename[0] == '\0' || app_argc < 1 ||
+	    app_argc > ELFLOAD_CUSTOM_ARGC_MAX || app_argv == NULL)
+		return;
+
+	snprintf(loader_path, sizeof(loader_path), "%s", filename);
+
+#ifdef DVRP
+	dvr_pfs_ix = (party != NULL) ? getDVRPPartyMountIndex(party) : -1;
+	if (dvr_pfs_ix >= 0)
+		dvr_pfs_name[7] = '0' + dvr_pfs_ix;
+#endif
+
+	if (party != NULL && isHddPartyPath(party) && !strncmp(filename, "pfs0:", 5)) {
+		if (0 > fileXioMount("pfs0:", party, FIO_MT_RDONLY)) {
+			unmountParty(0);
+			if (0 > fileXioMount("pfs0:", party, FIO_MT_RDONLY))
+				return;
+		}
+#ifdef DVRP
+	} else if (dvr_pfs_ix >= 0 && !strncmp(filename, dvr_pfs_name, 9)) {
+		if (0 > fileXioMount(dvr_pfs_name, party, FIO_MT_RDONLY)) {
+			unmountDVRPParty(dvr_pfs_ix);
+			if (0 > fileXioMount(dvr_pfs_name, party, FIO_MT_RDONLY))
+				return;
+		}
+#endif
+	}
+
+	for (i = 0; i < app_argc; i++)
+		argv[i] = app_argv[i];
+
+	argv[app_argc] = loader_path;
+	snprintf(loader_arg, sizeof(loader_arg), "%s", (reboot_iop_elf_load) ? "-la=ER" : "-la=E");
+	argv[app_argc + 1] = loader_arg;
+
+	RunEmbeddedLoader(app_argc + 2, argv);
+}
+//--------------------------------------------------------------
+//End of func:  void RunLoaderElfWithArgs(char *filename, char *party, int app_argc, char *app_argv[], int reboot_iop_elf_load)
+//--------------------------------------------------------------
 #ifdef XFROM
 static int isElfPayload(const u8 *payload, int payload_size)
 {
@@ -712,12 +764,15 @@ int PrepareMbrLaunchPayload(const char *path, char *mem_arg, size_t mem_arg_size
 // Modified version of loader from Independence
 //	(C) 2003 Marcus R. Brown <mrbrown@0xd6.org>
 //------------------------------
-void RunLoaderElf(char *filename, char *party, const char *selected_path, int exec_kind, int reboot_iop_elf_load)
+void RunLoaderElfWithArg0(char *filename, char *party, const char *selected_path,
+                          const char *arg0_path, int exec_kind, int reboot_iop_elf_load)
 {
 	char *argv[ELFLOAD_MAX_ARGC], bootpath[256];
 	static char exec_target[MAX_PATH];
 	static char exec_arg0[MAX_PATH];
+	static char explicit_arg0[MAX_PATH];
 	static char loader_arg[12];
+	const char *normalized_path = NULL;
 	const char *handoff_path = NULL;
 	int argc;
 	int cleanup_hdd_launch;
@@ -727,11 +782,16 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 #endif
 
 	if (selected_path != NULL && selected_path[0] != '\0')
-		handoff_path = normalizeExecArg0Path(selected_path, exec_arg0, sizeof(exec_arg0));
+		normalized_path = normalizeExecArg0Path(selected_path, exec_arg0, sizeof(exec_arg0));
+	if (arg0_path != NULL && arg0_path[0] != '\0') {
+		snprintf(explicit_arg0, sizeof(explicit_arg0), "%s", arg0_path);
+		handoff_path = explicit_arg0;
+	} else
+		handoff_path = normalized_path;
 	snprintf(exec_target, sizeof(exec_target), "%s", filename);
 	cleanup_hdd_launch = isHddPartyPath(party);
-	if (exec_kind == 1 && handoff_path != NULL && !strncmp(handoff_path, "mass", 4))
-		snprintf(exec_target, sizeof(exec_target), "%s", handoff_path);
+	if (exec_kind == 1 && normalized_path != NULL && !strncmp(normalized_path, "mass", 4))
+		snprintf(exec_target, sizeof(exec_target), "%s", normalized_path);
 	DPRINTF("RunLoaderElf: exec_kind=%d reboot_iop=%d target='%s' handoff='%s' party='%s'\n",
 	        exec_kind, reboot_iop_elf_load, filename,
 	        (handoff_path != NULL) ? handoff_path : "",
@@ -803,6 +863,13 @@ void RunLoaderElf(char *filename, char *party, const char *selected_path, int ex
 	DPRINTF("RunLoaderElf: loader mode arg='%s' argc=%d\n", loader_arg, argc);
 
 	RunEmbeddedLoader(argc, argv);
+}
+//------------------------------
+//End of func:  void RunLoaderElfWithArg0(char *filename, char *party, const char *selected_path, const char *arg0_path, int exec_kind, int reboot_iop_elf_load)
+//--------------------------------------------------------------
+void RunLoaderElf(char *filename, char *party, const char *selected_path, int exec_kind, int reboot_iop_elf_load)
+{
+	RunLoaderElfWithArg0(filename, party, selected_path, NULL, exec_kind, reboot_iop_elf_load);
 }
 //------------------------------
 //End of func:  void RunLoaderElf(char *filename, char *party, const char *selected_path, int exec_kind, int reboot_iop_elf_load)

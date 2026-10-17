@@ -76,7 +76,11 @@ int IsSupportedFileType(char *path)
 		if (genCmpFileExt(path, "ELF") || genCmpFileExt(path, "XLF") || genCmpFileExt(path, "KELF"))
 			return (checkELFheader(path) >= 0);
 		if (IsPopstarterVcdPath(path))
-			return 1;
+			return !setting->disable_popstarter;
+		if (genCmpFileExt(path, "ISO"))
+			return !setting->disable_neutrino;
+		if (IsEmberDiscImagePath(path))
+			return !setting->disable_ember;
 		if (IsTextEditorFileType(path))
 			return 1;
 		return 0;

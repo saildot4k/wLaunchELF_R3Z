@@ -216,7 +216,7 @@ Init_Delay = 0
 VirtualKeyboardLayout = qwerty
 # ----------------------------------------------------------------------
 # Hide_Hdd controls which HDD/ATA root devices are hidden in FileBrowser.
-# This can be changed from the "Startup Settings" submenu. Values are:
+# This can be changed from the "Advanced Settings" submenu. Values are:
 # 0 => Show All
 # 1 => hide hdd1
 # 2 => hide hdd0 and hdd1
@@ -226,6 +226,17 @@ VirtualKeyboardLayout = qwerty
 # 6 => hide hdd0, hdd1, ata0, and ata1
 # ----------------------------------------------------------------------
 Hide_Hdd = 5
+# ----------------------------------------------------------------------
+# Disable automatic disc-image launching through each supported loader.
+# These can be changed from the "Advanced Settings" submenu.
+# 0 => OFF, support enabled (default if omitted)
+# 1 => ON, support disabled in FileBrowser and saved launch keys
+# EMBER handles BIN/CUE, POPSTARTER handles VCD, and NEUTRINO handles ISO.
+# The image files remain available for normal file operations.
+# ----------------------------------------------------------------------
+Disable_EMBER = 0
+Disable_POPSTARTER = 0
+Disable_NEUTRINO = 0
 # ----------------------------------------------------------------------
 # Hide_MCMMCE controls whether FileBrowser hides mc0/mc1 and mmce0/mmce1
 # when their matching memory card slot is not detected. This is a
@@ -316,6 +327,16 @@ FONT_FILE =
 # This can be changed from the "Startup Settings" submenu.
 # ----------------------------------------------------------------------
 POPSTARTER_ELF =
+# ----------------------------------------------------------------------
+# NEUTRINO_ELF is required to launch ISO files through Neutrino. There is
+# no default path. Selecting an .ISO opens the Neutrino launch-options
+# screen for game compatibility, video mode/compatibility, debug colors,
+# and the PS2 logo. Run passes these options with -dvd=<ISO path> and
+# -cwd=<Neutrino directory>; Cancel aborts the launch. These choices reset
+# for each launch and are never saved. The ELF path can be changed from
+# the "Startup Settings" submenu.
+# ----------------------------------------------------------------------
+NEUTRINO_ELF =
 # From v3.92 Two options for PSU gamesave files are saved here.
 # Set PSU_HugeNames non-zero to make PSU names contain both original
 # gamesave folder names and the gamesave titles (from icon.sys).

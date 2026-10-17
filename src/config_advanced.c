@@ -13,12 +13,40 @@ enum CONFIG_ADVANCED {
 	CONFIG_ADVANCED_PATHPAD_LOCK,
 	CONFIG_ADVANCED_FB_NOICONS,
 	CONFIG_ADVANCED_HOSTWRITE,
+	CONFIG_ADVANCED_HIDE_HDD,
+	CONFIG_ADVANCED_DISABLE_EMBER,
+	CONFIG_ADVANCED_DISABLE_POPSTARTER,
+	CONFIG_ADVANCED_DISABLE_NEUTRINO,
 
 	CONFIG_ADVANCED_AFT_OPTIONS,
 	CONFIG_ADVANCED_RETURN = CONFIG_ADVANCED_AFT_OPTIONS,
 
 	CONFIG_ADVANCED_COUNT
 };
+
+static int normalizeHideHddMode(int mode)
+{
+	while (mode < 0)
+		mode += HIDE_HDD_COUNT;
+	while (mode >= HIDE_HDD_COUNT)
+		mode -= HIDE_HDD_COUNT;
+	return mode;
+}
+
+static const char *hide_hdd_mode_names[HIDE_HDD_COUNT] = {
+	"Show All",
+	"hdd1",
+	"hdd0/1",
+	"ata1",
+	"ata0/1",
+	"hdd1 & ata1",
+	"hdd0/1 & ata0/1",
+};
+
+static const char *getHideHddModeDisplayName(int mode)
+{
+	return hide_hdd_mode_names[normalizeHideHddMode(mode)];
+}
 
 static int getConfigAdvancedItemY(int s)
 {
@@ -30,7 +58,8 @@ static int getConfigAdvancedItemY(int s)
 
 	for (i = CONFIG_ADVANCED_APP_GAMEID; i < s; i++) {
 		y += FONT_HEIGHT;
-		if (i != CONFIG_ADVANCED_APP_GAMEID && i != CONFIG_ADVANCED_PSU_HUGENAMES && i != CONFIG_ADVANCED_PSU_DATENAMES)
+		if (i != CONFIG_ADVANCED_APP_GAMEID && i != CONFIG_ADVANCED_PSU_HUGENAMES && i != CONFIG_ADVANCED_PSU_DATENAMES &&
+		    i != CONFIG_ADVANCED_DISABLE_EMBER && i != CONFIG_ADVANCED_DISABLE_POPSTARTER)
 			y += FONT_HEIGHT / 2;
 	}
 
@@ -53,6 +82,10 @@ void Config_Advanced(void)
 	const char *psu_nooverwrite_label = LNG(Create_New_PSU_if_filename_exists);
 	const char *pathpad_lock_label = LNG(Lock_Main_LaunchKey_PathPad_Paths);
 	const char *fb_noicons_label = LNG(Disable_Icons_in_File_Browser);
+	const char *hide_hdd_label = "Hide HDD";
+	const char *disable_ember_label = "Disable EMBER support";
+	const char *disable_popstarter_label = "Disable POPSTARTER support";
+	const char *disable_neutrino_label = "Disable NEUTRINO support";
 
 	event = 1;
 	s = CONFIG_ADVANCED_FIRST;
@@ -83,9 +116,11 @@ void Config_Advanced(void)
 						s = max_s;
 					else
 						s = CONFIG_ADVANCED_FIRST;
-				} else if ((new_pad & PAD_CROSS) || (new_pad & PAD_CIRCLE)) {
+				} else if ((!swapKeys && new_pad & PAD_CROSS) || (swapKeys && new_pad & PAD_CIRCLE)) {
 					event |= 2;
-					if (s == CONFIG_ADVANCED_APP_GAMEID)
+					if (s == CONFIG_ADVANCED_HIDE_HDD)
+						setting->Hide_Hdd = normalizeHideHddMode(setting->Hide_Hdd - 1);
+					else if (s == CONFIG_ADVANCED_APP_GAMEID)
 						setting->app_gameid = !setting->app_gameid;
 					else if (s == CONFIG_ADVANCED_CDROM_DISABLE_GAMEID)
 						setting->cdrom_disable_gameid = !setting->cdrom_disable_gameid;
@@ -105,11 +140,49 @@ void Config_Advanced(void)
 						setting->FB_NoIcons = !setting->FB_NoIcons;
 					else if (s == CONFIG_ADVANCED_HOSTWRITE)
 						setting->HOSTwrite = !setting->HOSTwrite;
+					else if (s == CONFIG_ADVANCED_DISABLE_EMBER)
+						setting->disable_ember = !setting->disable_ember;
+					else if (s == CONFIG_ADVANCED_DISABLE_POPSTARTER)
+						setting->disable_popstarter = !setting->disable_popstarter;
+					else if (s == CONFIG_ADVANCED_DISABLE_NEUTRINO)
+						setting->disable_neutrino = !setting->disable_neutrino;
+					else if (s == CONFIG_ADVANCED_RETURN)
+						return;
+				} else if ((swapKeys && new_pad & PAD_CROSS) || (!swapKeys && new_pad & PAD_CIRCLE)) {
+					event |= 2;
+					if (s == CONFIG_ADVANCED_HIDE_HDD)
+						setting->Hide_Hdd = normalizeHideHddMode(setting->Hide_Hdd + 1);
+					else if (s == CONFIG_ADVANCED_APP_GAMEID)
+						setting->app_gameid = !setting->app_gameid;
+					else if (s == CONFIG_ADVANCED_CDROM_DISABLE_GAMEID)
+						setting->cdrom_disable_gameid = !setting->cdrom_disable_gameid;
+					else if (s == CONFIG_ADVANCED_PSU_HUGENAMES)
+						setting->PSU_HugeNames = !setting->PSU_HugeNames;
+					else if (s == CONFIG_ADVANCED_PSU_DATENAMES) {
+						setting->PSU_DateNames = !setting->PSU_DateNames;
+						if (!setting->PSU_DateNames)
+							setting->PSU_NoOverwrite = 0;
+					} else if (s == CONFIG_ADVANCED_PSU_NOOVERWRITE) {
+						setting->PSU_NoOverwrite = !setting->PSU_NoOverwrite;
+						if (setting->PSU_NoOverwrite)
+							setting->PSU_DateNames = 1;
+					} else if (s == CONFIG_ADVANCED_PATHPAD_LOCK)
+						setting->PathPad_Lock = !setting->PathPad_Lock;
+					else if (s == CONFIG_ADVANCED_FB_NOICONS)
+						setting->FB_NoIcons = !setting->FB_NoIcons;
+					else if (s == CONFIG_ADVANCED_HOSTWRITE)
+						setting->HOSTwrite = !setting->HOSTwrite;
+					else if (s == CONFIG_ADVANCED_DISABLE_EMBER)
+						setting->disable_ember = !setting->disable_ember;
+					else if (s == CONFIG_ADVANCED_DISABLE_POPSTARTER)
+						setting->disable_popstarter = !setting->disable_popstarter;
+					else if (s == CONFIG_ADVANCED_DISABLE_NEUTRINO)
+						setting->disable_neutrino = !setting->disable_neutrino;
 					else if (s == CONFIG_ADVANCED_RETURN)
 						return;
 				} else if (new_pad & PAD_TRIANGLE)
 					return;
-			}
+				}
 
 		if (event || post_event) {
 			clrScr(setting->color[COLOR_BACKGR]);
@@ -136,6 +209,14 @@ void Config_Advanced(void)
 				bool_label_width = (int)strlen(fb_noicons_label);
 			if ((int)strlen(hostwrite_label) > bool_label_width)
 				bool_label_width = (int)strlen(hostwrite_label);
+			if ((int)strlen(hide_hdd_label) > bool_label_width)
+				bool_label_width = (int)strlen(hide_hdd_label);
+			if ((int)strlen(disable_ember_label) > bool_label_width)
+				bool_label_width = (int)strlen(disable_ember_label);
+			if ((int)strlen(disable_popstarter_label) > bool_label_width)
+				bool_label_width = (int)strlen(disable_popstarter_label);
+			if ((int)strlen(disable_neutrino_label) > bool_label_width)
+				bool_label_width = (int)strlen(disable_neutrino_label);
 
 			printXY(LNG(Advanced_Settings), x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
@@ -178,31 +259,60 @@ void Config_Advanced(void)
 				y += FONT_HEIGHT;
 				y += FONT_HEIGHT / 2;
 
+				configFormatLabelValueAligned(c, sizeof(c), hide_hdd_label, getHideHddModeDisplayName(setting->Hide_Hdd), bool_label_width);
+				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
+				y += FONT_HEIGHT;
+				y += FONT_HEIGHT / 2;
+
+				configFormatLabelValueAligned(c, sizeof(c), disable_ember_label, setting->disable_ember ? LNG(ON) : LNG(OFF), bool_label_width);
+				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
+				y += FONT_HEIGHT;
+
+				configFormatLabelValueAligned(c, sizeof(c), disable_popstarter_label, setting->disable_popstarter ? LNG(ON) : LNG(OFF), bool_label_width);
+				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
+				y += FONT_HEIGHT;
+
+				configFormatLabelValueAligned(c, sizeof(c), disable_neutrino_label, setting->disable_neutrino ? LNG(ON) : LNG(OFF), bool_label_width);
+				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
+				y += FONT_HEIGHT;
+				y += FONT_HEIGHT / 2;
+
 				sprintf(c, "  %s", LNG(RETURN));
 				printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 
 				y = getConfigAdvancedItemY(s);
 				drawChar(LEFT_CUR, x, y, setting->color[COLOR_TEXT]);
 
-				if (s < CONFIG_ADVANCED_AFT_OPTIONS) {
-				if (swapKeys)
-					len = sprintf(c, "\xFF"
-					                 "1:%s",
-					              LNG(Change));
-				else
-					len = sprintf(c, "\xFF"
-					                 "0:%s",
-					              LNG(Change));
-			} else {
-				if (swapKeys)
-					len = sprintf(c, "\xFF"
-					                 "1:%s",
-					              LNG(OK));
-				else
-					len = sprintf(c, "\xFF"
-					                 "0:%s",
-					              LNG(OK));
-			}
+				if (s == CONFIG_ADVANCED_HIDE_HDD) {
+					if (swapKeys)
+						len = sprintf(c, "\xFF"
+						                 "1:%s \xFF"
+						                 "0:%s",
+						              LNG(Add), LNG(Subtract));
+					else
+						len = sprintf(c, "\xFF"
+						                 "0:%s \xFF"
+						                 "1:%s",
+						              LNG(Add), LNG(Subtract));
+				} else if (s < CONFIG_ADVANCED_AFT_OPTIONS) {
+					if (swapKeys)
+						len = sprintf(c, "\xFF"
+						                 "1:%s",
+						              LNG(Change));
+					else
+						len = sprintf(c, "\xFF"
+						                 "0:%s",
+						              LNG(Change));
+					} else {
+						if (swapKeys)
+							len = sprintf(c, "\xFF"
+							                 "1:%s",
+							              LNG(OK));
+						else
+							len = sprintf(c, "\xFF"
+							                 "0:%s",
+							              LNG(OK));
+					}
 			sprintf(&c[len], " \xFF"
 			                 "3:%s",
 			        LNG(Return));

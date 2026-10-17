@@ -28,7 +28,6 @@ enum {
 	GETSIZE,
 	OPEN_TEXTEDITOR,
 	LAUNCH_ELF_ARGS,
-	TIMEMANIP,
 	TIMEMANIP_CUSTOM,
 	TITLE_CFG,
 	NUM_MENU
@@ -64,10 +63,28 @@ extern u64 PasteTime;
 extern int PSU_content;
 extern int fileMode;
 
+enum {
+	FILE_SHOW_NAME = 0,
+	FILE_SHOW_NAME_DETAILS = 1,
+	FILE_SHOW_TITLE_DETAILS = 2,
+	FILE_SHOW_TITLE = 3
+};
+
 extern int file_show;
 extern int file_sort;
+extern int file_sort_descending;
 extern int size_valid;
 extern int time_valid;
+
+static inline int fileShowTitles(void)
+{
+	return file_show == FILE_SHOW_TITLE || file_show == FILE_SHOW_TITLE_DETAILS;
+}
+
+static inline int fileShowDetails(void)
+{
+	return file_show == FILE_SHOW_NAME_DETAILS || file_show == FILE_SHOW_TITLE_DETAILS;
+}
 
 extern char cnfmode_extU[CNFMODE_CNT][4];
 extern char cnfmode_extL[CNFMODE_CNT][4];

@@ -20,36 +20,12 @@ enum CONFIG_STARTUP {
 	CONFIG_STARTUP_ESR,
 	CONFIG_STARTUP_OSDSYS,
 	CONFIG_STARTUP_POPSTARTER,
-	CONFIG_STARTUP_HIDE_HDD,
+	CONFIG_STARTUP_NEUTRINO,
 
 	CONFIG_STARTUP_RETURN,
 
 	CONFIG_STARTUP_COUNT
 };
-
-static int normalizeHideHddMode(int mode)
-{
-	while (mode < 0)
-		mode += HIDE_HDD_COUNT;
-	while (mode >= HIDE_HDD_COUNT)
-		mode -= HIDE_HDD_COUNT;
-	return mode;
-}
-
-static const char *hide_hdd_mode_names[HIDE_HDD_COUNT] = {
-	"Show All",
-	"hdd1",
-	"hdd0/1",
-	"ata1",
-	"ata0/1",
-	"hdd1 & ata1",
-	"hdd0/1 & ata0/1",
-};
-
-static const char *getHideHddModeDisplayName(int mode)
-{
-	return hide_hdd_mode_names[normalizeHideHddMode(mode)];
-}
 
 static int getConfigStartupItemY(int s)
 {
@@ -61,7 +37,7 @@ static int getConfigStartupItemY(int s)
 
 	for (i = CONFIG_STARTUP_FIRST; i < s; i++) {
 		y += FONT_HEIGHT;
-		if (i == CONFIG_STARTUP_RESET_IOP_ELFLOAD || i == CONFIG_STARTUP_KBDMAP || i == CONFIG_STARTUP_POPSTARTER || i == CONFIG_STARTUP_HIDE_HDD)
+		if (i == CONFIG_STARTUP_RESET_IOP_ELFLOAD || i == CONFIG_STARTUP_KBDMAP || i == CONFIG_STARTUP_NEUTRINO)
 			y += FONT_HEIGHT / 2;
 	}
 
@@ -137,8 +113,8 @@ void Config_Startup(void)
 						setting->LK_Flag[SETTING_LK_OSDSYS] = 0;
 					} else if (s == CONFIG_STARTUP_POPSTARTER)
 						setting->popstarter_file[0] = '\0';
-					else if (s == CONFIG_STARTUP_HIDE_HDD)
-						setting->Hide_Hdd = normalizeHideHddMode(setting->Hide_Hdd - 1);
+					else if (s == CONFIG_STARTUP_NEUTRINO)
+						setting->neutrino_file[0] = '\0';
 				} else if ((swapKeys && new_pad & PAD_CROSS) || (!swapKeys && new_pad & PAD_CIRCLE)) {
 					event |= 2;  //event |= valid pad command
 					if (s == CONFIG_STARTUP_LANGUAGE) {
@@ -197,8 +173,14 @@ void Config_Startup(void)
 							snprintf(c, sizeof(c), "mc%.*s", (int)sizeof(c) - 3, &setting->popstarter_file[3]);
 							strcpy(setting->popstarter_file, c);
 						}
-					} else if (s == CONFIG_STARTUP_HIDE_HDD)
-						setting->Hide_Hdd = normalizeHideHddMode(setting->Hide_Hdd + 1);
+					} else if (s == CONFIG_STARTUP_NEUTRINO) {
+						getFilePath(setting->neutrino_file, ELF_FILE_CNF);
+						if (!strncmp(setting->neutrino_file, "mc0", 3) ||
+						    !strncmp(setting->neutrino_file, "mc1", 3)) {
+							snprintf(c, sizeof(c), "mc%.*s", (int)sizeof(c) - 3, &setting->neutrino_file[3]);
+							strcpy(setting->neutrino_file, c);
+						}
+					}
 					else if (s == CONFIG_STARTUP_RETURN)
 						return;
 				} else if (new_pad & PAD_TRIANGLE)
@@ -287,13 +269,12 @@ void Config_Startup(void)
 			configFormatLabelValue(c, sizeof(c), "POPSTARTER ELF", (strlen(setting->popstarter_file) == 0) ? LNG(DEFAULT) : setting->popstarter_file);
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
-			y += FONT_HEIGHT / 2;
 
-			configFormatLabelValue(c, sizeof(c), "Hide HDD", getHideHddModeDisplayName(setting->Hide_Hdd));
+			configFormatLabelValue(c, sizeof(c), "NEUTRINO ELF", (strlen(setting->neutrino_file) == 0) ? LNG(NONE) : setting->neutrino_file);
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
-
 			y += FONT_HEIGHT / 2;
+
 			sprintf(c, "  %s", LNG(RETURN));
 			printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
 			y += FONT_HEIGHT;
@@ -313,7 +294,7 @@ void Config_Startup(void)
 					len = sprintf(c, "\xFF"
 					                 "0:%s",
 					              LNG(Change));
-			} else if ((s == CONFIG_STARTUP_LANGUAGE) || (s == CONFIG_STARTUP_INIT_DELAY) || (s == CONFIG_STARTUP_TIMEOUT) || (s == CONFIG_STARTUP_VKEY_LAYOUT) || (s == CONFIG_STARTUP_HIDE_HDD)) {  //language || Init_Delay || timeout || vkey layout || Hide HDD
+			} else if ((s == CONFIG_STARTUP_LANGUAGE) || (s == CONFIG_STARTUP_INIT_DELAY) || (s == CONFIG_STARTUP_TIMEOUT) || (s == CONFIG_STARTUP_VKEY_LAYOUT)) {  //language || Init_Delay || timeout || vkey layout
 				if (swapKeys)
 					len = sprintf(c, "\xFF"
 					                 "1:%s \xFF"
@@ -326,8 +307,8 @@ void Config_Startup(void)
 					              LNG(Add), LNG(Subtract));
 			} else if ((s == CONFIG_STARTUP_USBKBD) || (s == CONFIG_STARTUP_KBDMAP) || (s == CONFIG_STARTUP_CNF)
 			           //usbkbd_file||kbdmap_file||CNF_Path
-			           //Language||Fontfile||ESR_elf||OSDSYS_kelf||POPSTARTER_ELF
-			           || (s == CONFIG_STARTUP_LANG_FILE) || (s == CONFIG_STARTUP_FONT) || (s == CONFIG_STARTUP_ESR) || (s == CONFIG_STARTUP_OSDSYS) || (s == CONFIG_STARTUP_POPSTARTER)) {
+			           //Language||Fontfile||ESR_elf||OSDSYS_kelf||POPSTARTER_ELF||NEUTRINO_ELF
+			           || (s == CONFIG_STARTUP_LANG_FILE) || (s == CONFIG_STARTUP_FONT) || (s == CONFIG_STARTUP_ESR) || (s == CONFIG_STARTUP_OSDSYS) || (s == CONFIG_STARTUP_POPSTARTER) || (s == CONFIG_STARTUP_NEUTRINO)) {
 				if (swapKeys)
 					len = sprintf(c, "\xFF"
 					                 "1:%s \xFF"

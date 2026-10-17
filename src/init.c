@@ -254,6 +254,7 @@ static void resetUsbMassScanState(void);
 static void resetUsbMassRuntimeState(void);
 static void resetDriverStackLoadTracking(void);
 static void resetRuntimeDeviceState(int show_status);
+static int loadDeviceStackForPath(const char *path);
 static void switchStorageDriverStack(int target_mode);
 static void switchBlockStorageStack(int target_mode);
 #if defined(ETH) && defined(UDPFS)
@@ -1460,6 +1461,94 @@ void rebootIopAndReloadCoreStack(void)
 void rebootIopAndReloadCoreStackSilent(void)
 {
 	resetRuntimeDeviceState(FALSE);
+}
+
+static int loadDeviceStackForPath(const char *path)
+{
+	if (path == NULL || path[0] == '\0')
+		return 0;
+
+	if (!strncmp(path, "mc", 2))
+		return 1;
+	if (!strncmp(path, "vmc", 3))
+		return load_vmcman();
+	if (!strncmp(path, "cdfs", 4)) {
+		loadCdModules();
+		return 1;
+	}
+#ifdef XFROM
+	if (!strncmp(path, "xfrom", 5))
+		return loadFlashModules();
+#else
+	if (!strncmp(path, "xfrom", 5))
+		return 0;
+#endif
+#ifdef DVRP
+	if (!strncmp(path, "dvr_hdd0:", 9))
+		return loadDVRPHddModules();
+#else
+	if (!strncmp(path, "dvr_hdd0:", 9))
+		return 0;
+#endif
+	if ((!strncmp(path, "hdd", 3) && path[3] >= '0' && path[3] <= '9' && path[4] == ':') ||
+	    (!strncmp(path, "pfs", 3) && path[3] >= '0' && path[3] <= '9' && path[4] == ':'))
+		return loadHddModules();
+	if (!strncmp(path, "mass", 4) || !strncmp(path, "usb", 3)) {
+		loadUsbModules();
+		return (USB_mass_loaded != 0);
+	}
+#ifdef MMCE
+	if (!strncmp(path, "mmce", 4))
+		return loadMmceModules();
+#else
+	if (!strncmp(path, "mmce", 4))
+		return 0;
+#endif
+#ifdef MX4SIO
+	if (!strncmp(path, "mx4sio", 6))
+		return loadMx4sioModules();
+#else
+	if (!strncmp(path, "mx4sio", 6))
+		return 0;
+#endif
+#ifdef EXFAT
+	if (!strncmp(path, "ata", 3))
+		return loadAtaModules();
+#else
+	if (!strncmp(path, "ata", 3))
+		return 0;
+#endif
+#ifdef ETH
+	if (!strncmp(path, "host:", 5)) {
+		initHOST();
+		return 1;
+	}
+#else
+	if (!strncmp(path, "host:", 5))
+		return 0;
+#endif
+#ifdef UDPFS
+	if (!strncmp(path, "udpfs:", 6))
+		return load_udpfs();
+#else
+	if (!strncmp(path, "udpfs:", 6))
+		return 0;
+#endif
+
+	return 1;
+}
+
+int rebootIopAndLoadDeviceStackForPath(const char *path)
+{
+#ifdef DS34
+	stopDs34Input();
+#endif
+	closeKeyboardIfOpened();
+	showRebootingIopMsg();
+	unmountAll();
+	Reset();
+	setupPad();
+	return loadDeviceStackForPath(path);
 }
 
 void ensureMemoryCardPortAccessible(int port)
