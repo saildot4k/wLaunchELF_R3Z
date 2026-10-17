@@ -11,7 +11,7 @@ wLaunchELF, formerly known as uLaunchELF, also known as wLE or uLE (abbreviated)
 | __mx4sio:/__[^1] | SD card interface over memory card port. | Always |
 | __hdd:/__[^2] | APA formatted internal HDD | Hidden on deckard |
 | __ata:/__[^2] | BDM hard drive, exFAT for now till more are supported | Hiddon on deckard |
-| __xfrom:/__ | PSX DESR-XXXX flash storage | Hidden on non-PSX |
+| __xfrom0:/__ | PSX DESR-XXXX flash storage | Hidden on non-PSX |
 | __dvr_hdd0:/__ | PSX DESR-XXXX digital video recorder hdd partition/side | Hidden on non-PSX |
 | __cdfs:/__ | CD/DVD File System | Always |
 | __udpfs:/__ | Network interface used with [PCM720s UDPFSD Server](https://github.com/pcm720/udpfsd) | Always |
@@ -51,6 +51,12 @@ Drivers load on demand for maximum compatibility and initial boot speed.
 - Organize OSDSYS/HOSDSYS MC/HDD browser by altering timestamps on root of memcard and `hdd0:__common:pfs:/*`
   - Sort order: Manual, A-Z, Z-A, SAS Timestamps (should ignore game saves)
 
+
+### Neutrino ISO launch options
+
+Selecting an ISO opens a launch-options screen with game compatibility toggles, Video Mode and Video Compatibility selectors, Debug Colors, and PS2 Logo. Use Left/Right to cycle the two video settings, then choose Run or Cancel. Choices reset each time and are never saved.
+
+Configure the Neutrino ELF path in Startup Settings. Supported compatibility modes are 0, 2, 3, 5, and 7; mode 1 is Neutrino's dummy entry and is omitted. The available arguments follow [Neutrino's usage documentation](https://github.com/ps2max32/neutrino#usage-instructions).
 
 ### LaunchELF with Args
 

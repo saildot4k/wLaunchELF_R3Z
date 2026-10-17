@@ -1,4 +1,4 @@
-uLE now has 3 different display modes, as follows:
+uLE has 4 different display modes, as follows:
 
 Display mode 0 == Filenames only
 The full screen width is used to display the file/folder names, thus allowing quite long names to be fully displayed, but at cost of not being able to show other file info. This is identical to the traditional filename display mode of older uLE versions.
@@ -9,6 +9,17 @@ This new mode uses a little more than half the screen width to display file/fold
 Display mode 2 == Game Titles and Info
 This new mode is similar to mode 1 in how it uses the screen, except that it displays gamesave titles instead of filenames (when titles are available). Since such titles are always limited to max 32 characters there will be no space conflict (except possibly for files that don't have any titles). Gamesave titles will be displayed correctly for PS1 gamesave files, PS2 gamesave folders, and PSU gamesave backup files, and regardless of the media any of these are stored on.
 
+
+Display mode 3 == Game Titles only
+This mode displays gamesave titles when available, falling back to filenames. It uses the full screen width without file sizes or timestamps.
+
+Open the L1 mode menu to change how content is shown:
+
+- Circle: Select Filename; press again to toggle Filename + Details.
+- Square: Select Game Title; press again to toggle Game Title + Details.
+
+The selected display row shows whether details are enabled. Cross has no display-mode action.
+In either details mode, the device selection screen shows device descriptions instead of sizes and timestamps. MISC/ has no description, and its command list has no file details.
 
 The FileBrowser has four sort criteria. Open the L1 mode menu to select one:
 

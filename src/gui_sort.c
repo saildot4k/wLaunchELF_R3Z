@@ -24,7 +24,7 @@ int cmpFile(FILEINFO *a, FILEINFO *b)
 				return 1;
 		}
 		if (file_sort == 3) {
-			t = (file_show == 2);
+			t = fileShowTitles();
 			if (time_valid) {
 				u64 time_a = *(u64 *)&a->stats._Modify;
 				u64 time_b = *(u64 *)&b->stats._Modify;

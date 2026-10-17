@@ -284,6 +284,7 @@ typedef struct
 	char lang_file[MAX_PATH];
 	char font_file[MAX_PATH];
 	char popstarter_file[MAX_PATH];
+	char neutrino_file[MAX_PATH];
 	int Menu_Frame;
 	int timeout;
 	int Hide_Paths;
@@ -302,6 +303,9 @@ typedef struct
 	int reboot_iop_elf_load;
 	int virtual_keyboard_layout;
 	int Hide_Hdd;
+	int disable_ember;
+	int disable_popstarter;
+	int disable_neutrino;
 	int Hide_MCMMCE;
 	int Show_Titles;
 	int PathPad_Lock;
@@ -391,6 +395,7 @@ int loadAtaModules(void);
 /* elf.c */
 int checkELFheader(char *filename);
 void RunLoaderElf(char *filename, char *party, const char *selected_path, int exec_kind, int reboot_iop_elf_load);
+void RunLoaderElfWithArgs(char *filename, char *party, int app_argc, char *app_argv[], int reboot_iop_elf_load);
 void RunLoaderElfWithArg0(char *filename, char *party, const char *selected_path,
                           const char *arg0_path, int exec_kind, int reboot_iop_elf_load);
 void RunLoaderMemory(const char *arg0, const char *mem_arg, int reboot_iop);
