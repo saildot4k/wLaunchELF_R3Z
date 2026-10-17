@@ -111,7 +111,7 @@ int showNeutrinoLaunchOptions(const char *iso_path, NEUTRINO_LAUNCH_OPTIONS *opt
 	char text[128];
 	int selection = 0, event = 1, post_event = 0;
 	int width = SCREEN_WIDTH - 2 * SCREEN_MARGIN;
-	int height = 16 * FONT_HEIGHT;
+	int height = 17 * FONT_HEIGHT;
 	int left = (SCREEN_WIDTH - width) / 2;
 	int top = (SCREEN_HEIGHT - height) / 2;
 	int x = left + 3 * FONT_WIDTH;
@@ -162,8 +162,6 @@ int showNeutrinoLaunchOptions(const char *iso_path, NEUTRINO_LAUNCH_OPTIONS *opt
 			snprintf(text, sizeof(text), "D-pad: %s  \xFF" "%c: %s  \xFF" "3: %s",
 			         LNG(Select), swapKeys ? '1' : '0', LNG(Change), LNG(Cancel));
 			setScrTmp(iso_path, text);
-			drawPopSprite(setting->color[COLOR_BACKGR], left, top, left + width, top + height);
-			drawFrame(left, top, left + width, top + height, setting->color[COLOR_FRAME]);
 			drawNeutrinoHeading("Game Compatibility", y);
 			for (i = 0; i < NEUTRINO_COMPAT_COUNT; i++) {
 				snprintf(text, sizeof(text), "[%c] %s",
@@ -180,8 +178,8 @@ int showNeutrinoLaunchOptions(const char *iso_path, NEUTRINO_LAUNCH_OPTIONS *opt
 			drawNeutrinoOption(text, NEUTRINO_DEBUG_COLORS, selection, x, y + 11 * FONT_HEIGHT);
 			snprintf(text, sizeof(text), "PS2 Logo: %s", options->logo ? LNG(YES) : LNG(NO));
 			drawNeutrinoOption(text, NEUTRINO_LOGO, selection, x, y + 12 * FONT_HEIGHT);
-			drawNeutrinoOption("Run", NEUTRINO_RUN, selection, x, y + 13 * FONT_HEIGHT);
-			drawNeutrinoOption(LNG(Cancel), NEUTRINO_CANCEL, selection, x, y + 14 * FONT_HEIGHT);
+			drawNeutrinoOption("Run", NEUTRINO_RUN, selection, x, y + 14 * FONT_HEIGHT);
+			drawNeutrinoOption(LNG(Cancel), NEUTRINO_CANCEL, selection, x, y + 15 * FONT_HEIGHT);
 		}
 		drawScr();
 		post_event = event;
