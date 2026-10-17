@@ -175,6 +175,7 @@ int showNeutrinoLaunchOptions(NEUTRINO_LAUNCH_OPTIONS *options)
 
 		if (event || post_event) {
 			clrScr(setting->color[COLOR_BACKGR]);
+			setScrTmp("", "");
 			drawPopSprite(setting->color[COLOR_BACKGR], left, top, left + width, top + height);
 			drawFrame(left, top, left + width, top + height, setting->color[COLOR_FRAME]);
 			drawNeutrinoHeading("Game Compatibility", y);
