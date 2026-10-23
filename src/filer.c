@@ -108,7 +108,7 @@ char cnfmode_extU[CNFMODE_CNT][4] = {
     "",     // cnfmode DIR_CNF
     "IRX",  // cnfmode USBMASS_IRX_CNF
     "LNG",  // cnfmode LANG_CNF
-    "FNT",  // cnfmode FONT_CNF
+    "TTF",  // cnfmode FONT_CNF
     "*",    // cnfmode SAVE_CNF
     "ELF"   // cnfmode ELF_FILE_CNF
 };
@@ -124,7 +124,7 @@ char cnfmode_extL[CNFMODE_CNT][4] = {
     "",     // cnfmode DIR_CNF
     "irx",  // cnfmode USBMASS_IRX_CNF
     "lng",  // cnfmode LANG_CNF
-    "fnt",  // cnfmode FONT_CNF
+    "ttf",  // cnfmode FONT_CNF
     "*",    // cnfmode SAVE_CNF
     "elf"   // cnfmode ELF_FILE_CNF
 };

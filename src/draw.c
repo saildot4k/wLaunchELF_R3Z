@@ -86,7 +86,8 @@ static void drawMenuTitleLine(void)
 	sprintf(app_title, "\xff\x34 wLaunchELF %s \xff\x34", ULE_VERSION);
 
 	drawSprite(setting->color[COLOR_BACKGR], 0, Menu_title_y - 1, SCREEN_WIDTH, Menu_message_y - 1);
-	printXY(app_title, x, y, setting->color[COLOR_FRAME], TRUE, 0);
+	drawSprite(setting->color[COLOR_SELECT], 0, Menu_title_y - 1, 3, Menu_message_y - 1);
+	printXY(app_title, x, y, setting->color[COLOR_SELECT], TRUE, 0);
 
 	menuTitleFormatClock(clock_title, sizeof(clock_title));
 	if (clock_title[0] != '\0')
@@ -230,19 +231,22 @@ void drawScr(void)
 //--------------------------------------------------------------
 void drawFrame(int x1, int y1, int x2, int y2, u64 color)
 {
+	int edge = 1;
+	int accent_end;
+	if (x2 <= x1 || y2 <= y1)
+		return;
 	updateScr_1 = 1;
-
-	//Top horizontal edge
-	gsKit_prim_sprite(gsGlobal, x1, y1, x2, y1 + LINE_THICKNESS - 1, 1, color);
-
-	//Bottom horizontal
-	gsKit_prim_sprite(gsGlobal, x1, y2 - LINE_THICKNESS + 1, x2, y2, 1, color);
-
-	//Left vertical edge
-	gsKit_prim_sprite(gsGlobal, x1, y1, x1 + LINE_THICKNESS - 1, y2, 1, color);
-
-	//Right vertical edge
-	gsKit_prim_sprite(gsGlobal, x2 - LINE_THICKNESS + 1, y1, x2, y2, 1, color);
+	gsKit_prim_sprite(gsGlobal, x1, y1, x2, y1 + edge, 1, color);
+	gsKit_prim_sprite(gsGlobal, x1, y2 - edge, x2, y2, 1, color);
+	gsKit_prim_sprite(gsGlobal, x1, y1, x1 + edge, y2, 1, color);
+	gsKit_prim_sprite(gsGlobal, x2 - edge, y1, x2, y2, 1, color);
+	if (setting != NULL && x2 - x1 > 36) {
+		accent_end = x1 + 34;
+		if (accent_end > x2 - 2)
+			accent_end = x2 - 2;
+		gsKit_prim_sprite(gsGlobal, x1 + 2, y1, accent_end, y1 + 1, 1,
+		                  setting->color[COLOR_SELECT]);
+	}
 }
 
 //--------------------------------------------------------------

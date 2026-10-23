@@ -167,7 +167,7 @@ enum {                // cnfmode values for getFilePath in browsing for configur
 	DIR_CNF,          // Directory choice
 	USBMASS_IRX_CNF,  // USB_MASS.IRX choice for startup
 	LANG_CNF,         // Language file choice
-	FONT_CNF,         // Font file choice ( .fnt )
+	FONT_CNF,         // TrueType font file choice (.ttf)
 	SAVE_CNF,         // Generic Save choice (with or without selected file)
 	ELF_FILE_CNF,     // Generic ELF file choice
 	CNFMODE_CNT       // Total number of cnfmode values defined

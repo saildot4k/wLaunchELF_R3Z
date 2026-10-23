@@ -2,6 +2,7 @@
 //File name:   draw_text.c
 //--------------------------------------------------------------
 #include "draw_private.h"
+#include "ttf_font.h"
 
 //The font file ELISA100.FNT is needed to display MC save titles in japanese
 //and the arrays defined here are needed to find correct data in that file
@@ -66,41 +67,36 @@ static const u8 sjis_lookup_82[256] = {
 int loadFont(char *path_arg)
 {
 	int fd;
-
-	if (strlen(path_arg) != 0) {
-		char FntPath[MAX_PATH];
-		genFixPath(path_arg, FntPath);
-		fd = genOpen(FntPath, FIO_O_RDONLY);
-		if (fd < 0) {
-			genClose(fd);
+	if (path_arg != NULL && path_arg[0] != '\0') {
+		char FontPath[MAX_PATH];
+		int font_size;
+		unsigned char *font_data;
+		genFixPath(path_arg, FontPath);
+		fd = genOpen(FontPath, FIO_O_RDONLY);
+		if (fd < 0)
 			goto use_default;
-		}  // end if failed open file
-		genLseek(fd, 0, SEEK_SET);
-		if (genLseek(fd, 0, SEEK_END) > 4700) {
+		font_size = genLseek(fd, 0, SEEK_END);
+		if (font_size < 12 || font_size > 1024 * 1024) {
 			genClose(fd);
 			goto use_default;
 		}
 		genLseek(fd, 0, SEEK_SET);
-		u8 FontHeader[100];
-		genRead(fd, FontHeader, 100);
-		if ((FontHeader[0] == 0x00) &&
-		    (FontHeader[1] == 0x02) &&
-		    (FontHeader[70] == 0x60) &&
-		    (FontHeader[72] == 0x60) &&
-		    (FontHeader[83] == 0x90)) {
-			genLseek(fd, 1018, SEEK_SET);
-			memset(FontBuffer, 0, 32 * 16);
-			genRead(fd, FontBuffer + 32 * 16, 224 * 16);  //.fnt files skip 1st 32 chars
-			genClose(fd);
-			return 1;
-		} else {  // end if good fnt file
+		font_data = (unsigned char *)malloc((size_t)font_size);
+		if (font_data == NULL) {
 			genClose(fd);
 			goto use_default;
-		}     // end else bad fnt file
-	} else {  // end if external font file
-	use_default:
-		memcpy(FontBuffer, &font_uLE, 4096);
-	}  // end else build-in font
+		}
+		if (genRead(fd, font_data, font_size) == font_size &&
+		    ttfRasterizeFont(font_data, (size_t)font_size, FontBuffer, sizeof(FontBuffer))) {
+			free(font_data);
+			genClose(fd);
+			return 1;
+		}
+		free(font_data);
+		genClose(fd);
+	}
+use_default:
+	memcpy(FontBuffer, &font_uLE, 4096);
 	return 0;
 }
 void drawChar(unsigned int c, int x, int y, u64 colour)

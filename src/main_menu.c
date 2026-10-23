@@ -82,6 +82,8 @@ int drawMainMenuScreen(MainMenuState *state, const char *main_msg)
 	int nElfs = 0;
 	int i;
 	int x, y, console_info_y;
+	int left_x, left_right, right_x, right_w, panel_top, panel_bottom;
+	int row_index, title_limit;
 	u64 color;
 	char *p;
 	char c[MAX_PATH + 8], f[MAX_PATH];
@@ -100,10 +102,19 @@ int drawMainMenuScreen(MainMenuState *state, const char *main_msg)
 	}
 
 	clrScr(setting->color[COLOR_BACKGR]);
-
-	x = Menu_start_x;
-	y = Menu_start_y;
-	console_info_y = Menu_end_y - 3 * FONT_HEIGHT;
+	left_x = SCREEN_MARGIN + 4;
+	right_w = 148;
+	right_x = SCREEN_WIDTH - SCREEN_MARGIN - 4 - right_w;
+	left_right = right_x - 12;
+	panel_top = Menu_start_y - 6;
+	panel_bottom = Menu_end_y - 5;
+	drawFrame(left_x, panel_top, left_right, panel_bottom, setting->color[COLOR_FRAME]);
+	drawFrame(right_x, panel_top, SCREEN_WIDTH - SCREEN_MARGIN - 4, panel_bottom, setting->color[COLOR_FRAME]);
+	printXY("LAUNCH", left_x + 10, Menu_start_y, setting->color[COLOR_SELECT], TRUE, 0);
+	printXY("SYSTEM", right_x + 10, Menu_start_y, setting->color[COLOR_SELECT], TRUE, 0);
+	x = left_x + 10;
+	y = Menu_start_y + 2 * FONT_HEIGHT;
+	console_info_y = Menu_start_y + 2 * FONT_HEIGHT;
 	c[0] = 0;
 	if (state->init_delay)
 		sprintf(c, "%s: %d", LNG(Init_Delay), state->init_delay / 1000);
@@ -113,10 +124,17 @@ int drawMainMenuScreen(MainMenuState *state, const char *main_msg)
 		else
 			sprintf(c, "%s: %s", LNG(TIMEOUT), LNG(Halted));
 	}
-	if (c[0]) {
-		printXY(c, x, y, setting->color[COLOR_TEXT], TRUE, 0);
-		y += FONT_HEIGHT * 2;
-	}
+	if (c[0])
+		printXY(c, x, Menu_start_y + FONT_HEIGHT, setting->color[COLOR_TEXT], TRUE, 0);
+	printXY("MODEL", right_x + 10, console_info_y, setting->color[COLOR_SELECT], TRUE, 0);
+	printXY(state->console_model, right_x + 10, console_info_y + FONT_HEIGHT, setting->color[COLOR_TEXT], TRUE, 0);
+	printXY("BOOT ROM", right_x + 10, console_info_y + 3 * FONT_HEIGHT, setting->color[COLOR_SELECT], TRUE, 0);
+	printXY(state->console_bootrom, right_x + 10, console_info_y + 4 * FONT_HEIGHT, setting->color[COLOR_TEXT], TRUE, 0);
+	printXY("DVD", right_x + 10, console_info_y + 6 * FONT_HEIGHT, setting->color[COLOR_SELECT], TRUE, 0);
+	printXY(state->console_dvdver, right_x + 10, console_info_y + 7 * FONT_HEIGHT, setting->color[COLOR_TEXT], TRUE, 0);
+	drawOpSprite(setting->color[COLOR_FRAME], right_x + 10, console_info_y + 9 * FONT_HEIGHT,
+	             SCREEN_WIDTH - SCREEN_MARGIN - 14, console_info_y + 9 * FONT_HEIGHT + 1);
+	printXY("wLaunchELF", right_x + 10, console_info_y + 10 * FONT_HEIGHT, setting->color[COLOR_SELECT], TRUE, 0);
 	for (i = 0; i < SETTING_LK_BTN_COUNT; i++) {
 		if ((setting->LK_Path[i][0]) && ((i <= SETTING_LK_SELECT) || setting->LK_Flag[i])) {
 			state->menu_lk[nElfs] = i;  //memorize RunElf index for this menu entry
@@ -187,39 +205,49 @@ int drawMainMenuScreen(MainMenuState *state, const char *main_msg)
 					strcpy(f, setting->LK_Path[i]);
 				}
 			}  //ends clause for No title
-			if (nElfs++ == state->selected && state->mode == MAIN_MENU_MODE_DPAD)
-				color = setting->color[COLOR_SELECT];
-			else
-				color = setting->color[COLOR_TEXT];
-			{
-				int len = (strlen(LNG(LEFT)) + 2 > strlen(LNG(RIGHT)) + 2) ?
-				              strlen(LNG(LEFT)) + 2 :
-				              strlen(LNG(RIGHT)) + 2;
-				if (i == SETTING_LK_LEFT) {  // LEFT
-					if (strlen(LNG(RIGHT)) + 2 > strlen(LNG(LEFT)) + 2)
-						printXY(c, x + (strlen(LNG(RIGHT)) + 2 > 9 ? ((strlen(LNG(RIGHT)) + 2) - (strlen(LNG(LEFT)) + 2)) * FONT_WIDTH : (9 - (strlen(LNG(LEFT)) + 2)) * FONT_WIDTH),
+				row_index = nElfs;
+				if (row_index == state->selected && state->mode == MAIN_MENU_MODE_DPAD) {
+					drawOpSprite(setting->color[COLOR_FRAME], left_x + 4, y - 1, left_right - 4, y + FONT_HEIGHT);
+					drawOpSprite(setting->color[COLOR_SELECT], left_x + 4, y - 1, left_x + 7, y + FONT_HEIGHT);
+					color = setting->color[COLOR_SELECT];
+				} else {
+					color = setting->color[COLOR_TEXT];
+				}
+				nElfs++;
+				{
+					int len = (strlen(LNG(LEFT)) + 2 > strlen(LNG(RIGHT)) + 2) ?
+					              strlen(LNG(LEFT)) + 2 :
+					              strlen(LNG(RIGHT)) + 2;
+					title_limit = (left_right - (x + (len > 9 ? len : 9) * FONT_WIDTH) - 10) / FONT_WIDTH;
+					if (title_limit < 4)
+						title_limit = 4;
+					if ((int)strlen(f) > title_limit) {
+						f[title_limit - 3] = '.';
+						f[title_limit - 2] = '.';
+						f[title_limit - 1] = '.';
+						f[title_limit] = '\0';
+					}
+					if (i == SETTING_LK_LEFT) {  // LEFT
+						if (strlen(LNG(RIGHT)) + 2 > strlen(LNG(LEFT)) + 2)
+							printXY(c, x + (strlen(LNG(RIGHT)) + 2 > 9 ? ((strlen(LNG(RIGHT)) + 2) - (strlen(LNG(LEFT)) + 2)) * FONT_WIDTH : (9 - (strlen(LNG(LEFT)) + 2)) * FONT_WIDTH),
 						        y, color, TRUE, 0);
-					else
-						printXY(c, x + (strlen(LNG(LEFT)) + 2 > 9 ? 0 : (9 - (strlen(LNG(LEFT)) + 2)) * FONT_WIDTH),
+						else
+							printXY(c, x + (strlen(LNG(LEFT)) + 2 > 9 ? 0 : (9 - (strlen(LNG(LEFT)) + 2)) * FONT_WIDTH),
 						        y, color, TRUE, 0);
-				} else if (i == SETTING_LK_RIGHT) {  // RIGHT
-					if (strlen(LNG(LEFT)) + 2 > strlen(LNG(RIGHT)) + 2)
-						printXY(c, x + (strlen(LNG(LEFT)) + 2 > 9 ? ((strlen(LNG(LEFT)) + 2) - (strlen(LNG(RIGHT)) + 2)) * FONT_WIDTH : (9 - (strlen(LNG(RIGHT)) + 2)) * FONT_WIDTH),
+					} else if (i == SETTING_LK_RIGHT) {  // RIGHT
+						if (strlen(LNG(LEFT)) + 2 > strlen(LNG(RIGHT)) + 2)
+							printXY(c, x + (strlen(LNG(LEFT)) + 2 > 9 ? ((strlen(LNG(LEFT)) + 2) - (strlen(LNG(RIGHT)) + 2)) * FONT_WIDTH : (9 - (strlen(LNG(RIGHT)) + 2)) * FONT_WIDTH),
 						        y, color, TRUE, 0);
-					else
-						printXY(c, x + (strlen(LNG(RIGHT)) + 2 > 9 ? 0 : (9 - (strlen(LNG(RIGHT)) + 2)) * FONT_WIDTH),
+						else
+							printXY(c, x + (strlen(LNG(RIGHT)) + 2 > 9 ? 0 : (9 - (strlen(LNG(RIGHT)) + 2)) * FONT_WIDTH),
 						        y, color, TRUE, 0);
-				} else
-					printXY(c, x + (len > 9 ? (len - 9) * FONT_WIDTH : 0), y, color, TRUE, 0);
-				printXY(f, x + (len > 9 ? len * FONT_WIDTH : 9 * FONT_WIDTH), y, color, TRUE, 0);
-			}
-			y += FONT_HEIGHT;
-		}  //ends clause for defined LK_Path[i] valid for menu
+					} else
+						printXY(c, x + (len > 9 ? (len - 9) * FONT_WIDTH : 0), y, color, TRUE, 0);
+					printXY(f, x + (len > 9 ? len * FONT_WIDTH : 9 * FONT_WIDTH), y, color, TRUE, 0);
+				}
+				y += FONT_HEIGHT;
+			}  //ends clause for defined LK_Path[i] valid for menu
 	}      //ends for
-	snprintf(c, sizeof(c), "MODEL: %s", state->console_model);
-	printXY(c, x + 4, console_info_y, setting->color[COLOR_TEXT], TRUE, 0);
-	printXY(state->console_bootrom, x + 4, console_info_y + FONT_HEIGHT, setting->color[COLOR_TEXT], TRUE, 0);
-	printXY(state->console_dvdver, x + 4, console_info_y + 2 * FONT_HEIGHT, setting->color[COLOR_TEXT], TRUE, 0);
 
 	if (state->mode == MAIN_MENU_MODE_BUTTON)
 		sprintf(c, "%s!", LNG(PUSH_ANY_BUTTON_or_DPAD));

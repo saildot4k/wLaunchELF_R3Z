@@ -650,7 +650,8 @@ void initializeBootGraphics(void)
 //---------------------------------------------------------------------------
 void loadConfiguredBootFont(void)
 {
-	loadFont(setting->font_file);
+	if (loadFont(setting->font_file) == 0)
+		setting->font_file[0] = '\0';
 }
 //------------------------------
 //endfunc loadConfiguredBootFont

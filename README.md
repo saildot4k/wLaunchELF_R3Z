@@ -51,6 +51,12 @@ Drivers load on demand for maximum compatibility and initial boot speed.
 - Organize OSDSYS/HOSDSYS MC/HDD browser by altering timestamps on root of memcard and `hdd0:__common:pfs:/*`
   - Sort order: Manual, A-Z, Z-A, SAS Timestamps (should ignore game saves)
 
+### Interface and custom fonts
+
+The default interface uses a dark, high-contrast palette, clear selection states and separate launch and console-information panels on the main screen. In **Startup Settings → Font File**, choose a `.TTF` file to replace the interface font. The TTF is rasterized when loaded and converted to the PS2's existing 8×16 bitmap glyph grid (256 Latin-1 code points); font files are limited to 1 MiB. The configurable UI-font selector no longer accepts `.FNT` files. The built-in font remains the fallback when a TTF cannot be read or parsed.
+
+The separate `ELISA100.FNT` resource is still used only for Japanese save-title glyphs in the memory-card browser; it is not an alternative UI font format.
+
 
 ### Neutrino ISO launch options
 
@@ -300,4 +306,3 @@ MG_CHALLENGE_IV=11569b681f98ebe5c9fab2cf670ee97e380a94ee9d85e69d99aa32d6ab2471b7
 - `make all-ds34-off` builds a dedicated ELF without DS34 support.
 - `make all-ds34-on` builds a dedicated ELF with DS34 support.
 - `make all-ds34-variants` builds both variants in one run.
-

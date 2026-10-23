@@ -8,23 +8,23 @@ enum {
 	DEF_TIMEOUT = 10,
 	DEF_HIDE_PATHS = TRUE,
 #ifdef CUSTOM_COLORS
-	DEF_COLOR1 = GS_SETREG_RGBA(0, 0, 0, 0),  //Backgr
-	DEF_COLOR2 = GS_SETREG_RGBA(0x35, 0x35, 0x35, 0),  //Frame
-	DEF_COLOR3 = GS_SETREG_RGBA(0x6c, 0xce, 0xff, 0),  //Select
-	DEF_COLOR4 = GS_SETREG_RGBA(0xa0, 0xa0, 0xa0, 0),  //Text
-	DEF_COLOR5 = GS_SETREG_RGBA(0xff, 0xcc, 0x99, 0),  //Folders
-	DEF_COLOR6 = GS_SETREG_RGBA(0x48, 0x6a, 0, 0),     //ELFs
-	DEF_COLOR7 = GS_SETREG_RGBA(0x43, 0x3a, 0x7c, 0),  //Unknown
-	DEF_COLOR8 = GS_SETREG_RGBA(0xd6, 0xc4, 0x28, 0),  //TextEditor
+	DEF_COLOR1 = GS_SETREG_RGBA(0x0b, 0x10, 0x18, 0),  //Backgr
+	DEF_COLOR2 = GS_SETREG_RGBA(0x34, 0x42, 0x54, 0),  //Frame
+	DEF_COLOR3 = GS_SETREG_RGBA(0x53, 0xd6, 0xb2, 0),  //Select
+	DEF_COLOR4 = GS_SETREG_RGBA(0xe3, 0xec, 0xf7, 0),  //Text
+	DEF_COLOR5 = GS_SETREG_RGBA(0xff, 0xc4, 0x83, 0),  //Folders
+	DEF_COLOR6 = GS_SETREG_RGBA(0x73, 0xd9, 0x9a, 0),  //ELFs
+	DEF_COLOR7 = GS_SETREG_RGBA(0x88, 0x9c, 0xb8, 0),  //Unknown
+	DEF_COLOR8 = GS_SETREG_RGBA(0xc1, 0x9a, 0xf5, 0),  //TextEditor
 #else
-	DEF_COLOR1 = GS_SETREG_RGBA(0, 0, 0, 0),              //Backgr
-	DEF_COLOR2 = GS_SETREG_RGBA(0x35, 0x35, 0x35, 0),     //Frame
-	DEF_COLOR3 = GS_SETREG_RGBA(0x6c, 0xce, 0xff, 0),     //Select
-	DEF_COLOR4 = GS_SETREG_RGBA(0xa0, 0xa0, 0xa0, 0),     //Text
-	DEF_COLOR5 = GS_SETREG_RGBA(0xff, 0xcc, 0x99, 0),     //Folders
-	DEF_COLOR6 = GS_SETREG_RGBA(0x48, 0x6a, 0, 0),        //ELFs
-	DEF_COLOR7 = GS_SETREG_RGBA(0x43, 0x3a, 0x7c, 0),     //Unknown
-	DEF_COLOR8 = GS_SETREG_RGBA(0xd6, 0xc4, 0x28, 0),     //TextEditor
+	DEF_COLOR1 = GS_SETREG_RGBA(0x0b, 0x10, 0x18, 0),  //Backgr
+	DEF_COLOR2 = GS_SETREG_RGBA(0x34, 0x42, 0x54, 0),  //Frame
+	DEF_COLOR3 = GS_SETREG_RGBA(0x53, 0xd6, 0xb2, 0),  //Select
+	DEF_COLOR4 = GS_SETREG_RGBA(0xe3, 0xec, 0xf7, 0),  //Text
+	DEF_COLOR5 = GS_SETREG_RGBA(0xff, 0xc4, 0x83, 0),  //Folders
+	DEF_COLOR6 = GS_SETREG_RGBA(0x73, 0xd9, 0x9a, 0),  //ELFs
+	DEF_COLOR7 = GS_SETREG_RGBA(0x88, 0x9c, 0xb8, 0),  //Unknown
+	DEF_COLOR8 = GS_SETREG_RGBA(0xc1, 0x9a, 0xf5, 0),  //TextEditor
 #endif //CUSTOM_COLORS
 	DEF_MENU_FRAME = TRUE,
 	DEF_SWAPKEYS = FALSE,
