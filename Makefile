@@ -5,6 +5,7 @@ MMCE ?= 1
 DS34 ?= 0
 TMANIP ?= 1
 ETH ?= 0
+SMB ?= 0
 UDPFS ?= 1
 EXFAT ?= 1
 DVRP ?= 1
@@ -20,7 +21,7 @@ LCDVD ?= LATEST#or LEGACY
 # ----------------------------- #
 .SILENT:
 
-BIN_NAME = $(HAS_EXFAT)$(HAS_DS34)$(HAS_ETH)$(HAS_UDPFS)$(HAS_MX4SIO)$(HAS_MMCE)$(HAS_DVRP)$(HAS_XFROM)$(HAS_EESIO)$(HAS_UDPTTY)$(HAS_PPCTTY)$(HAS_IOP_RESET)
+BIN_NAME = $(HAS_EXFAT)$(HAS_DS34)$(HAS_ETH)$(HAS_SMB)$(HAS_UDPFS)$(HAS_MX4SIO)$(HAS_MMCE)$(HAS_DVRP)$(HAS_XFROM)$(HAS_EESIO)$(HAS_UDPTTY)$(HAS_PPCTTY)$(HAS_IOP_RESET)
 ifeq ($(DEBUG), 0)
   EE_BIN = UNC-BOOT$(BIN_NAME).ELF
   EE_BIN_PKD = BOOT$(BIN_NAME).ELF
@@ -170,11 +171,20 @@ ifeq ($(IOP_RESET),0)
 endif
 
 ifeq ($(ETH),1)
-    EE_OBJS += ps2smap_irx.o ps2ftpd_irx.o ps2host_irx.o ps2netfs_irx.o ps2ip_irx.o
+    EE_OBJS += netman_irx.o ps2smap_irx.o ps2ftpd_irx.o ps2host_irx.o ps2netfs_irx.o ps2ip_irx.o
     EE_CFLAGS += -DETH
 ifeq ($(UDPFS),1)
     HAS_ETH = -ETH
 endif
+endif
+
+ifeq ($(SMB),1)
+    ifneq ($(ETH),1)
+    $(error SMB requires ETH=1: smb2man.irx runs on the ETH network stack)
+    endif
+    EE_OBJS += smb2.o smb2man_irx.o
+    EE_CFLAGS += -DSMB
+    HAS_SMB = -SMB
 endif
 
 ifeq ($(UDPFS),1)
@@ -295,6 +305,7 @@ info:
 	$(info available build options:)
 	$(info   EXFAT		enable BDM and EXFAT support for it)
 	$(info   ETH		include host/netfs network stack)
+	$(info   SMB		include smb: SMB2/3 network shares, needs ETH=1)
 	$(info   UDPFS		include UDPFS network stack)
 	$(info   DS34		include PS3/PS4 controller support)
 	$(info   MX4SIO		support for SDCard connected to memory card slot 2)
@@ -369,7 +380,7 @@ info2:
 	$(info EE_BIN = $(EE_BIN))
 	$(info EE_BIN_PKD = $(EE_BIN_PKD))
 	$(info EE_OBJS = $(EE_OBJS))
-	$(info TMANIP=$(TMANIP), SIO_DEBUG=$(SIO_DEBUG), DS34=$(DS34), ETH=$(ETH), UDPFS=$(UDPFS))
+	$(info TMANIP=$(TMANIP), SIO_DEBUG=$(SIO_DEBUG), DS34=$(DS34), ETH=$(ETH), SMB=$(SMB), UDPFS=$(UDPFS))
 	$(info EXFAT=$(EXFAT), XFROM=$(XFROM), UDPTTY=$(UDPTTY), MX4SIO=$(MX4SIO))
 	$(info MMCE=$(MMCE), IOP_RESET=$(IOP_RESET))
 

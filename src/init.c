@@ -9,11 +9,16 @@
 
 //IRX for togleable features
 #ifdef ETH
+IMPORT_BIN2C(netman_irx);
 IMPORT_BIN2C(ps2ip_irx);
 IMPORT_BIN2C(ps2smap_irx);
 IMPORT_BIN2C(ps2host_irx);
 IMPORT_BIN2C(ps2netfs_irx);
 IMPORT_BIN2C(ps2ftpd_irx);
+#endif
+
+#ifdef SMB
+IMPORT_BIN2C(smb2man_irx);
 #endif
 
 #ifdef UDPFS
@@ -117,6 +122,9 @@ static u8 have_ps2host = 0;
 static u8 have_ps2ip = 0;
 static u8 have_NetModules = 0;
 static u8 have_ps2netfs = 0;
+#ifdef SMB
+static u8 have_smb2man = 0;
+#endif
 #ifdef UDPFS
 static u8 have_udpfs_smap = 0;
 static u8 have_udpfs_ministack = 0;
@@ -448,18 +456,20 @@ static void load_ps2ip(void)
 		return;
 	}
 
-	if (!have_ps2ip) {
-		ID = SifExecModuleBuffer(ps2ip_irx, size_ps2ip_irx, 0, NULL, &ret);
-		DPRINTF(" [PS2IP]: ID=%d, ret=%d\n", ID, ret);
-		have_ps2ip = (ID >= 0 && ret >= 0);
-		if (!have_ps2ip)
-			return;
-	}
 	if (!have_ps2smap) {
-		ID = SifExecModuleBuffer(ps2smap_irx, size_ps2smap_irx,
-		                    if_conf_len, &if_conf[0], &ret);
+		ID = SifExecModuleBuffer(netman_irx, size_netman_irx, 0, NULL, &ret);
+		DPRINTF(" [NETMAN]: ID=%d, ret=%d\n", ID, ret);
+		ID = SifExecModuleBuffer(ps2smap_irx, size_ps2smap_irx, 0, NULL, &ret);
 		DPRINTF(" [SMAP]: ID=%d, ret=%d\n", ID, ret);
 		have_ps2smap = (ID >= 0 && ret >= 0);
+		if (!have_ps2smap)
+			return;
+	}
+	if (!have_ps2ip) {
+		ID = SifExecModuleBuffer(ps2ip_irx, size_ps2ip_irx,
+		                    if_conf_len, &if_conf[0], &ret);
+		DPRINTF(" [PS2IP]: ID=%d, ret=%d\n", ID, ret);
+		have_ps2ip = (ID >= 0 && ret >= 0);
 	}
 }
 #endif
@@ -713,6 +723,32 @@ void load_ps2host(void)
 }
 //------------------------------
 //endfunc load_ps2host
+//---------------------------------------------------------------------------
+#endif
+#ifdef SMB
+int load_smb2(void)
+{
+	int ret, ID __attribute__((unused));
+
+	if (!have_smb2man || !have_ps2ip || !have_ps2smap || !ps2dev9_loaded)
+		showLoadingModulesMsg("smb");
+
+	ensureCoreIoStackReady();
+	setupPowerOff();
+	load_ps2ip();
+	if (!(have_ps2ip && have_ps2smap))
+		return 0;
+	if (!have_smb2man) {
+		ID = SifExecModuleBuffer(smb2man_irx, size_smb2man_irx, 0, NULL, &ret);
+		DPRINTF(" [SMB2MAN]: ID=%d, ret=%d\n", ID, ret);
+		have_smb2man = (ID >= 0 && ret >= 0);
+		if (have_smb2man)
+			connectSMB2Shares();
+	}
+	return have_smb2man;
+}
+//------------------------------
+//endfunc load_smb2
 //---------------------------------------------------------------------------
 #endif
 
@@ -1999,6 +2035,9 @@ static void clearIopModuleState(void)
 	have_ps2host = 0;
 	have_ps2ip = 0;
 	have_ps2netfs = 0;
+#ifdef SMB
+	have_smb2man = 0;
+#endif
 #ifdef UDPFS
 	have_udpfs_smap = 0;
 	have_udpfs_ministack = 0;
