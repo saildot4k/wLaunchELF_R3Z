@@ -478,6 +478,18 @@ static int prepareConfiguredElfLaunch(const char *elf_path, char *fullpath, size
 #endif
 	}
 
+	if (!strncmp(elf_path, "smb:", 4)) {
+#ifdef SMB
+		load_smb2();
+		if (!checkExecutablePath(elf_path, exec_kind))
+			return 0;
+		snprintf(fullpath, fullpath_size, "%s", elf_path);
+		return 1;
+#else
+		return 0;
+#endif
+	}
+
 	snprintf(fullpath, fullpath_size, "%s", elf_path);
 	return checkExecutablePath(fullpath, exec_kind);
 }
@@ -868,6 +880,15 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 	} else if (!strncmp(path, "udpfs:", 6)) {
 #ifdef UDPFS
 		load_udpfs();
+		party[0] = 0;
+		snprintf(fullpath, sizeof(fullpath), "%s", path);
+		goto CheckELF_fullpath;
+#else
+		goto ELFnotFound;
+#endif
+	} else if (!strncmp(path, "smb:", 4)) {
+#ifdef SMB
+		load_smb2();
 		party[0] = 0;
 		snprintf(fullpath, sizeof(fullpath), "%s", path);
 		goto CheckELF_fullpath;

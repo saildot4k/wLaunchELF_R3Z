@@ -96,6 +96,10 @@ static const char *getRootDeviceLabel(const char *name)
 	if (!strcmp(name, "udpfs:"))
 		return "udpfs:/";
 #endif
+#ifdef SMB
+	if (!strcmp(name, "smb:"))
+		return "smb:/";
+#endif
 	if (!strcmp(name, LNG(MISC)))
 		return "MISC/";
 
@@ -119,6 +123,7 @@ static const char *getRootDeviceDescription(const char *name)
 		{"ata1:/", "HDD 2 (exFAT)"},
 		{"cdfs:/", "CDVD Drive"},
 		{"udpfs:/", "UDPFS Network Server"},
+		{"smb:/", "SMB Network Shares"},
 		{"dvr_hdd0:/", "PSX DVR"},
 		{"xfrom0:/", "PSX Onboard Flash"}
 	};

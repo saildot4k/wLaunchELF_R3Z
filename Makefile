@@ -182,7 +182,7 @@ ifeq ($(SMB),1)
     ifneq ($(ETH),1)
     $(error SMB requires ETH=1: smb2man.irx runs on the ETH network stack)
     endif
-    EE_OBJS += smb2man_irx.o
+    EE_OBJS += smb2.o smb2man_irx.o
     EE_CFLAGS += -DSMB
     HAS_SMB = -SMB
 endif

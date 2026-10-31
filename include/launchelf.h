@@ -357,6 +357,10 @@ int load_vmcman(void);
 int get_vmcman_last_error(void);
 #ifdef ETH
 void load_ps2host(void);
+#ifdef SMB
+int load_smb2(void);
+void connectSMB2Shares(void);
+#endif
 #endif
 #ifdef UDPFS
 int load_udpfs(void);

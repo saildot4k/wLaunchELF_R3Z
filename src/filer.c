@@ -1574,6 +1574,12 @@ int getDir(const char *path, FILEINFO *info)
 		n = readUDPFS(path, info, max);
 #endif
 #endif
+#ifdef SMB
+	else if (!strncmp(path, "smb", 3)) {
+		if (load_smb2())
+			n = readGENERIC(path, info, max);
+	}
+#endif
 #ifdef MMCE
 	else if (!strncmp(path, "mmce", 4)) {
 		loadMmceModules();
@@ -1808,6 +1814,10 @@ int setFileList(const char *path, const char *ext, FILEINFO *files, int cnfmode)
 			}
 #ifdef UDPFS
 			strcpy(files[nfiles].name, "udpfs:");
+			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
+#endif
+#ifdef SMB
+			strcpy(files[nfiles].name, "smb:");
 			files[nfiles++].stats.AttrFile = sceMcFileAttrSubdir;
 #endif
 			if (cnfmode < 2) {

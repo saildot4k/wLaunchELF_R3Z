@@ -15,6 +15,7 @@ wLaunchELF, formerly known as uLaunchELF, also known as wLE or uLE (abbreviated)
 | __dvr_hdd0:/__ | PSX DESR-XXXX digital video recorder hdd partition/side | Hidden on non-PSX |
 | __cdfs:/__ | CD/DVD File System | Always |
 | __udpfs:/__ | Network interface used with [PCM720s UDPFSD Server](https://github.com/pcm720/udpfsd) | Always |
+| __smb:/__ | SMB2/SMB3 network shares on a Windows PC, Samba server or NAS, see [SMB network shares](#smb-network-shares) | SMB builds |
 
 Drivers load on demand for maximum compatibility and initial boot speed.
 
@@ -46,6 +47,7 @@ Drivers load on demand for maximum compatibility and initial boot speed.
 - Launch KELFs (encrypted elfs)
 - [LaunchELF with Args](#launchelf-with-args)
 - [APA Header injection](#HDD-APA-header-injection) from usb, mmce and udpfs. Thanks to Alex Parrado and @israpps
+- [SMB2/SMB3 network shares](#smb-network-shares) as the `smb:` device, through libsmb2's `smb2man.irx`
 - warnings when modifying/deleting exploit folders on PS2/PSX
 - Support for PS3/PS4 Dualshocks thanks to Alex Parrado (DS34 build)
 - Organize OSDSYS/HOSDSYS MC/HDD browser by altering timestamps on root of memcard and `hdd0:__common:pfs:/*`
@@ -158,6 +160,67 @@ content_subtype = 0
 
 </details>
 
+
+### SMB network shares
+
+<details>
+
+The `smb:` device gives access to SMB2 and SMB3 file shares, such as a shared folder on a Windows PC, a Samba server or a NAS. A share is browsed like any other device: files can be copied to and from it, and folders created, renamed and deleted. SMB1-only servers are not supported.
+
+It is backed by `smb2man.irx`, the IOP driver from [libsmb2](https://github.com/sahlberg/libsmb2)'s `wLaunchELF` branch, and is in builds made with `ETH=1 SMB=1`.
+
+Nothing touches the network until `smb:` is opened. The first time, wLaunchELF starts the network with the address set in `IPCONFIG.DAT`, as for the other network features, loads `smb2man.irx` and connects every share defined in `SMB2.CNF`. Each share is then a folder `smb:/<NAME>`. A share that does not connect, for example because of a wrong address or password, is not listed.
+
+#### SMB2.CNF location
+
+wLaunchELF uses the first `SMB2.CNF` it finds, in this order:
+
+1. Next to the launched ELF, for example `mc0:/APPS/SMB2.CNF` for `mc0:/APPS/BOOT.ELF`.
+2. `SYS-CONF/SMB2.CNF` on the memory card wLaunchELF was launched from: `mc1:/SYS-CONF/SMB2.CNF` when launched from `mc1:`, otherwise `mc0:/SYS-CONF/SMB2.CNF`.
+3. `SYS-CONF/SMB2.CNF` on the other memory card.
+
+This is where `IPCONFIG.DAT` is looked for too.
+
+#### SMB2.CNF syntax
+
+`SMB2.CNF` is a text file with one `KEY = value` per line. Each share is a group of keys that ends with its `URL`: the `URL` line connects the share with the keys above it, so it must come last in each group.
+
+| Key | Value | Maximum length |
+|---|---|---:|
+| `NAME` | Name of the share's folder in `smb:/` | 31 characters |
+| `USERNAME` | User name of an account on the server | 31 characters |
+| `PASSWORD` | Password of that account | 31 characters |
+| `URL` | `smb://<server>/<share>` | 255 characters |
+
+- Keys are upper case.
+- Lines that start with `#` are comments. Empty lines are ignored.
+- The value is everything after the `=` up to the end of the line. Spaces before the value are skipped, but spaces after it are kept, so make sure no space follows a password.
+- A line that is not a comment and has no `=` ends the file: no shares after it are read.
+- `<server>` is the server's IP address. `IPCONFIG.DAT` has no DNS server, so host names cannot be looked up.
+- `<share>` is the name the share is exported as. A path after it is ignored: the share's folder in `smb:/` always opens at the top of the share.
+- The user name goes in `USERNAME`, not in the URL.
+
+The URL is parsed by libsmb2, and only its basic form is described here. See the "SMB URL Format" section of [libsmb2's README](https://github.com/sahlberg/libsmb2/blob/master/README) for the full syntax.
+
+#### Example SMB2.CNF
+
+```ini
+# Shares for wLaunchELF's smb: device
+
+# A shared folder "PS2" on a Windows PC, as smb:/PC
+NAME = PC
+USERNAME = player
+PASSWORD = secret
+URL = smb://192.168.0.10/PS2
+
+# The "games" share of a NAS, as smb:/NAS
+NAME = NAS
+USERNAME = ps2
+PASSWORD = n4s-pa55word
+URL = smb://192.168.0.20/games
+```
+
+</details>
 
 ### Bind ELF to Memory Card as exploit update
 
@@ -300,4 +363,5 @@ MG_CHALLENGE_IV=11569b681f98ebe5c9fab2cf670ee97e380a94ee9d85e69d99aa32d6ab2471b7
 - `make all-ds34-off` builds a dedicated ELF without DS34 support.
 - `make all-ds34-on` builds a dedicated ELF with DS34 support.
 - `make all-ds34-variants` builds both variants in one run.
+- `make ETH=1 SMB=1` adds the [`smb:` device](#smb-network-shares).
 

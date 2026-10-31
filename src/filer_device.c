@@ -100,6 +100,10 @@ int ensurePathDeviceStackReady(const char *path)
 		return load_udpfs();
 	}
 #endif
+#ifdef SMB
+	if (!strncmp(path, "smb", 3))
+		return load_smb2();
+#endif
 	return TRUE;
 }
 int prepareTransferDeviceStacks(const char *src_path, const char *dst_path)
