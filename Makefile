@@ -170,7 +170,7 @@ ifeq ($(IOP_RESET),0)
 endif
 
 ifeq ($(ETH),1)
-    EE_OBJS += ps2smap_irx.o ps2ftpd_irx.o ps2host_irx.o ps2netfs_irx.o ps2ip_irx.o
+    EE_OBJS += netman_irx.o ps2smap_irx.o ps2ftpd_irx.o ps2host_irx.o ps2netfs_irx.o ps2ip_irx.o
     EE_CFLAGS += -DETH
 ifeq ($(UDPFS),1)
     HAS_ETH = -ETH

@@ -645,32 +645,19 @@ $(EE_ASM_DIR)dev9_poweroff_irx.s: $(LOCAL_DEV9_POWEROFF_IRX) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ dev9_poweroff_irx
 
 ifeq ($(ETH),1)
-$(EE_ASM_DIR)ps2ip_irx.s: $(PS2SDK)/iop/irx/ps2ip.irx | $(EE_ASM_DIR)
+# ETH stack: NETMAN with its SMAP driver and ps2ip-nm. With ps2ip.irx, the
+# older SMAP drivers put a wrong source MAC address in every frame.
+$(EE_ASM_DIR)netman_irx.s: $(PS2SDK)/iop/irx/netman.irx | $(EE_ASM_DIR)
+	$(BIN2S) $< $@ netman_irx
+
+$(EE_ASM_DIR)ps2ip_irx.s: $(PS2SDK)/iop/irx/ps2ip-nm.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ps2ip_irx
+
+$(EE_ASM_DIR)ps2smap_irx.s: $(PS2SDK)/iop/irx/smap.irx | $(EE_ASM_DIR)
+	$(BIN2S) $< $@ ps2smap_irx
 
 $(EE_ASM_DIR)udptty.s: $(PS2SDK)/iop/irx/udptty.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ udptty_irx
-
-# ETH stack policy:
-# Preserve historical wLaunchELF SMAP preference/order first, then fallback
-# to current PS2SDK variants.
-PS2SMAP_SOURCE :=
-ifneq ($(wildcard $(PS2DEV)/ps2eth/smap/ps2smap.irx),)
-PS2SMAP_SOURCE := $(PS2DEV)/ps2eth/smap/ps2smap.irx
-else ifneq ($(wildcard iop/__precompiled/ps2smap.irx),)
-PS2SMAP_SOURCE := iop/__precompiled/ps2smap.irx
-else ifneq ($(wildcard $(PS2SDK)/iop/irx/ps2smap.irx),)
-PS2SMAP_SOURCE := $(PS2SDK)/iop/irx/ps2smap.irx
-else ifneq ($(wildcard $(PS2SDK)/iop/irx/smap-ps2ip.irx),)
-PS2SMAP_SOURCE := $(PS2SDK)/iop/irx/smap-ps2ip.irx
-endif
-
-ifeq ($(strip $(PS2SMAP_SOURCE)),)
-$(error Missing SMAP driver. Provide $(PS2DEV)/ps2eth/smap/ps2smap.irx, iop/__precompiled/ps2smap.irx, or PS2SDK smap modules.)
-endif
-
-$(EE_ASM_DIR)ps2smap_irx.s: $(PS2SMAP_SOURCE) | $(EE_ASM_DIR)
-	$(BIN2S) $< $@ ps2smap_irx
 
 $(EE_ASM_DIR)ps2ftpd_irx.s: iop/ps2ftpd.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ps2ftpd_irx

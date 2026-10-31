@@ -9,6 +9,7 @@
 
 //IRX for togleable features
 #ifdef ETH
+IMPORT_BIN2C(netman_irx);
 IMPORT_BIN2C(ps2ip_irx);
 IMPORT_BIN2C(ps2smap_irx);
 IMPORT_BIN2C(ps2host_irx);
@@ -448,18 +449,20 @@ static void load_ps2ip(void)
 		return;
 	}
 
-	if (!have_ps2ip) {
-		ID = SifExecModuleBuffer(ps2ip_irx, size_ps2ip_irx, 0, NULL, &ret);
-		DPRINTF(" [PS2IP]: ID=%d, ret=%d\n", ID, ret);
-		have_ps2ip = (ID >= 0 && ret >= 0);
-		if (!have_ps2ip)
-			return;
-	}
 	if (!have_ps2smap) {
-		ID = SifExecModuleBuffer(ps2smap_irx, size_ps2smap_irx,
-		                    if_conf_len, &if_conf[0], &ret);
+		ID = SifExecModuleBuffer(netman_irx, size_netman_irx, 0, NULL, &ret);
+		DPRINTF(" [NETMAN]: ID=%d, ret=%d\n", ID, ret);
+		ID = SifExecModuleBuffer(ps2smap_irx, size_ps2smap_irx, 0, NULL, &ret);
 		DPRINTF(" [SMAP]: ID=%d, ret=%d\n", ID, ret);
 		have_ps2smap = (ID >= 0 && ret >= 0);
+		if (!have_ps2smap)
+			return;
+	}
+	if (!have_ps2ip) {
+		ID = SifExecModuleBuffer(ps2ip_irx, size_ps2ip_irx,
+		                    if_conf_len, &if_conf[0], &ret);
+		DPRINTF(" [PS2IP]: ID=%d, ret=%d\n", ID, ret);
+		have_ps2ip = (ID >= 0 && ret >= 0);
 	}
 }
 #endif
