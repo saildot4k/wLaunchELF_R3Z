@@ -665,6 +665,13 @@ $(EE_ASM_DIR)ps2ftpd_irx.s: iop/ps2ftpd.irx | $(EE_ASM_DIR)
 $(EE_ASM_DIR)ps2netfs_irx.s: $(PS2SDK)/iop/irx/ps2netfs.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ps2netfs_irx
 
+# libsmb2's SMB2/3 file system driver, built from libsmb2 with
+# `make -f Makefile.platform ps2_irx_all`. Override to use another build.
+SMB2MAN_IRX ?= iop/__precompiled/smb2man.irx
+
+$(EE_ASM_DIR)smb2man_irx.s: $(SMB2MAN_IRX) | $(EE_ASM_DIR)
+	$(BIN2S) $< $@ smb2man_irx
+
 $(EE_ASM_DIR)ps2host_irx.s: iop/ps2host.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ps2host_irx
 endif
