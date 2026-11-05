@@ -2,6 +2,7 @@
 //File name:   filer_browser.c
 //--------------------------------------------------------------
 #include "launchelf.h"
+#include "save_manager.h"
 #include "gui_texteditor.h"
 #include "filer_actions.h"
 #include "filer_shared.h"
@@ -384,32 +385,34 @@ static int isMcLikePath(const char *path)
 
 static int classifyPsuAction(const char *destPath)
 {
-	int i;
-	int all_psu = 1;
-	int all_dirs = 1;
-	int src_is_mc_like;
-
+	int i, all_psu = 1, all_dirs = 1, all_ps1 = 1, all_imports = 1;
+	int type = saveCardType(clipPath), dest = saveCardType(destPath);
 	if (nclipFiles <= 0)
 		return PSU_ACTION_NONE;
-
-	src_is_mc_like = isMcLikePath(clipPath);
 	for (i = 0; i < nclipFiles; i++) {
+		int system;
 		if (clipFiles[i].stats.AttrFile & sceMcFileAttrSubdir) {
-			all_psu = 0;
+			all_psu = all_ps1 = all_imports = 0;
 			continue;
 		}
-
 		all_dirs = 0;
-		if (!genCmpFileExt(clipFiles[i].name, "PSU"))
+		if (!genCmpFileExt(clipFiles[i].name, "psu"))
 			all_psu = 0;
+		system = saveInspect(clipPath, clipFiles + i);
+		if (system != 1)
+			all_ps1 = 0;
+		if ((system != 1 && system != 2) || system != dest)
+			all_imports = 0;
 	}
-
+	/* Preserve PSU extraction to ordinary directories as well as PS2 cards. */
 	if (all_psu)
 		return PSU_ACTION_EXTRACT;
-
-	if (all_dirs && src_is_mc_like && destPath && destPath[0] != '\0' && !isMcLikePath(destPath))
+	if (!isMcLikePath(destPath) && destPath[0] &&
+	    ((all_dirs && type == 2) || (all_ps1 && type == 1) ||
+	     (nclipFiles == 1 && saveInspect(clipPath, clipFiles) == 3)))
 		return PSU_ACTION_CREATE;
-
+	if (all_imports && saveCardRoot(destPath))
+		return PSU_ACTION_EXTRACT;
 	return PSU_ACTION_NONE;
 }
 
@@ -426,11 +429,11 @@ static int menu(const char *path, FILEINFO *file)
 
 	psu_action = classifyPsuAction(path);
 	if (psu_action == PSU_ACTION_EXTRACT)
-		psu_action_label = LNG(Extract_PSU);
+		psu_action_label = LNG(Import_Save);
 	else if (psu_action == PSU_ACTION_CREATE)
-		psu_action_label = LNG(Create_PSU);
+		psu_action_label = LNG(Create_Backup);
 	else
-		psu_action_label = LNG(psuAction);
+		psu_action_label = LNG(Save_Action);
 
 	int menu_len = strlen(LNG(Copy)) > strlen(LNG(Cut)) ?
 	                   strlen(LNG(Copy)) :
@@ -482,6 +485,10 @@ static int menu(const char *path, FILEINFO *file)
 		enable[MOUNTVMC0] = FALSE;
 		enable[MOUNTVMC1] = FALSE;
 		enable[GETSIZE] = FALSE;
+	}
+	if (saveCardType(path) == 1) {
+		enable[NEWDIR] = FALSE;
+		enable[NEWICON] = FALSE;
 	}
 	enable[TIMEMANIP_CUSTOM] = filerCanOrganizeFolderTimestamps(path);
 	if (genCmpFileExt(file->name, "ELF") && isTitleCfgPathEligible(path, menu_disabled))
@@ -1503,7 +1510,10 @@ int getFilePath(char *out, int cnfmode)
 								if (j != vmc_PartyIndex[1 ^ i])
 									Party_vmcIndex[j] = -1;
 							}
-							fileXioUmount(tmp);
+							if (saveVmcSlot(tmp) >= 0)
+								saveVmcUnmount(i);
+							else
+								fileXioUmount(tmp);
 							vmcMounted[i] = 0;
 						}
 						j = genFixPath(path, tmp1);
@@ -1522,13 +1532,14 @@ int getFilePath(char *out, int cnfmode)
 #endif
 						strcat(tmp2, files[browser_sel].name);
 						/* genFixPath may reset the IOP while lazy-loading storage stacks. */
-						x = load_vmcman();
-						if (!x) {
-							x = get_vmcman_last_error();
-							sprintf(msg1, "\n'%s vmc%d:' for \"%s\"\nvmcman not registered\nResult=%d",
-							        LNG(Mount), i, tmp2, x);
-							(void)ynDialog(msg1);
-						} else if ((x = fileXioMount(tmp, tmp2, FIO_MT_RDWR)) >= 0) {
+						x = saveVmcMount(i, tmp2);
+						if (x == 0) {
+							if (!load_vmcman())
+								x = get_vmcman_last_error();
+							else
+								x = fileXioMount(tmp, tmp2, FIO_MT_RDWR);
+						}
+						if (x >= 0) {
 							if ((j >= 0) && (j < MOUNT_LIMIT)) {
 								vmc_PartyIndex[i] = j;
 								Party_vmcIndex[j] = i;
@@ -1669,7 +1680,10 @@ int getFilePath(char *out, int cnfmode)
 			}
 #endif
 			if (!cnfmode) {  //Calculate free space (unless configuring)
-				if (!strncmp(path, "mc", 2)) {
+				if (saveVmcSlot(path) >= 0) {
+					freeSpace = saveVmcFree(path);
+					vfreeSpace = TRUE;
+				} else if (!strncmp(path, "mc", 2)) {
 					mcGetInfo(path[2] - '0', 0, &mctype_PSx, &mcfreeSpace, NULL);
 					mcSync(0, NULL, &ret);
 					freeSpace = mcfreeSpace * ((mctype_PSx == 1) ? 8192 : 1024);
@@ -2209,21 +2223,150 @@ static void submenu_func_Paste(char *mess, char *path)
 //------------------------------
 //endfunc submenu_func_Paste
 //--------------------------------------------------------------
+static int backupFormatMenu(int system)
+{
+	const char *labels[10];
+	int formats[10], count = 0;
+	int i, sel = 0, event = 1, post = 0, width = 0, x, y = 64;
+	if (system == 2) {
+		static char psu_label[80];
+		snprintf(psu_label, sizeof(psu_label), "%s (PS2)", LNG(Create_PSU));
+		labels[count] = psu_label;
+		formats[count++] = 0;
+		labels[count] = LNG(Create_PSV);
+		formats[count++] = SAVE_PSV;
+	} else {
+		if (system == 1) {
+			labels[count] = LNG(Create_MCS);
+			formats[count++] = SAVE_MCS;
+			labels[count] = LNG(Create_PSX);
+			formats[count++] = SAVE_PSX;
+			labels[count] = LNG(Create_Raw_Save);
+			formats[count++] = SAVE_RAW;
+			labels[count] = LNG(Create_PSV);
+			formats[count++] = SAVE_PSV;
+		}
+		labels[count] = LNG(Create_VMC);
+		formats[count++] = CARD_RAW;
+		labels[count] = LNG(Create_VM1);
+		formats[count++] = CARD_VM1;
+		labels[count] = LNG(Create_GME);
+		formats[count++] = CARD_GME;
+		labels[count] = LNG(Create_VGS);
+		formats[count++] = CARD_VGS;
+		labels[count] = LNG(Create_VMP);
+		formats[count++] = CARD_VMP;
+		labels[count] = LNG(Create_MCX);
+		formats[count++] = CARD_MCX;
+	}
+	for (i = 0; i < count; i++)
+		if ((int)strlen(labels[i]) > width)
+			width = strlen(labels[i]);
+	width = (width + 4) * FONT_WIDTH;
+	x = SCREEN_WIDTH - 35 - width;
+	while (1) {
+		waitPadReady(0, 0);
+		if (readpad()) {
+			if (new_pad & PAD_UP) {
+				sel = (sel + count - 1) % count;
+				event = 1;
+			} else if (new_pad & PAD_DOWN) {
+				sel = (sel + 1) % count;
+				event = 1;
+			} else if ((new_pad & PAD_TRIANGLE) || (!swapKeys && (new_pad & PAD_CROSS)) || (swapKeys && (new_pad & PAD_CIRCLE)))
+				return -1;
+			else if ((swapKeys && (new_pad & PAD_CROSS)) || (!swapKeys && (new_pad & PAD_CIRCLE)))
+				return formats[sel];
+		}
+		if (event || post) {
+			drawPopSprite(setting->color[COLOR_BACKGR], x, y, x + width, y + (count + 1) * FONT_HEIGHT);
+			drawFrame(x, y, x + width, y + (count + 1) * FONT_HEIGHT, setting->color[COLOR_FRAME]);
+			for (i = 0; i < count; i++)
+				printXY(labels[i], x + 2 * FONT_WIDTH, y + FONT_HEIGHT / 2 + i * FONT_HEIGHT, setting->color[COLOR_TEXT], TRUE, 0);
+			drawChar(LEFT_CUR, x + FONT_WIDTH, y + FONT_HEIGHT / 2 + sel * FONT_HEIGHT, setting->color[COLOR_TEXT]);
+		}
+		drawScr();
+		post = event;
+		event = 0;
+	}
+}
+
 static void submenu_func_psuPaste(char *mess, char *path)
 {
-	int psu_action = classifyPsuAction(path);
-
-	if (psu_action == PSU_ACTION_EXTRACT) {
-		PasteMode = PM_PSU_RESTORE;
-	} else if (psu_action == PSU_ACTION_CREATE) {
-		PasteMode = PM_PSU_BACKUP;
+	int action = classifyPsuAction(path), type = saveCardType(clipPath);
+	int format = -1, i, ret = 0, all_psu = 1;
+	char full[MAX_PATH];
+	if (action == PSU_ACTION_CREATE) {
+		format = backupFormatMenu(type == 2 ? 2 : type == 1 ? 1 :
+		                                                      3);
+		if (format < 0) {
+			browser_pushed = FALSE;
+			return;
+		}
+		if (format == 0) {
+			PasteMode = PM_PSU_BACKUP;
+			subfunc_Paste(mess, path);
+			return;
+		}
+	} else if (action == PSU_ACTION_EXTRACT) {
+		if (saveCardType(path) == 1) {
+			for (i = 0; i < nclipFiles; i++)
+				if (saveInspect(clipPath, clipFiles + i) != 1) {
+					ret = -EXDEV;
+					goto done;
+				}
+		}
+		for (i = 0; i < nclipFiles; i++)
+			if (!genCmpFileExt(clipFiles[i].name, "psu"))
+				all_psu = 0;
+		if (all_psu) {
+			PasteMode = PM_PSU_RESTORE;
+			subfunc_Paste(mess, path);
+			return;
+		}
 	} else {
-		strcpy(mess, LNG(Paste_Failed));
-		browser_pushed = FALSE;
-		return;
+		ret = -EINVAL;
+		goto done;
 	}
-	subfunc_Paste(mess, path);
+	ret = prepareTransferDeviceStacks(clipPath, path);
+	if (ret < 0 || waitForClipboardSourceDevice() < 0) {
+		ret = -EIO;
+		goto done;
+	}
+	if (format >= CARD_RAW) {
+		ret = saveBackupCard(clipPath, clipFiles, nclipFiles, path, format);
+	} else
+		for (i = 0; i < nclipFiles; i++) {
+			drawMsg(clipFiles[i].name);
+			if (action == PSU_ACTION_CREATE)
+				ret = saveBackup(clipPath, clipFiles + i, path, format);
+			else if (genCmpFileExt(clipFiles[i].name, "psu")) {
+				PasteMode = PM_PSU_RESTORE;
+				PM_flag[0] = PM_NORMAL;
+				PM_file[0] = -1;
+				ret = copy(path, clipPath, clipFiles[i], 0);
+			} else {
+				if (snprintf(full, sizeof(full), "%s%s", clipPath, clipFiles[i].name) >= (int)sizeof(full))
+					ret = -ENAMETOOLONG;
+				else
+					ret = saveImport(full, path);
+			}
+			if (ret < 0)
+				break;
+		}
+done:
+	if (ret < 0) {
+		const char *message = ret == -EXDEV ? LNG(Save_Wrong_Card) : ret == -EEXIST ? LNG(Save_Exists) :
+		                                                         ret == -ENOSPC     ? LNG(Save_No_Space) :
+		                                                                              LNG(Save_Invalid);
+		strcpy(mess, message);
+	} else
+		markMx4sioDestinationAfterWrite(path);
+	/* Backups/imports keep clipboard sources even when selected with Cut. */
+	browser_pushed = FALSE;
+	browser_cd = TRUE;
 }
+
 //------------------------------
 //endfunc submenu_func_psuPaste
 //--------------------------------------------------------------

@@ -1,4 +1,5 @@
 #include "launchelf.h"
+#include "save_manager.h"
 #include "filer_actions.h"
 #include "filer_shared.h"
 #include "gui_hdd0_format.h"
@@ -352,7 +353,7 @@ static int isHddCommonPath(const char *path)
 
 int filerCanOrganizeFolderTimestamps(const char *path)
 {
-	return isMemoryCardRootPath(path) || isHddCommonPath(path);
+	return (isMemoryCardRootPath(path) && saveCardType(path) == 2) || isHddCommonPath(path);
 }
 
 int filerCanSetCustomTimestamp(const char *path, const FILEINFO *file)
@@ -1744,6 +1745,20 @@ int Rename(const char *path, const FILEINFO *file, const char *name)
 
 	if (filerIsExploitProtectedPath(path, file))
 		return -EPERM;
+	if (saveCardType(path) == 1) {
+		sceMcTblGetDir info = file->stats;
+		iox_stat_t st;
+		if (!saveNameValid(name, 20)) return -EINVAL;
+		if (snprintf(oldPath, sizeof(oldPath), "%s%s", path, file->name) >= (int)sizeof(oldPath) ||
+		    snprintf(newPath, sizeof(newPath), "%s%s", path, name) >= (int)sizeof(newPath)) return -ENAMETOOLONG;
+		if (saveVmcSlot(path) >= 0) return saveVmcRename(oldPath, name);
+		if (genGetStat(newPath, &st) >= 0) return -EEXIST;
+		memset(info.EntryName, 0, sizeof(info.EntryName));
+		memcpy(info.EntryName, name, strlen(name));
+		ret = mcSetFileInfo(path[2] - '0', 0, oldPath + 4, &info, 0x0010);
+		if (ret >= 0) mcSync(0, NULL, &ret);
+		return ret == -4 ? -EEXIST : ret;
+	}
 
 	if (!strncmp(path, "hdd", 3)) {
 		if (getHddParty(path, NULL, party, oldPath) < 0)

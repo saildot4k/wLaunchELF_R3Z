@@ -40,7 +40,8 @@ Drivers load on demand for maximum compatibility and initial boot speed.
 - HDD Manager can inject APA partition headers
 - View/edit APA partiion header `system.cnf`
 - All drivers besides core lazy loading for faster boot and support of all devices.
-- Create and Extract PSU options so user knows what will happen
+- [PS1/PS2 save imports and backups](docs/save-formats.md), including PSU, PSV, MAX, CBS, XPS/SPS and PS1 save formats
+- Browse and edit PS1 virtual cards for Ember, POPStarter, PS3, PSP/Vita and emulators
 - Extra file extensions for Text Editor ShortCuts
 - Timestamp manipulation feature to fix the date of any memory card folder containing any icon-based exploit _(\*tuna)_
 - Launch KELFs (encrypted elfs)

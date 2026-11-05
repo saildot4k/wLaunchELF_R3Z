@@ -2,6 +2,7 @@
 //File name:   filer_copy.c
 //--------------------------------------------------------------
 #include "launchelf.h"
+#include "save_manager.h"
 #include "filer_copy.h"
 #include "filer_actions.h"
 #include "filer_shared.h"
@@ -140,6 +141,7 @@ static void fillVmcStatFromMcInfo(iox_stat_t *stat, const sceMcTblGetDir *info)
 
 static int applyMcInfoToVmcPath(const char *path, const sceMcTblGetDir *info)
 {
+	if (saveVmcSlot(path) >= 0) return 0;
 	iox_stat_t stat;
 	char fixed_path[MAX_PATH];
 	int len, ret;
@@ -409,6 +411,9 @@ int copy(char *outPath, const char *inPath, FILEINFO file, int recurses)
 		return -1;
 	}
 
+	if (recurses == 0 && saveCheckCardCopy(inPath, outPath, &file, PasteMode) < 0)
+		return -EXDEV;
+
 	PM_flag[recurses + 1] = PM_NORMAL;  //assume normal mode for next level
 	PM_file[recurses + 1] = -1;         //assume that no special file is needed
 
@@ -470,6 +475,9 @@ restart_copy:  //restart point for PM_PSU_RESTORE to reprocess modified argument
 #endif
 	} else
 		sprintf(out, "%s%s", outPath, newfile.name);
+
+	if (saveCardType(outPath) == 1 && !saveNameValid(newfile.name, 20))
+		return -EINVAL;
 
 	if (!strcmp(in, out))
 		return 0;  //if in and out are identical our work is done.
@@ -811,7 +819,7 @@ non_PSU_RESTORE_init:
 			makeHostPath(out, out);
 #endif
 		genLimObjName(out, 0);                                //Limit dest file name
-		dummy = genRemove(out);                               //Remove old file if present
+		dummy = (saveVmcSlot(out) >= 0) ? 0 : genRemove(out);                               //Remove old file if present
 #if FILEOP_TRACE
 		if (trace_vmc_copy)
 			printf("[VMC_COPY] remove existing out='%s' ret=%d recurse=%d\n", out, dummy, recurses);
@@ -1140,6 +1148,7 @@ copy_file_exit_mem_err:
 		}
 	}
 	if (out_fd >= 0) {
+		if (ret < 0) saveVmcAbort(out_fd);
 		genClose(out_fd);
 	}
 	return ret;

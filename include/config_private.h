@@ -8,7 +8,7 @@ enum {
 	DEF_TIMEOUT = 10,
 	DEF_HIDE_PATHS = TRUE,
 #ifdef CUSTOM_COLORS
-	DEF_COLOR1 = GS_SETREG_RGBA(0, 0, 0, 0),  //Backgr
+	DEF_COLOR1 = GS_SETREG_RGBA(0, 0, 0, 0),		   //Backgr
 	DEF_COLOR2 = GS_SETREG_RGBA(0x35, 0x35, 0x35, 0),  //Frame
 	DEF_COLOR3 = GS_SETREG_RGBA(0x6c, 0xce, 0xff, 0),  //Select
 	DEF_COLOR4 = GS_SETREG_RGBA(0xa0, 0xa0, 0xa0, 0),  //Text

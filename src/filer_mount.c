@@ -2,6 +2,7 @@
 //File name:   filer_mount.c
 //--------------------------------------------------------------
 #include "filer_internal.h"
+#include "save_manager.h"
 
 #ifdef ULE_DEBUG_BUILD
 #ifndef FILEOP_TRACE
@@ -162,7 +163,10 @@ void unmountAll(void)
 	for (i = 0; i < 2; i++) {
 		if (vmcMounted[i]) {
 			vmc_str[3] = '0' + i;
-			fileXioUmount(vmc_str);
+			if (saveVmcSlot(vmc_str) >= 0)
+				saveVmcUnmount(i);
+			else
+				fileXioUmount(vmc_str);
 			vmcMounted[i] = 0;
 			vmc_PartyIndex[i] = -1;
 		}

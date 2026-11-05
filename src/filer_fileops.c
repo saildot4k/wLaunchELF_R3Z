@@ -1,4 +1,5 @@
 #include "launchelf.h"
+#include "save_manager.h"
 #include "filer_shared.h"
 #include "init.h"
 
@@ -200,6 +201,7 @@ limited:
 
 int genRmdir(char *path)
 {
+	if (saveVmcSlot(path) >= 0) return -ENOTDIR;
 	int ret;
 #if FILEOP_TRACE
 	u64 t0, t1;
@@ -231,6 +233,7 @@ int genRmdir(char *path)
 //--------------------------------------------------------------
 int genRemove(char *path)
 {
+	if (saveVmcSlot(path) >= 0) return saveVmcDelete(path);
 	int ret;
 #if FILEOP_TRACE
 	u64 t0, t1;
@@ -265,6 +268,7 @@ int genRemove(char *path)
 //--------------------------------------------------------------
 int genGetStat(const char *path, iox_stat_t *stat)
 {
+	if (saveVmcSlot(path) >= 0) return saveVmcStat(path, stat);
 	char stat_path[MAX_PATH];
 
 	if (path == NULL || path[0] == '\0' || stat == NULL)
@@ -282,6 +286,7 @@ int genGetStat(const char *path, iox_stat_t *stat)
 //--------------------------------------------------------------
 int genMkdir(const char *path, int mode)
 {
+	if (saveVmcSlot(path) >= 0) return -ENOTDIR;
 	char mkdir_path[MAX_PATH];
 	int ret;
 #if FILEOP_TRACE
@@ -315,6 +320,7 @@ int genMkdir(const char *path, int mode)
 //--------------------------------------------------------------
 int genOpen(const char *path, int mode)
 {
+	if (saveVmcSlot(path) >= 0) return saveVmcOpen(path, mode);
 	char open_path[MAX_PATH], alt_path[MAX_PATH], *sep;
 	int fd;
 #if FILEOP_TRACE
@@ -396,6 +402,7 @@ int genOpen(const char *path, int mode)
 //--------------------------------------------------------------
 int genDopen(char *path)
 {
+	if (saveVmcSlot(path) >= 0) return -ENOTDIR;
 	int fd;
 #if FILEOP_TRACE
 	u64 t0, t1;
@@ -456,6 +463,7 @@ int genDopen(char *path)
 //--------------------------------------------------------------
 s64 genLseek(int fd, s64 where, int how)
 {
+	if (saveVmcFd(fd)) return saveVmcSeek(fd, where, how);
 	s64 ret64;
 #if FILEOP_TRACE
 	int ret32 = -1;
@@ -497,6 +505,7 @@ s64 genLseek(int fd, s64 where, int how)
 //--------------------------------------------------------------
 int genRead(int fd, void *buf, int size)
 {
+	if (saveVmcFd(fd)) return saveVmcRead(fd, buf, size);
 	int ret;
 #if FILEOP_TRACE
 	u64 t0, t1;
@@ -515,6 +524,7 @@ int genRead(int fd, void *buf, int size)
 //--------------------------------------------------------------
 int genWrite(int fd, void *buf, int size)
 {
+	if (saveVmcFd(fd)) return saveVmcWrite(fd, buf, size);
 	int ret;
 #if FILEOP_TRACE
 	u64 t0, t1;
@@ -533,6 +543,7 @@ int genWrite(int fd, void *buf, int size)
 //--------------------------------------------------------------
 int genClose(int fd)
 {
+	if (saveVmcFd(fd)) return saveVmcClose(fd);
 	int ret;
 #if FILEOP_TRACE
 	u64 t0, t1;

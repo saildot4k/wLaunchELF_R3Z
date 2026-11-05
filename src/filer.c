@@ -2,6 +2,7 @@
 //File name:   filer.c
 //--------------------------------------------------------------
 #include "launchelf.h"
+#include "save_manager.h"
 #include "filer_copy.h"
 #include "gui_hdd0_format.h"
 #include "gui_sort.h"
@@ -797,6 +798,8 @@ int genFixPath(const char *inp_path, char *gen_path)
 //--------------------------------------------------------------
 int readVMC(const char *path, FILEINFO *info, int max)
 {
+	if (saveVmcSlot(path) >= 0)
+		return saveVmcList(path, info, max);
 	iox_dirent_t dirbuf;
 	char dir[MAX_PATH];
 	int i = 0, fd;
