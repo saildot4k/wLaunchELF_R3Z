@@ -20,9 +20,17 @@ int ret[4] = {0, 0, 0, 0};
 u32 new_pad, new_pad_t[4];
 u32 joy_value = 0;
 static int test_joy = 0;
+static volatile u32 held_buttons;
 
 int semPoll,semRunning,semFinish;
 int isRunning;
+
+// Use the polling thread snapshot; DS34 RPC buffers belong to that thread.
+u32 readPadButtonsHeld(void)
+{
+	WaitSema(semPoll);
+	return held_buttons;
+}
 
 void clearPadPressState(void)
 {
@@ -34,6 +42,7 @@ void clearPadPressState(void)
 	new_pad = 0;
 	paddata = 0;
 	joy_value = 0;
+	held_buttons = 0;
 }
 
 // Alarm handler
@@ -52,6 +61,7 @@ void padPollingThread(void *args)
 	int state;
 	ee_sema_t semData;
 	int semAlrm,iIsRunning;
+	u32 held;
 
 	semData.option = semData.attr = 0;
 	semData.init_count = 0;
@@ -68,18 +78,23 @@ void padPollingThread(void *args)
 		    
 		
 
+		held = 0;
 		state = padGetState(0, 0);
 		if (state == PAD_STATE_STABLE || (state == PAD_STATE_FINDCTP1)) {
 			ret[0] = padRead(0, 0, &buttons_t[0]);
-			if (ret[0] != 0)
+			if (ret[0] != 0) {
 				paddata_t[0] = 0xffff ^ buttons_t[0].btns;
+				held |= paddata_t[0];
+			}
 		}
 
 		state = padGetState(1, 0);
 		if (state == PAD_STATE_STABLE || (state == PAD_STATE_FINDCTP1)) {
 			ret[1] = padRead(1, 0, &buttons_t[1]);
-			if (ret[1] != 0)
+			if (ret[1] != 0) {
 				paddata_t[1] = 0xffff ^ buttons_t[1].btns;
+				held |= paddata_t[1];
+			}
 		}
 
 
@@ -88,6 +103,7 @@ void padPollingThread(void *args)
 			ds34bt_set_rumble(0, 0, 0);
 			if (ret[2] != 0) {
 				paddata_t[2] = 0xffff ^ buttons_t[2].btns;
+				held |= paddata_t[2];
 			}
 		}
 
@@ -96,9 +112,12 @@ void padPollingThread(void *args)
 			ds34usb_set_rumble(0, 0, 0);
 			if (ret[3] != 0) {
 				paddata_t[3] = 0xffff ^ buttons_t[3].btns;
+				held |= paddata_t[3];
 			}
 		}
 
+
+		held_buttons = held;
 
 		// Signal readpad_no* functions
 		SignalSema(semPoll);

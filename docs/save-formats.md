@@ -20,8 +20,18 @@ To back up a card save, copy its directory (PS2) or file (PS1), browse to a stor
 directory, and choose **R1 → Create backup**. A second popup selects the format.
 PS2 offers **Create PSU (PS2)** and **Create PSV (PS3)**. PS1 offers individual
 save formats and whole-card containers. A PS1 whole-card backup contains all
-selected saves and must fit in 15 blocks. A filename prompt names the new image;
-existing backup files are preserved. The PSU path keeps its existing naming and
+selected saves and must fit in 15 blocks. The VMC choices create these exact names:
+
+| Backup option | Filename |
+| --- | --- |
+| Create VMC (Ember - Card 1) | `MC1.vmc` |
+| Create VMC (Ember - Card 2) | `MC2.vmc` |
+| Create VMC (PopStarter - Card 1) | `SLOT0.VMC` |
+| Create VMC (PopStarter - Card 2) | `SLOT1.VMC` |
+
+These presets save directly in the current destination directory without a
+filename prompt. Other card containers use a filename prompt. Existing backup
+files are preserved. The PSU path keeps its existing naming and
 overwrite settings. New menu strings currently use English fallbacks in the
 bundled non-English language files.
 

@@ -18,6 +18,8 @@ wLaunchELF, formerly known as uLaunchELF, also known as wLE or uLE (abbreviated)
 
 Drivers load on demand for maximum compatibility and initial boot speed.
 
+UDPFS uses a [source-built SMAP driver](iop/udpfs_smap/ORIGIN.md) that preserves the final byte of odd-length network reads.
+
 [^1]: MMCE and MX4SIO will incure an IOP reboot as the 2 are incompatible.
 
 [^2]: Dual HDD/ATA support is built in for future development.
@@ -52,6 +54,10 @@ Drivers load on demand for maximum compatibility and initial boot speed.
 - Organize OSDSYS/HOSDSYS MC/HDD browser by altering timestamps on root of memcard and `hdd0:__common:pfs:/*`
   - Sort order: Manual, A-Z, Z-A, SAS Timestamps (should ignore game saves)
 
+
+### ELF launch IOP reset override
+
+When launching an ELF, tap Confirm to use your configured **Reboot IOP when loading ELF** choice. Hold Confirm for one second to use the opposite choice for that launch. Confirm follows the Circle/Cross button setting. A short press launches when you release the button; a long press launches after one second. The saved setting stays the same.
 
 ### Neutrino ISO launch options
 

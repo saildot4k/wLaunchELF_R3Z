@@ -480,6 +480,7 @@ extern int isRunning;
 #endif
 int setupPad(void);
 int readpad(void);
+u32 readPadButtonsHeld(void);
 int readpad_no_KB(void);
 int readpad_noRepeat(void);
 void clearPadPressState(void);

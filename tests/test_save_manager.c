@@ -234,6 +234,29 @@ int main(void)
 	assert(saveImport(ps2, "mc0:/") == -EEXIST);
 	assert(saveImport(ps1, "mc1:/") == 0);
 	assertFile("mc1:/BASLUS-99999TEST", payload, sizeof(payload));
+	/* Presets keep exact filename case/extensions and skip the keyboard prompt. */
+	{
+		const char *names[] = {"MC1.vmc", "MC2.vmc", "SLOT0.VMC", "SLOT1.VMC"};
+		char destination[MAX_PATH];
+		FILEINFO save = {0};
+		strcpy(save.name, "BASLUS-99999TEST");
+		save.stats.FileSizeByte = sizeof(payload);
+		snprintf(destination, sizeof(destination), "%s/", dir);
+		for (int i = 0; i < 4; i++) {
+			uint8_t *disk;
+			size_t length;
+			int format;
+			assert(saveBackupCard("mc1:/", &save, 1, destination, CARD_RAW, names[i]) == 0);
+			snprintf(path, sizeof(path), "%s/%s", dir, names[i]);
+			assert(saveReadFile(path, &disk, &length) == 0);
+			assert(length == PS1_CARD_SIZE);
+			assert(ps1CardDecode(disk, length, raw, &format) == 0 && format == CARD_RAW);
+			assert(ps1CardFind(raw, save.name) >= 0);
+			assert(saveBackupCard("mc1:/", &save, 1, destination, CARD_RAW, names[i]) == -EEXIST);
+			assertFile(path, disk, length);
+			free(disk);
+		}
+	}
 	/* Mid-import failure removes only the new partial directory. */
 	strcpy(a.root.name, "FAILED");
 	snprintf(path, sizeof(path), "%s/FAIL.PSV", dir);
