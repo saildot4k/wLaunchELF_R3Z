@@ -45,6 +45,7 @@ UDPFS uses a [source-built SMAP driver](iop/udpfs_smap/ORIGIN.md) that preserves
 - [PS1/PS2 save imports and backups](docs/save-formats.md), including PSU, PSV, MAX, CBS, XPS/SPS and PS1 save formats
 - Browse and edit PS1 virtual cards for Ember, POPStarter, PS3, PSP/Vita and emulators
 - Extra file extensions for Text Editor ShortCuts
+- [Sort by type](<docs/FileBrowser sort+display modes.txt>): press Cross in the L1 menu to group folders, executables, text files and other files.
 - Timestamp manipulation feature to fix the date of any memory card folder containing any icon-based exploit _(\*tuna)_
 - Launch KELFs (encrypted elfs)
 - [LaunchELF with Args](#launchelf-with-args)

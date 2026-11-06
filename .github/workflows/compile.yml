@@ -66,6 +66,9 @@ jobs:
     - name: Test ELF launch confirm hold
       run: python3 tests/test_elf_launch_hold.py
 
+    - name: Test browser type sorting
+      run: python3 tests/test_gui_sort.py
+
     - name: Prepare PS2SDK source for local module builds
       run: |
         if [ -n "${PS2SDKSRC:-}" ] && [ -f "$PS2SDKSRC/Defs.make" ] && [ -f "$PS2SDKSRC/iop/Rules.make" ]; then

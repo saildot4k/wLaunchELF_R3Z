@@ -1,6 +1,45 @@
 #include "gui_sort.h"
 #include "filer_shared.h"
 
+enum {
+	FILE_TYPE_FOLDER,
+	FILE_TYPE_EXECUTABLE,
+	FILE_TYPE_TEXT,
+	FILE_TYPE_OTHER
+};
+
+static int fileType(const FILEINFO *file)
+{
+	if (file->stats.AttrFile & sceMcFileAttrSubdir)
+		return FILE_TYPE_FOLDER;
+	if (genCmpFileExt(file->name, "ELF") || genCmpFileExt(file->name, "XLF") || genCmpFileExt(file->name, "KELF"))
+		return FILE_TYPE_EXECUTABLE;
+	if (IsTextEditorFileType(file->name))
+		return FILE_TYPE_TEXT;
+	return FILE_TYPE_OTHER;
+}
+
+static const char *fileExtension(const FILEINFO *file)
+{
+	const char *dot = strrchr(file->name, '.');
+	return dot != NULL ? dot + 1 : "";
+}
+
+// Keep type groups fixed; text and other files compare extension before filename.
+static int cmpFileType(const FILEINFO *a, const FILEINFO *b)
+{
+	int a_type = fileType(a), b_type = fileType(b), result;
+
+	if (a_type != b_type)
+		return a_type - b_type;
+	if (a_type == FILE_TYPE_TEXT || a_type == FILE_TYPE_OTHER) {
+		result = stricmp(fileExtension(a), fileExtension(b));
+		if (result != 0)
+			return result;
+	}
+	return stricmp(a->name, b->name);
+}
+
 // cmpFile returns negative when entry a should be ordered before b.
 int cmpFile(FILEINFO *a, FILEINFO *b)
 {
@@ -11,6 +50,8 @@ int cmpFile(FILEINFO *a, FILEINFO *b)
 
 	if (file_sort == 0)
 		return 0;
+	if (file_sort == 4)
+		return cmpFileType(a, b);
 
 	if (a_is_dir == b_is_dir) {
 		if (!a_is_dir) {

@@ -76,7 +76,7 @@ int latestDVRPMount = -1;
 #endif
 
 int file_show = FILE_SHOW_NAME_DETAILS;
-int file_sort = 1;  //dlanor: 0==none, 1==name, 2==title, 3==mtime
+int file_sort = 1;  //0==none, 1==name, 2==title, 3==mtime, 4==type
 int file_sort_descending = FALSE;
 int size_valid = 0;
 int time_valid = 0;

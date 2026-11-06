@@ -18,18 +18,19 @@ Open the L1 mode menu to change how content is shown:
 - Circle: Select Filename; press again to toggle Filename + Details.
 - Square: Select Game Title; press again to toggle Game Title + Details.
 
-The selected display row shows whether details are enabled. Cross has no display-mode action.
+The selected display row shows whether details are enabled. Cross selects Type sorting.
 In either details mode, the device selection screen shows device descriptions instead of sizes and timestamps. MISC/ has no description, and its command list has no file details.
 
-The FileBrowser has four sort criteria. Open the L1 mode menu to select one:
+The FileBrowser has five sort criteria. Open the L1 mode menu to select one:
 
 - D-pad Right: No Sort
 - D-pad Down: Filename A -> Z; press again to toggle Z -> A
 - D-pad Left: Game Title A -> Z; press again to toggle Z -> A
 - D-pad Up: Timestamp Old -> New; press again to toggle New -> Old
+- Cross: Type (fixed groups and ascending extension/name order)
 
-Switching to another criterion starts in ascending order. Press Triangle to return to the browser and apply the selected display and sorting modes.
-Folders remain above files, and ELF files remain above other files, in either direction.
+Switching to another criterion starts in ascending order. Type always uses fixed ascending groups. Press Triangle to return to the browser and apply the selected display and sorting modes.
+Folders remain above files, and ELF files remain above other files, in either direction for Filename, Game Title and Timestamp. Type uses the groups described below.
 
 Sort mode 0 == No sort
 As the name indicates, uLE does not change the display order at all for this mode, so that all objects are displayed in the order they were given by the device drivers, which presumably matches the physical order of storage.
@@ -61,3 +62,19 @@ This new mode sorts objects by the modification timestamp, if the current device
 3c: All non-ELF files, sorted by timestamp
 
 Timestamp sorting starts with the oldest objects first (Old -> New). Press D-pad Up again in the L1 menu for the most recently modified objects first (New -> Old).
+
+
+Sort mode 4 == Sort by Type
+Select Type with Cross in the L1 menu. Entries are grouped in this order:
+
+4a: Folders, sorted by name
+4b: ELF, XLF and KELF executables together, sorted by name
+4c: TextEditor auto-open file types, sorted by extension and then name
+4d: Other files, sorted by extension and then name
+
+Comparisons ignore filename/extension case. Extensionless files sort before files with extensions in the Other group. Type does not reverse; its group and extension order stay fixed. It uses file attributes and names without opening files.
+
+Type ordering follows Launchstation's File Browser implementation:
+https://github.com/saildot4k/Launchstation/blob/master/src/dash_browser.c
+
+Host regression tests: python3 tests/test_gui_sort.py (requires Python 3 and a native C compiler).

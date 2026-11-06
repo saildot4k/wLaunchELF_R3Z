@@ -846,6 +846,8 @@ static int BrowserModePopup(void)
 		menu_len = i;
 	if (menu_len < (i = strlen(LNG(No_Sort))))
 		menu_len = i;
+	if (menu_len < (i = strlen(LNG(File_Type))))
+		menu_len = i;
 	if (menu_len < (i = strlen(LNG(Timestamp)) + 1 + strlen(LNG(Old_to_New))))
 		menu_len = i;
 	if (menu_len < (i = strlen(LNG(Timestamp)) + 1 + strlen(LNG(New_to_Old))))
@@ -855,7 +857,7 @@ static int BrowserModePopup(void)
 	menu_len += 3;  //All of the above strings are indented 3 spaces, for tooltips
 
 	int menu_ch_w = menu_len + 1;  //Total characters in longest menu string
-	int menu_ch_h = 13;            //Total number of menu lines
+	int menu_ch_h = 14;            //Total number of menu lines
 	int mSprite_w = (menu_ch_w + 3) * FONT_WIDTH;
 	int mSprite_h = (menu_ch_h + 1) * FONT_HEIGHT;
 	int mSprite_X1 = SCREEN_WIDTH / 2 - mSprite_w / 2;
@@ -894,6 +896,11 @@ static int BrowserModePopup(void)
 					file_sort_descending = (file_sort == 3) && !file_sort_descending;
 					file_sort = 3;
 					event |= 2;  //event |= valid pad command
+					break;
+				case PAD_CROSS:
+					file_sort_descending = FALSE;
+					file_sort = 4;
+					event |= 2;
 					break;
 				case PAD_CIRCLE:
 					file_show = (file_show == FILE_SHOW_NAME) ? FILE_SHOW_NAME_DETAILS : FILE_SHOW_NAME;
@@ -969,7 +976,9 @@ static int BrowserModePopup(void)
 				else if (i == 10)
 					snprintf(tmp, sizeof(tmp), "\xFF" "= %s %s", LNG(Timestamp),
 					         (file_sort == 3 && file_sort_descending) ? LNG(New_to_Old) : LNG(Old_to_New));
-				else if (i == 12)
+				else if (i == 11)
+					snprintf(tmp, sizeof(tmp), "\xFF" "1 %s", LNG(File_Type));
+				else if (i == 13)
 					sprintf(tmp, "\xFF"
 					             "3 %s",
 					        LNG(Back_to_Browser));
@@ -979,7 +988,7 @@ static int BrowserModePopup(void)
 				printXY(tmp, mSprite_X1 + 2 * FONT_WIDTH, y, setting->color[COLOR_TEXT], TRUE, 0);
 				//Display marker for current modes
 				if ((i == 2 && !fileShowTitles()) || (i == 3 && fileShowTitles()) ||
-				    (i >= 7 && i <= 10 && file_sort == i - 7))
+				    (i >= 7 && i <= 11 && file_sort == i - 7))
 					drawChar(LEFT_CUR, mSprite_X1 + FONT_WIDTH / 2, y, setting->color[COLOR_SELECT]);
 				y += FONT_HEIGHT;
 
