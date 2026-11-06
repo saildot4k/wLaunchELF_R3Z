@@ -20,7 +20,7 @@ static int chooseElfLaunchIopReset(int configured_reset)
 	u64 start = Timer();
 
 	while (readPadButtonsHeld() & confirm) {
-		if (Timer() - start >= 1000)
+		if (Timer() - start >= 2000)
 			return !configured_reset;
 		DelayThread(10000);
 	}

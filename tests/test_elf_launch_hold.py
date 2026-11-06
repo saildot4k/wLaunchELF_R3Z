@@ -55,7 +55,7 @@ static u64 Timer(void) { return now; }
 static void DelayThread(int us) { assert(us == 10000); now += us / 1000; }
 static u32 readPadButtonsHeld(void)
 {
-    assert(++polls < 200);
+    assert(++polls < 300);
     return now - origin <= release_after ? gesture_buttons : 0;
 }
 static void gesture(u32 buttons, u64 duration)
@@ -145,7 +145,7 @@ static void check_readers(void)
 
 int main(void)
 {
-    const u64 durations[] = {0, 10, 100, 990, 999, 1000, 1001, 5000};
+    const u64 durations[] = {0, 10, 100, 990, 999, 1000, 1001, 1990, 1999, 2000, 2001, 5000};
     for (int mapping = 0; mapping < 2; mapping++) {
         swapKeys = mapping;
         u32 confirm = mapping ? PAD_CROSS : PAD_CIRCLE;
@@ -156,8 +156,8 @@ int main(void)
                 /* Start near timer wrap to exercise elapsed-time arithmetic too. */
                 now = UINT64_MAX - 500;
                 gesture(confirm, durations[i]);
-                assert(chooseElfLaunchIopReset(saved) == (durations[i] >= 1000 ? !saved : saved));
-                assert(now - origin <= 1000);
+                assert(chooseElfLaunchIopReset(saved) == (durations[i] >= 2000 ? !saved : saved));
+                assert(now - origin <= 2000);
                 assert(config.reboot_iop_elf_load == saved);
             }
             gesture(0, 5000); /* Automatic/keyboard launch: no physical confirm. */
