@@ -504,7 +504,7 @@ static int menu(const char *path, FILEINFO *file)
 		enable[TITLE_CFG] = FALSE;
 
 	enable[OPEN_TEXTEDITOR] = canOpenInTextEditor(path, file);
-	enable[LAUNCH_ELF_ARGS] = enable[OPEN_TEXTEDITOR];
+	enable[LAUNCH_ELF_ARGS] = enable[OPEN_TEXTEDITOR] && IsTextEditorFileType(file->name);
 
 
 	if (write_disabled || menu_disabled) {

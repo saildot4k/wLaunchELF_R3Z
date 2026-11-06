@@ -73,7 +73,8 @@ MMCE builds also send a valid serial such as `SLUS_123.45` to responding MMCE de
 
 <details>
 
-In FileBrowser, select a TextEditor-supported file, press `R1`, then choose `LaunchELF with Args`.
+In FileBrowser, select a file type that opens automatically in TextEditor, press `R1`, then choose `LaunchELF with Args`.
+For other file types, the action uses Color 2/Frames and cannot be selected.
 wLaunchELF parses the file immediately, caches the args in memory, and leaves you in FileBrowser to select the target `ELF`.
 
 The same action is available from TextEditor's `R1` menu for the active opened file.
