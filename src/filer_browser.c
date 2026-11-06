@@ -9,6 +9,7 @@
 #include "gui_hdd0_format.h"
 #include "init.h"
 #include "main_console_info.h"
+#include "main_actions.h"
 #include "main_title.h"
 
 #define SOURCE_DEVICE_WAIT_INTERVAL_MS 1000
@@ -49,6 +50,10 @@ static const char *getRootDeviceLabel(const char *name)
 		return "mc0:/";
 	if (!strcmp(name, "mc1:"))
 		return "mc1:/";
+	if (!strcmp(name, "vmc0:"))
+		return "vmc0:";
+	if (!strcmp(name, "vmc1:"))
+		return "vmc1:";
 	if (!strcmp(name, "mass:"))
 		return "usb:/";
 	if (!strncmp(name, "mass", 4) && name[4] >= '0' && name[4] <= '9' && name[5] == ':' && name[6] == '\0')
@@ -111,6 +116,8 @@ static const char *getRootDeviceDescription(const char *name)
 	} devices[] = {
 		{"mc0:/", "Memory Card 1"},
 		{"mc1:/", "Memory Card 2"},
+		{"vmc0:", "Virtual Memory Card 1"},
+		{"vmc1:", "Virtual Memory Card 2"},
 		{"mmce0:/", "MMCE Slot 1"},
 		{"mmce1:/", "MMCE Slot 2"},
 		{"mx4sio:/", "MX4SIO"},
@@ -497,7 +504,7 @@ static int menu(const char *path, FILEINFO *file)
 		enable[TITLE_CFG] = FALSE;
 
 	enable[OPEN_TEXTEDITOR] = canOpenInTextEditor(path, file);
-	enable[LAUNCH_ELF_ARGS] = enable[OPEN_TEXTEDITOR];
+	enable[LAUNCH_ELF_ARGS] = enable[OPEN_TEXTEDITOR] && IsTextEditorFileType(file->name);
 
 
 	if (write_disabled || menu_disabled) {
@@ -1115,7 +1122,9 @@ int getFilePath(char *out, int cnfmode)
 	int use_12h = 0, date_format = 0;
 	int details_column;
 	int device_info_ready = FALSE;
+	int ps1_free_blocks = -1;
 
+	prepareElfLaunchIopReset(NULL);
 	elisa_failed = FALSE;  //set at failure to load font, cleared at each browser entry
 
 	browser_cd = TRUE;
@@ -1214,9 +1223,13 @@ int getFilePath(char *out, int cnfmode)
 				} else {
 					//pushed OK for a file
 					sprintf(out, "%s%s", path, files[browser_sel].name);
+					if (cnfmode == NON_CNF &&
+					    (genCmpFileExt(out, "ELF") || genCmpFileExt(out, "KELF") || genCmpFileExt(out, "XLF")))
+						prepareElfLaunchIopReset(out);
 					// Must to include a function for check IRX Header
 					if (((cnfmode == LK_ELF_CNF) || (cnfmode == NON_CNF)) && (!IsSupportedFileType(out))) {
 						browser_pushed = FALSE;
+						prepareElfLaunchIopReset(NULL);
 						sprintf(msg0, "%s.", LNG(This_file_isnt_an_ELF));
 						out[0] = 0;
 					} else {
@@ -1679,15 +1692,21 @@ int getFilePath(char *out, int cnfmode)
 				browser_nfiles = setFileList(path, ext, files, cnfmode);
 			}
 #endif
+			ps1_free_blocks = -1;
 			if (!cnfmode) {  //Calculate free space (unless configuring)
 				if (saveVmcSlot(path) >= 0) {
 					freeSpace = saveVmcFree(path);
+					ps1_free_blocks = (int)(freeSpace / PS1_BLOCK_SIZE);
 					vfreeSpace = TRUE;
 				} else if (!strncmp(path, "mc", 2)) {
-					mcGetInfo(path[2] - '0', 0, &mctype_PSx, &mcfreeSpace, NULL);
-					mcSync(0, NULL, &ret);
-					freeSpace = mcfreeSpace * ((mctype_PSx == 1) ? 8192 : 1024);
-					vfreeSpace = TRUE;
+					ret = mcGetInfo(path[2] - '0', 0, &mctype_PSx, &mcfreeSpace, NULL);
+					if (ret >= 0)
+						mcSync(0, NULL, &ret);
+					if (ret == sceMcResSucceed && mctype_PSx == 1 &&
+					    mcfreeSpace >= 0 && mcfreeSpace <= PS1_MAX_BLOCKS)
+						ps1_free_blocks = mcfreeSpace;
+					freeSpace = mcfreeSpace * ((mctype_PSx == 1) ? PS1_BLOCK_SIZE : 1024);
+					vfreeSpace = (ret == sceMcResSucceed && mcfreeSpace >= 0);
 #ifdef XFROM
 				} else if (!strncmp(path, "xfrom", 5)) {
 					xfromGetInfo(0, 0, &mctype_PSx, &mcfreeSpace, NULL);
@@ -1987,7 +2006,9 @@ int getFilePath(char *out, int cnfmode)
 			}
 			setScrTmp(msg0, msg1);
 			if (vfreeSpace) {
-				if (freeSpace >= 1024 * 1024)
+				if (ps1_free_blocks >= 0)
+					snprintf(tmp, sizeof(tmp), LNG(PS1_Blocks_Free), ps1_free_blocks, PS1_MAX_BLOCKS);
+				else if (freeSpace >= 1024 * 1024)
 					sprintf(tmp, "[%.1fMB %s]", (double)freeSpace / 1024 / 1024, LNG(free));
 				else if (freeSpace >= 1024)
 					sprintf(tmp, "[%.1fKB %s]", (double)freeSpace / 1024, LNG(free));
@@ -2223,10 +2244,10 @@ static void submenu_func_Paste(char *mess, char *path)
 //------------------------------
 //endfunc submenu_func_Paste
 //--------------------------------------------------------------
-static int backupFormatMenu(int system)
+static int backupFormatMenu(int system, const char **filename)
 {
-	const char *labels[10];
-	int formats[10], count = 0;
+	const char *labels[13], *filenames[13] = {NULL};
+	int formats[13], count = 0;
 	int i, sel = 0, event = 1, post = 0, width = 0, x, y = 64;
 	if (system == 2) {
 		static char psu_label[80];
@@ -2246,7 +2267,17 @@ static int backupFormatMenu(int system)
 			labels[count] = LNG(Create_PSV);
 			formats[count++] = SAVE_PSV;
 		}
-		labels[count] = LNG(Create_VMC);
+		labels[count] = LNG(Create_VMC_Ember_Card_1);
+		filenames[count] = "MC1.vmc";
+		formats[count++] = CARD_RAW;
+		labels[count] = LNG(Create_VMC_Ember_Card_2);
+		filenames[count] = "MC2.vmc";
+		formats[count++] = CARD_RAW;
+		labels[count] = LNG(Create_VMC_PopStarter_Card_1);
+		filenames[count] = "SLOT0.VMC";
+		formats[count++] = CARD_RAW;
+		labels[count] = LNG(Create_VMC_PopStarter_Card_2);
+		filenames[count] = "SLOT1.VMC";
 		formats[count++] = CARD_RAW;
 		labels[count] = LNG(Create_VM1);
 		formats[count++] = CARD_VM1;
@@ -2275,8 +2306,10 @@ static int backupFormatMenu(int system)
 				event = 1;
 			} else if ((new_pad & PAD_TRIANGLE) || (!swapKeys && (new_pad & PAD_CROSS)) || (swapKeys && (new_pad & PAD_CIRCLE)))
 				return -1;
-			else if ((swapKeys && (new_pad & PAD_CROSS)) || (!swapKeys && (new_pad & PAD_CIRCLE)))
+			else if ((swapKeys && (new_pad & PAD_CROSS)) || (!swapKeys && (new_pad & PAD_CIRCLE))) {
+				*filename = filenames[sel];
 				return formats[sel];
+			}
 		}
 		if (event || post) {
 			drawPopSprite(setting->color[COLOR_BACKGR], x, y, x + width, y + (count + 1) * FONT_HEIGHT);
@@ -2295,10 +2328,10 @@ static void submenu_func_psuPaste(char *mess, char *path)
 {
 	int action = classifyPsuAction(path), type = saveCardType(clipPath);
 	int format = -1, i, ret = 0, all_psu = 1;
+	const char *filename = NULL;
 	char full[MAX_PATH];
 	if (action == PSU_ACTION_CREATE) {
-		format = backupFormatMenu(type == 2 ? 2 : type == 1 ? 1 :
-		                                                      3);
+		format = backupFormatMenu(type == 2 ? 2 : type == 1 ? 1 : 3, &filename);
 		if (format < 0) {
 			browser_pushed = FALSE;
 			return;
@@ -2334,7 +2367,7 @@ static void submenu_func_psuPaste(char *mess, char *path)
 		goto done;
 	}
 	if (format >= CARD_RAW) {
-		ret = saveBackupCard(clipPath, clipFiles, nclipFiles, path, format);
+		ret = saveBackupCard(clipPath, clipFiles, nclipFiles, path, format, filename);
 	} else
 		for (i = 0; i < nclipFiles; i++) {
 			drawMsg(clipFiles[i].name);

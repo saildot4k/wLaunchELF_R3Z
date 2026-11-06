@@ -12,7 +12,8 @@ int saveInspect(const char *path, const FILEINFO *file);
 int saveCollect(const char *path, const FILEINFO *file, save_archive_t *save);
 int saveImport(const char *source, const char *destination);
 int saveBackup(const char *source, const FILEINFO *file, const char *destination, int format);
-int saveBackupCard(const char *source, const FILEINFO *files, int count, const char *destination, int format);
+/* filename includes its extension; NULL opens the custom filename prompt. */
+int saveBackupCard(const char *source, const FILEINFO *files, int count, const char *destination, int format, const char *filename);
 int saveCheckCardCopy(const char *source, const char *destination, const FILEINFO *file, int mode);
 
 /* EE PS1 virtual cards share vmc0:/vmc1:/ with the IOP PS2 VMC driver. */

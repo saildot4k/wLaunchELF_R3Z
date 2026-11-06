@@ -18,6 +18,8 @@ wLaunchELF, formerly known as uLaunchELF, also known as wLE or uLE (abbreviated)
 
 Drivers load on demand for maximum compatibility and initial boot speed.
 
+UDPFS uses a [source-built SMAP driver](iop/udpfs_smap/ORIGIN.md) that preserves the final byte of odd-length network reads.
+
 [^1]: MMCE and MX4SIO will incure an IOP reboot as the 2 are incompatible.
 
 [^2]: Dual HDD/ATA support is built in for future development.
@@ -53,6 +55,10 @@ Drivers load on demand for maximum compatibility and initial boot speed.
   - Sort order: Manual, A-Z, Z-A, SAS Timestamps (should ignore game saves)
 
 
+### ELF launch IOP reset override
+
+When launching an ELF, tap Confirm to use your configured **Reboot IOP when loading ELF** choice. Hold Confirm for two seconds to use the opposite choice for that launch. Confirm follows the Circle/Cross button setting. A short press launches when you release the button; a long press launches after two seconds. The saved setting stays the same.
+
 ### Neutrino ISO launch options
 
 Selecting an ISO opens a launch-options screen with game compatibility toggles, Video Mode and Video Compatibility selectors, Debug Colors, and PS2 Logo. Use Left/Right to cycle the two video settings, then choose Run or Cancel. Choices reset each time and are never saved.
@@ -67,7 +73,8 @@ MMCE builds also send a valid serial such as `SLUS_123.45` to responding MMCE de
 
 <details>
 
-In FileBrowser, select a TextEditor-supported file, press `R1`, then choose `LaunchELF with Args`.
+In FileBrowser, select a file type that opens automatically in TextEditor, press `R1`, then choose `LaunchELF with Args`.
+For other file types, the action uses Color 2/Frames and cannot be selected.
 wLaunchELF parses the file immediately, caches the args in memory, and leaves you in FileBrowser to select the target `ELF`.
 
 The same action is available from TextEditor's `R1` menu for the active opened file.

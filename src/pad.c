@@ -12,6 +12,22 @@ u32 new_pad, new_pad_t[2];
 u32 joy_value = 0;
 static int test_joy = 0;
 
+// Read physical buttons without menu repeat, keyboard input, or stale disconnected pads.
+u32 readPadButtonsHeld(void)
+{
+	struct padButtonStatus buttons;
+	u32 held = 0;
+	int port, state;
+
+	for (port = 0; port < 2; port++) {
+		state = padGetState(port, 0);
+		if ((state == PAD_STATE_STABLE || state == PAD_STATE_FINDCTP1) &&
+		    padRead(port, 0, &buttons) != 0)
+			held |= 0xffff ^ buttons.btns;
+	}
+	return held;
+}
+
 void clearPadPressState(void)
 {
 	memset(old_pad_t, 0, sizeof(old_pad_t));

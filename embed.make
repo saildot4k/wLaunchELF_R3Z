@@ -684,13 +684,10 @@ endif
 
 ifeq ($(UDPFS),1)
 UDPFS_THIRDPARTY_ROOT := thirdparty/nhddl-legacy/iop/udpfs
-UDPFS_SMAP_SOURCE :=
+UDPFS_SMAP_SOURCE := iop/__generated/udpfs_smap.irx
 UDPFS_MINISTACK_SOURCE :=
 UDPFS_IOMAN_SOURCE :=
 
-ifneq ($(wildcard $(UDPFS_THIRDPARTY_ROOT)/smap/Makefile),)
-UDPFS_SMAP_SOURCE := iop/__generated/udpfs_smap.irx
-endif
 ifneq ($(wildcard $(UDPFS_THIRDPARTY_ROOT)/ministack/Makefile),)
 UDPFS_MINISTACK_SOURCE := iop/__generated/udpfs_ministack.irx
 endif
@@ -698,11 +695,6 @@ ifneq ($(wildcard $(UDPFS_THIRDPARTY_ROOT)/udpfs/Makefile),)
 UDPFS_IOMAN_SOURCE := iop/__generated/udpfs_ioman.irx
 endif
 
-ifeq ($(strip $(UDPFS_SMAP_SOURCE)),)
-ifneq ($(wildcard iop/__precompiled/udpfs_smap.irx),)
-UDPFS_SMAP_SOURCE := iop/__precompiled/udpfs_smap.irx
-endif
-endif
 ifeq ($(strip $(UDPFS_MINISTACK_SOURCE)),)
 ifneq ($(wildcard iop/__precompiled/udpfs_ministack.irx),)
 UDPFS_MINISTACK_SOURCE := iop/__precompiled/udpfs_ministack.irx
@@ -714,9 +706,6 @@ UDPFS_IOMAN_SOURCE := iop/__precompiled/udpfs_ioman.irx
 endif
 endif
 
-ifeq ($(strip $(UDPFS_SMAP_SOURCE)),)
-$(error Missing udpfs_smap.irx. Provide $(UDPFS_THIRDPARTY_ROOT)/smap sources or iop/__precompiled/udpfs_smap.irx)
-endif
 ifeq ($(strip $(UDPFS_MINISTACK_SOURCE)),)
 $(error Missing udpfs_ministack.irx. Provide $(UDPFS_THIRDPARTY_ROOT)/ministack sources or iop/__precompiled/udpfs_ministack.irx)
 endif
@@ -725,11 +714,11 @@ $(error Missing udpfs_ioman.irx. Provide $(UDPFS_THIRDPARTY_ROOT)/udpfs sources 
 endif
 
 ifneq ($(filter iop/__generated/udpfs_smap.irx,$(UDPFS_SMAP_SOURCE)),)
-$(UDPFS_SMAP_SOURCE): | iop/__generated
-	$(MAKE) -C $(UDPFS_THIRDPARTY_ROOT)/smap \
-		IOP_BIN_DIR=$(abspath iop/__generated)/ \
+UDPFS_SMAP_DEPS := $(wildcard iop/udpfs_smap/src/* iop/udpfs_smap/include/*) iop/udpfs_smap/Makefile
+$(UDPFS_SMAP_SOURCE): $(UDPFS_SMAP_DEPS) | iop/__generated
+	$(MAKE) -C iop/udpfs_smap \
 		IOP_OBJS_DIR=$(abspath iop/__generated/udpfs_smap_obj)/ \
-		IOP_BIN=udpfs_smap.irx
+		IOP_BIN=$(abspath $@)
 endif
 
 ifneq ($(filter iop/__generated/udpfs_ministack.irx,$(UDPFS_MINISTACK_SOURCE)),)

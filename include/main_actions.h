@@ -15,6 +15,8 @@ typedef struct
 	char *romver_data;
 } MainExecuteContext;
 
+/* Capture before FileBrowser validates an ELF; NULL discards any captured choice. */
+void prepareElfLaunchIopReset(const char *path);
 void ExecuteMainAction(char *pathin, const MainExecuteContext *ctx);
 
 #endif

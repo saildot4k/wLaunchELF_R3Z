@@ -14,7 +14,7 @@
 #define ULE_VERSION_DEBUG_SUFFIX ""
 #endif
 
-#define ULE_VERSION "v4.80_R3Z" ULE_VERSION_DEBUG_SUFFIX
+#define ULE_VERSION "v4.85_R3Z" ULE_VERSION_DEBUG_SUFFIX
 //#ifndef ULE_VERDATE
 //#define ULE_VERDATE __DATE__
 //#endif
@@ -480,6 +480,7 @@ extern int isRunning;
 #endif
 int setupPad(void);
 int readpad(void);
+u32 readPadButtonsHeld(void);
 int readpad_no_KB(void);
 int readpad_noRepeat(void);
 void clearPadPressState(void);

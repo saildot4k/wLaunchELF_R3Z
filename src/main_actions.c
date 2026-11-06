@@ -11,6 +11,41 @@
 #include "gui_neutrino.h"
 #include "neutrino_gameid.h"
 
+static char prepared_elf_path[MAX_PATH];
+static int prepared_elf_iop_reset;
+
+static int chooseElfLaunchIopReset(int configured_reset)
+{
+	const u32 confirm = swapKeys ? PAD_CROSS : PAD_CIRCLE;
+	u64 start = Timer();
+
+	while (readPadButtonsHeld() & confirm) {
+		if (Timer() - start >= 2000)
+			return !configured_reset;
+		DelayThread(10000);
+	}
+	return configured_reset != 0;
+}
+
+void prepareElfLaunchIopReset(const char *path)
+{
+	prepared_elf_path[0] = '\0';
+	if (path == NULL)
+		return;
+	prepared_elf_iop_reset = chooseElfLaunchIopReset(setting->reboot_iop_elf_load);
+	snprintf(prepared_elf_path, sizeof(prepared_elf_path), "%s", path);
+}
+
+static int takePreparedElfLaunchIopReset(const char *path)
+{
+	int reset = -1;
+
+	if (prepared_elf_path[0] && !strcmp(prepared_elf_path, path))
+		reset = prepared_elf_iop_reset;
+	prepared_elf_path[0] = '\0';
+	return reset;
+}
+
 //CleanUpForExec releases uLE stuff preparatory to launching some other application
 //------------------------------
 void CleanUpForExec(void)
@@ -647,14 +682,18 @@ void ExecuteMainAction(char *pathin, const MainExecuteContext *ctx)
 	char *p;
 	int x, t = 0;
 	int ember_launch = 0;
+	int launch_iop_reset;
 	char dvdpl_path[] = "mc0:/BREXEC-DVDPLAYER/dvdplayer.elf";
 	int dvdpl_update;
 #ifdef XFROM
 	char mbr_mem_arg[32];
 #endif
 
-	if (ctx == NULL || pathin == NULL || pathin[0] == 0)
+	if (ctx == NULL || pathin == NULL || pathin[0] == 0) {
+		prepareElfLaunchIopReset(NULL);
 		return;
+	}
+	launch_iop_reset = takePreparedElfLaunchIopReset(pathin);
 
 	ember_arg0[0] = '\0';
 
@@ -705,6 +744,12 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		ember_launch = 1;
 	}
 
+	if (launch_iop_reset < 0) {
+		launch_iop_reset = setting->reboot_iop_elf_load;
+		if (!ember_launch && strncmp(path, setting->Misc, strlen(setting->Misc)))
+			launch_iop_reset = chooseElfLaunchIopReset(launch_iop_reset);
+	}
+
 	if (!strncmp(path, "mc", 2)) {
 		party[0] = 0;
 		if (path[2] != ':')
@@ -731,7 +776,7 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 		if (PrepareMbrLaunchPayload(path, mbr_mem_arg, sizeof(mbr_mem_arg)) < 0)
 			goto ELFnotFound;
 
-		x = setting->reboot_iop_elf_load;
+		x = launch_iop_reset;
 		CleanUpForExec();
 		LaunchArgsClear();
 		RunLoaderMemory("rom0:HDDBOOT", mbr_mem_arg, x);
@@ -1127,7 +1172,7 @@ Recurse_for_ESR:  //Recurse here for PS2Disc command with ESR disc
 				show_launch_gameid = buildLaunchGameID(fullpath, launch_gameid, sizeof(launch_gameid));
 			}
 
-			x = ember_launch ? 0 : setting->reboot_iop_elf_load;
+			x = ember_launch ? 0 : launch_iop_reset;
 			CleanUpForExec();
 			if (show_launch_gameid)
 				displayRetroGemGameID(launch_gameid, 2);

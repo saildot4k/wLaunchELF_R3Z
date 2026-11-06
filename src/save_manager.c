@@ -366,7 +366,7 @@ done:
 	return result;
 }
 
-int saveBackupCard(const char *source, const FILEINFO *files, int count, const char *destination, int format)
+int saveBackupCard(const char *source, const FILEINFO *files, int count, const char *destination, int format, const char *filename)
 {
 	uint8_t *raw = malloc(PS1_CARD_SIZE), *data = NULL, *original = NULL;
 	size_t size, original_size = 0;
@@ -395,15 +395,23 @@ int saveBackupCard(const char *source, const FILEINFO *files, int count, const c
 			if (result < 0)
 				goto done;
 		}
-	if (keyboard(name, 32) < 0) {
-		result = 1;
-		goto done;
+	if (filename != NULL) {
+		if (!saveNameValid(filename, sizeof(name) - 1)) {
+			result = -EINVAL;
+			goto done;
+		}
+		strcpy(name, filename);
+	} else {
+		if (keyboard(name, 32) < 0) {
+			result = 1;
+			goto done;
+		}
+		if (!saveNameValid(name, 32)) {
+			result = -EINVAL;
+			goto done;
+		}
+		strcat(name, ext);
 	}
-	if (!saveNameValid(name, 32)) {
-		result = -EINVAL;
-		goto done;
-	}
-	strcat(name, ext);
 	if (join(full, destination, name) < 0) {
 		result = -ENAMETOOLONG;
 		goto done;
