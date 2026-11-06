@@ -1,7 +1,10 @@
 # Save imports and backups
 
 Copy a save archive, browse to the root of the matching memory card, then choose
-**R1 → Import save**. PS1 saves require a PS1 card; PS2 saves require a PS2 card.
+**R1 → Extract <extension>**, such as **Extract PSU**, **Extract PSV** or
+**Extract MCS**. The extension is shown in uppercase; mixed formats and
+extensionless saves use **Extract saves**. PS1 saves require a PS1 card;
+PS2 saves require a PS2 card.
 The same restriction applies to mounted virtual cards and direct copies between
 cards. PS1 cards have a flat directory with a 20-byte save filename limit.
 

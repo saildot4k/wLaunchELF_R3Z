@@ -11,6 +11,7 @@
 #include "main_console_info.h"
 #include "main_actions.h"
 #include "main_title.h"
+#include <ctype.h>
 
 #define SOURCE_DEVICE_WAIT_INTERVAL_MS 1000
 #define SOURCE_DEVICE_WAIT_TIMEOUT_MS 6000
@@ -423,10 +424,39 @@ static int classifyPsuAction(const char *destPath)
 	return PSU_ACTION_NONE;
 }
 
+static void formatExtractSaveLabel(char *label, size_t size)
+{
+	const char *extension;
+	char format[16];
+	int i;
+
+	snprintf(label, size, "%s", LNG(Import_Save));
+	if (nclipFiles <= 0)
+		return;
+	extension = strrchr(clipFiles[0].name, '.');
+	if (extension == NULL || extension[1] == '\0' || strlen(extension + 1) >= sizeof(format))
+		return;
+	extension++;
+	for (i = 1; i < nclipFiles; i++) {
+		const char *other = strrchr(clipFiles[i].name, '.');
+		if (other == NULL || stricmp(extension, other + 1))
+			return;
+	}
+	for (i = 0; extension[i]; i++) {
+		unsigned char c = (unsigned char)extension[i];
+		if (!isalnum(c))
+			return;
+		format[i] = (char)toupper(c);
+	}
+	format[i] = '\0';
+	snprintf(label, size, LNG(Extract_Archive), format);
+}
+
 static int menu(const char *path, FILEINFO *file)
 {
 	u64 color;
 	char enable[NUM_MENU], tmp[80];
+	char extract_label[80];
 	const char *psu_action_label;
 	int x, y, i, sel;
 	int event, post_event = 0;
@@ -435,9 +465,10 @@ static int menu(const char *path, FILEINFO *file)
 	int psu_action;
 
 	psu_action = classifyPsuAction(path);
-	if (psu_action == PSU_ACTION_EXTRACT)
-		psu_action_label = LNG(Import_Save);
-	else if (psu_action == PSU_ACTION_CREATE)
+	if (psu_action == PSU_ACTION_EXTRACT) {
+		formatExtractSaveLabel(extract_label, sizeof(extract_label));
+		psu_action_label = extract_label;
+	} else if (psu_action == PSU_ACTION_CREATE)
 		psu_action_label = LNG(Create_Backup);
 	else
 		psu_action_label = LNG(Save_Action);
